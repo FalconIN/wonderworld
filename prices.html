@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pricing — Wonder World Westgate</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="styles.css" />
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          teal: { DEFAULT: '#0E9F6E', light: '#D1FAE5' },
+          indigo: { DEFAULT: '#4F46E5', light: '#EEF2FF' },
+          amber: { DEFAULT: '#F59E0B', light: '#FEF3C7' },
+          offwhite: '#F9FAFB',
+        },
+        fontFamily: { display: ['Fredoka', 'sans-serif'], body: ['Inter', 'sans-serif'] },
+        boxShadow: { soft: '0 4px 24px rgba(0,0,0,0.07)', card: '0 8px 40px rgba(0,0,0,0.10)' },
+      },
+    },
+  };
+</script>
+</head>
+<body class="bg-offwhite font-body">
+
+<nav class="bg-white border-b border-gray-100">
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="wwmascot-64.png" alt="Wonder World" class="w-9 h-9 rounded-xl" style="image-rendering:pixelated" />
+      <span class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></span>
+    </a>
+    <div class="flex items-center gap-4">
+      <a href="/" class="text-sm text-gray-500 hover:text-indigo-500 transition-colors">← Back to home</a>
+      <a href="/#rooms" class="btn-primary text-sm py-2.5 px-5">Book a Party 🎉</a>
+    </div>
+  </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-5 py-16">
+
+  <!-- Party Packages -->
+  <div class="text-center mb-12">
+    <h1 class="font-display font-bold text-5xl text-gray-900 mb-4">Party Room Pricing</h1>
+    <p class="text-gray-500 text-lg max-w-xl mx-auto">Everything included — no hidden fees. Just show up and celebrate.</p>
+  </div>
+
+  <!-- Duration options -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+    <div class="bg-white rounded-3xl shadow-card p-8 border-2 border-indigo-500 relative">
+      <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-xs font-bold rounded-full px-4 py-1">MOST POPULAR</div>
+      <div class="font-display font-bold text-3xl text-gray-900 mb-1">90 Minutes</div>
+      <div class="text-gray-500 text-sm mb-4">Standard party package</div>
+      <div class="font-display font-bold text-6xl text-indigo-600 mb-1">$39</div>
+      <div class="text-gray-400 text-sm mb-6">per child</div>
+      <div class="space-y-2 text-sm text-gray-600 mb-6">
+        <div class="flex items-center gap-2">✅ Playground entry (value $26.80)</div>
+        <div class="flex items-center gap-2">✅ 90 min exclusive party room access</div>
+        <div class="flex items-center gap-2">✅ 15 min early entry for setup</div>
+        <div class="flex items-center gap-2">✅ Choice of Nuggets or Mini Burger</div>
+        <div class="flex items-center gap-2">✅ Fries & Blackcurrant Drink</div>
+        <div class="flex items-center gap-2">✅ Dedicated party host</div>
+        <div class="flex items-center gap-2">🎂 Outside birthday cake welcome</div>
+      </div>
+      <a href="/#rooms" class="btn-primary w-full py-3 text-center block">Book Now →</a>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-soft p-8 border-2 border-teal-light">
+      <div class="font-display font-bold text-3xl text-gray-900 mb-1">2 Hours</div>
+      <div class="text-gray-500 text-sm mb-4">Extended party package</div>
+      <div class="font-display font-bold text-6xl text-teal mb-1">$68</div>
+      <div class="text-gray-400 text-sm mb-6">per child <span class="text-xs">(base $39 + $29 extra)</span></div>
+      <div class="space-y-2 text-sm text-gray-600 mb-6">
+        <div class="flex items-center gap-2">✅ Everything in 90 min package</div>
+        <div class="flex items-center gap-2">✅ Extra 30 min party room time</div>
+        <div class="flex items-center gap-2">✅ More time to eat, play & celebrate</div>
+        <div class="flex items-center gap-2">✅ Perfect for bigger groups</div>
+        <div class="flex items-center gap-2">🎂 Outside birthday cake welcome</div>
+      </div>
+      <a href="/#rooms" class="btn-secondary w-full py-3 text-center block">Book Now →</a>
+    </div>
+  </div>
+
+  <!-- Room minimums -->
+  <div class="bg-white rounded-2xl shadow-soft p-6 mb-8">
+    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">Room Requirements</h2>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-indigo-light rounded-xl p-4 text-center">
+        <div class="font-display font-bold text-lg text-indigo-700">Small Rooms</div>
+        <div class="text-sm text-gray-500 mt-1">Sunshine · Dream · Forest</div>
+        <div class="font-bold text-2xl text-indigo-600 mt-2">Min 8 kids</div>
+      </div>
+      <div class="bg-amber-light rounded-xl p-4 text-center">
+        <div class="font-display font-bold text-lg text-amber-700">The Big Room</div>
+        <div class="text-sm text-gray-500 mt-1">Extra large zone</div>
+        <div class="font-bold text-2xl text-amber-600 mt-2">Min 12 kids</div>
+      </div>
+    </div>
+    <p class="text-xs text-gray-400 mt-3 text-center">Extra children charged at the same package rate per child.</p>
+  </div>
+
+  <!-- Booking times -->
+  <div class="bg-white rounded-2xl shadow-soft p-6 mb-8">
+    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">⏰ Party Room Times</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">9:30 AM</div><div class="text-xs text-gray-400">– 11:00 AM</div></div>
+      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">11:30 AM</div><div class="text-xs text-gray-400">– 1:00 PM</div></div>
+      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">1:30 PM</div><div class="text-xs text-gray-400">– 3:00 PM</div></div>
+      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">3:30 PM</div><div class="text-xs text-gray-400">– 5:00 PM</div></div>
+    </div>
+  </div>
+
+  <!-- General Admission -->
+  <div class="bg-white rounded-2xl shadow-soft p-6 mb-8">
+    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">🎟️ General Admission</h2>
+    <p class="text-gray-500 text-sm mb-4">Walk-in anytime — no booking needed for general play.</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-teal-light rounded-xl p-4 text-center">
+        <div class="font-bold text-gray-800">Under 1</div>
+        <div class="font-display font-bold text-3xl text-teal mt-1">FREE</div>
+        <div class="text-xs text-gray-400 mt-1">Babies & infants</div>
+      </div>
+      <div class="bg-indigo-light rounded-xl p-4 text-center">
+        <div class="font-bold text-gray-800">Ages 1–2</div>
+        <div class="font-display font-bold text-3xl text-indigo mt-1">$23.80</div>
+        <div class="text-xs text-gray-400 mt-1">Per session</div>
+      </div>
+      <div class="bg-amber-light rounded-xl p-4 text-center">
+        <div class="font-bold text-gray-800">Ages 3–12</div>
+        <div class="font-display font-bold text-3xl text-amber mt-1">$26.80</div>
+        <div class="text-xs text-gray-400 mt-1">Per session</div>
+      </div>
+    </div>
+    <p class="text-xs text-gray-400 mt-3">One supervising adult enters free with every paying child. Additional adults welcome at no charge.</p>
+  </div>
+
+  <!-- CTA -->
+  <div class="text-center">
+    <a href="/#rooms" class="btn-primary text-lg py-4 px-12">Book a Party Room 🎉</a>
+    <p class="text-gray-400 text-sm mt-4">Questions? Call us on <a href="tel:+6495550123" class="text-indigo-500">(09) 555 0123</a> or email <a href="mailto:hello@wonderworldwestgate.store" class="text-indigo-500">hello@wonderworldwestgate.store</a></p>
+  </div>
+
+</div>
+
+<footer class="bg-gray-900 text-white py-8 mt-16">
+  <div class="max-w-6xl mx-auto px-5 text-center text-gray-400 text-sm">
+    © 2026 Wonder World Westgate. All rights reserved.
+    <span class="mx-2">·</span>
+    <a href="/" class="hover:text-white transition-colors">Home</a>
+    <span class="mx-2">·</span>
+    <a href="/#rules" class="hover:text-white transition-colors">Rules & Policy</a>
+    <span class="mx-2">·</span>
+    <a href="/admin" class="hover:text-white transition-colors">Admin</a>
+  </div>
+</footer>
+
+</body>
+</html>

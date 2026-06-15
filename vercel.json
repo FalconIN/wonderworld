@@ -3,14 +3,10 @@
   "buildCommand": "node scripts/inject-env.js",
   "outputDirectory": ".",
   "routes": [
-    {
-      "src": "/admin",
-      "dest": "/admin.html"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
+    { "src": "/admin", "dest": "/admin.html" },
+    { "src": "/login", "dest": "/login.html" },
+    { "src": "/prices", "dest": "/prices.html" },
+    { "src": "/(.*)", "dest": "/$1" }
   ],
   "headers": [
     {

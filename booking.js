@@ -48,12 +48,16 @@ const ROOM_COLOR_MAP = {
   green:  { border: 'border-green-200',  bg: 'bg-green-50',  badge: 'bg-green-500',  text: 'text-green-600' },
 };
 
-// All time slots (availability is filtered from Supabase)
-const ALL_SLOTS = [
-  '9:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM',
-  '12:00 PM','12:30 PM','1:00 PM','1:30 PM','2:00 PM',
-  '2:30 PM','3:00 PM','3:30 PM','4:00 PM',
-];
+// Official party room booking times (from poster)
+const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+
+// Slot end times for display
+const SLOT_END_TIMES = {
+  '9:30 AM':  { one: '11:00 AM', two: '11:30 AM' },
+  '11:30 AM': { one: '1:00 PM',  two: '1:30 PM'  },
+  '1:30 PM':  { one: '3:00 PM',  two: '3:30 PM'  },
+  '3:30 PM':  { one: '5:00 PM',  two: '5:30 PM'  },
+};
 
 // Tracks our real-time slot subscription
 let slotSubscription = null;
@@ -218,11 +222,15 @@ function renderSlotsHtml(slots, unavailableSlots) {
   slots.forEach(slot => {
     const unavail  = unavailableSlots.includes(slot);
     const selected = state.selectedTime === slot;
+    const ends = SLOT_END_TIMES[slot];
     let cls = 'time-slot';
     if (unavail)  cls += ' unavailable';
     if (selected) cls += ' selected';
-    const label = unavail ? `<div class="text-xs text-gray-400 mt-0.5">Full</div>` : '';
-    html += `<div class="${cls}" onclick="${unavail ? '' : `selectTime('${slot}', this)`}">${slot}${label}</div>`;
+    if (unavail) {
+      html += `<div class="${cls}"><div class="font-semibold">${slot}</div><div class="text-xs opacity-60">– ${ends?.one || ''}</div><div class="text-xs text-gray-400 mt-0.5">Full</div></div>`;
+    } else {
+      html += `<div class="${cls}" onclick="selectTime('${slot}', this)"><div class="font-semibold">${slot}</div><div class="text-xs opacity-75">– ${ends?.one || ''}</div></div>`;
+    }
   });
   grid.innerHTML = html;
 }
@@ -509,9 +517,13 @@ function renderOrderSummary() {
   if (!state.selectedRoom) return;
   const room = state.selectedRoom;
   const isBig = room.id === 'big';
-  const pricePerChild = isBig
+  const duration = state.duration || 90;
+  const basePricePerChild = isBig
     ? (state.isWeekend ? room.weekendTotal : room.weekdayTotal)
     : room.basePricePerChild;
+  // 2-hour adds $29/child extra
+  const extraPerChild = duration === 120 ? 29 : 0;
+  const pricePerChild = basePricePerChild + extraPerChild;
   const baseTotal = pricePerChild * state.guests;
   const addonTotal = getAddonTotal();
   const total = baseTotal + addonTotal;
@@ -519,6 +531,7 @@ function renderOrderSummary() {
 
   const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
   const addonLines = getAddonSummaryLines();
+  const durationLabel = duration === 120 ? '2 hours' : '90 minutes';
 
   let addonHtml = '';
   if (addonLines.length > 0) {
@@ -532,9 +545,10 @@ function renderOrderSummary() {
     <div class="space-y-1.5 text-sm text-indigo-800">
       <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${room.name}</span></div>
       <div class="flex justify-between"><span>Date:</span><span class="font-semibold">${state.selectedDate} @ ${state.selectedTime}</span></div>
+      <div class="flex justify-between"><span>Duration:</span><span class="font-semibold">${durationLabel}</span></div>
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
       <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${foodLabels[state.selectedFood] || 'Not selected'}</span></div>
-      <div class="flex justify-between"><span>Package rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
+      <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
       ${addonHtml}
       <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
         <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>

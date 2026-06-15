@@ -15,7 +15,7 @@ const ENV_BLOCK = `
   };
 </script>`;
 
-const htmlFiles = ['index.html', 'admin.html'];
+const htmlFiles = ['index.html', 'admin.html', 'login.html', 'prices.html'];
 
 for (const file of htmlFiles) {
   const filePath = path.join(__dirname, '..', file);

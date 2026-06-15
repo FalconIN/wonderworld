@@ -29,6 +29,7 @@ const state = {
   allergyNotes:   '',
   allergies:      [],
   addons:         {},
+  duration:       90,
   confirmEmail:   '',
   confirmPhone:   '',
   bookingRef:     '',
@@ -264,6 +265,7 @@ function resetWizard() {
     allergyNotes: '',
     allergies: [],
     addons: {},
+    duration: 90,
     confirmEmail: '',
     confirmPhone: '',
     bookingRef: '',
@@ -441,3 +443,19 @@ document.addEventListener('DOMContentLoaded', () => {
     dateInput.min = today;
   }
 });
+
+// ---------------------------------------------------------------------------
+// Duration selector
+// ---------------------------------------------------------------------------
+function selectDuration(mins, el) {
+  state.duration = mins;
+  // Update UI
+  document.querySelectorAll('.duration-card').forEach(c => {
+    c.classList.remove('border-indigo-500', 'bg-indigo-50');
+    c.classList.add('border-gray-200', 'bg-white');
+  });
+  el.classList.remove('border-gray-200', 'bg-white');
+  el.classList.add('border-indigo-500', 'bg-indigo-50');
+  // Recalculate total if room already selected
+  if (state.selectedRoom) renderOrderSummary();
+}

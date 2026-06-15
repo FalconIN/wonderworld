@@ -61,6 +61,7 @@
     </div>
     <div class="flex items-center gap-3">
       <div id="navAuthArea">
+        <a href="/login" class="text-sm font-semibold text-gray-600 hover:text-indigo-500 transition-colors mr-2 hidden md:inline">Sign In</a>
         <button onclick="openBooking()" class="btn-primary text-sm py-2.5 px-5">Book a Party 🎉</button>
       </div>
     </div>
@@ -344,70 +345,15 @@
 </section>
 
 <!-- ── PRICES ─────────────────────────────────────────────── -->
-<section id="prices" class="py-16 bg-white">
-  <div class="max-w-5xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Playground Admission</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto">Walk-in anytime during opening hours — no booking needed for general play.</p>
+<section id="prices" class="py-12 bg-white">
+  <div class="max-w-3xl mx-auto px-5 text-center">
+    <h2 class="font-display font-bold text-4xl text-gray-900 mb-4">Simple, Transparent Pricing</h2>
+    <p class="text-gray-500 text-lg mb-8 max-w-xl mx-auto">Everything you need for an epic party — from $39 per child. Click below to see full pricing and what's included.</p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <a href="/prices" class="btn-primary text-lg py-4 px-10">View Full Pricing 💰</a>
+      <button onclick="openBooking()" class="btn-secondary text-lg py-4 px-10">Book a Party 🎉</button>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-      <div class="bg-white rounded-3xl shadow-soft p-8 text-center hover:shadow-card transition-shadow border-2 border-teal-light">
-        <div class="w-16 h-16 rounded-full bg-teal-light flex items-center justify-center text-3xl mx-auto mb-4">👶</div>
-        <div class="font-display font-bold text-2xl text-gray-900 mb-1">Under 1</div>
-        <div class="text-sm text-gray-500 mb-4">Babies &amp; infants</div>
-        <div class="font-display font-bold text-5xl text-teal mb-2">FREE</div>
-        <div class="text-xs text-gray-400">No charge for babies</div>
-      </div>
-      <div class="bg-white rounded-3xl shadow-soft p-8 text-center hover:shadow-card transition-shadow border-2 border-indigo-light">
-        <div class="w-16 h-16 rounded-full bg-indigo-light flex items-center justify-center text-3xl mx-auto mb-4">🧒</div>
-        <div class="font-display font-bold text-2xl text-gray-900 mb-1">Ages 1 – 2</div>
-        <div class="text-sm text-gray-500 mb-4">Toddlers</div>
-        <div class="font-display font-bold text-5xl text-indigo mb-2">$23.80</div>
-        <div class="text-xs text-gray-400">Per session</div>
-      </div>
-      <div class="relative bg-white rounded-3xl shadow-card p-8 text-center border-2 border-amber-300 hover:shadow-lg transition-shadow">
-        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-gray-900 text-xs font-bold rounded-full px-4 py-1">MOST COMMON</div>
-        <div class="w-16 h-16 rounded-full bg-amber-light flex items-center justify-center text-3xl mx-auto mb-4">🧑</div>
-        <div class="font-display font-bold text-2xl text-gray-900 mb-1">Ages 3 – 12</div>
-        <div class="text-sm text-gray-500 mb-4">Kids</div>
-        <div class="font-display font-bold text-5xl text-amber mb-2">$26.80</div>
-        <div class="text-xs text-gray-400">Per session</div>
-      </div>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
-        <span class="text-2xl flex-shrink-0">🎟️</span>
-        <div>
-          <div class="font-display font-bold text-lg text-gray-900 mb-1">What's included</div>
-          <p class="text-gray-500 text-sm leading-relaxed">Full access to all play areas for the entire session, including slides, climbing frames, soft play, and activity zones.</p>
-        </div>
-      </div>
-      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
-        <span class="text-2xl flex-shrink-0">🧑‍🤝‍🧑</span>
-        <div>
-          <div class="font-display font-bold text-lg text-gray-900 mb-1">Adults &amp; supervisors</div>
-          <p class="text-gray-500 text-sm leading-relaxed">One supervising adult enters free with every paying child. Additional adults are welcome at no charge.</p>
-        </div>
-      </div>
-      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
-        <span class="text-2xl flex-shrink-0">⏰</span>
-        <div>
-          <div class="font-display font-bold text-lg text-gray-900 mb-1">Last entry</div>
-          <p class="text-gray-500 text-sm leading-relaxed">Admission closes 45 minutes before we shut the doors — please plan your visit accordingly.</p>
-        </div>
-      </div>
-      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
-        <span class="text-2xl flex-shrink-0">🍔</span>
-        <div>
-          <div class="font-display font-bold text-lg text-gray-900 mb-1">Food &amp; drinks</div>
-          <p class="text-gray-500 text-sm leading-relaxed">Our café is open during all sessions. No outside food or drink in the playground — water bottles permitted.</p>
-        </div>
-      </div>
-    </div>
-    <div class="text-center">
-      <p class="text-gray-400 text-sm mb-4">Planning a bigger celebration? Party packages start from $39/child with a dedicated room &amp; host.</p>
-      <button onclick="openBooking()" class="btn-primary text-base py-3 px-8">Book a Party Room 🎉</button>
-    </div>
+    <p class="text-gray-400 text-sm mt-6">Party packages from $39/child · General admission from $23.80 · Open 7 days</p>
   </div>
 </section>
 
@@ -679,6 +625,24 @@
       <div id="step2" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">When's the big day?</h2>
         <p class="text-gray-500 text-sm mb-5">Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</p>
+
+        <!-- Duration picker -->
+        <div class="mb-5">
+          <label class="lbl">Party Duration</label>
+          <div class="grid grid-cols-2 gap-3 mt-1">
+            <div id="dur90" onclick="selectDuration(90, this)" class="duration-card selected border-2 border-indigo-500 bg-indigo-50 rounded-2xl p-4 cursor-pointer text-center transition-all">
+              <div class="font-display font-bold text-lg text-indigo-700">90 min</div>
+              <div class="text-xs text-gray-500 mt-1">Standard package</div>
+              <div class="text-xs font-semibold text-indigo-600 mt-1">$39/child</div>
+            </div>
+            <div id="dur120" onclick="selectDuration(120, this)" class="duration-card border-2 border-gray-200 bg-white rounded-2xl p-4 cursor-pointer text-center transition-all hover:border-indigo-300">
+              <div class="font-display font-bold text-lg text-gray-700">2 hours</div>
+              <div class="text-xs text-gray-500 mt-1">Extended party</div>
+              <div class="text-xs font-semibold text-teal mt-1">$29/child <span class="text-gray-400 font-normal">extra</span></div>
+            </div>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label class="lbl">Select Date</label>
@@ -693,7 +657,7 @@
           </div>
         </div>
         <div class="mt-4 bg-indigo-light rounded-xl p-4 text-sm text-indigo-700">
-          <strong>Weekend pricing applies Saturdays & Sundays.</strong> Weekday sessions are available Monday–Friday at standard rates.
+          <strong>Each session includes playground entry, room access, 15 min early setup, and choice of food.</strong>
         </div>
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(1)" class="btn-secondary py-3 px-6">← Back</button>
