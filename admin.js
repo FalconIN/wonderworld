@@ -85,7 +85,7 @@ async function loadOverview() {
     { count: upcomingCount },
   ] = await Promise.all([
     supabaseClient.from('bookings').select('*', { count: 'exact', head: true }),
-    supabaseClient.from('payments').select('amount').eq('status', 'succeeded'),
+    supabaseClient.from('bookings').select('total_amount').neq('status', 'cancelled'),
     supabaseClient.from('users').select('*', { count: 'exact', head: true }),
     supabaseClient.from('bookings')
       .select('*', { count: 'exact', head: true })
@@ -94,7 +94,7 @@ async function loadOverview() {
       .eq('status', 'confirmed'),
   ]);
 
-  const totalRevenue = (revenueData || []).reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  const totalRevenue = (revenueData || []).reduce((s, r) => s + parseFloat(r.total_amount || 0), 0);
 
   document.getElementById('stat-bookings').textContent  = totalBookings ?? '—';
   document.getElementById('stat-revenue').textContent   = '$' + totalRevenue.toFixed(2);
@@ -104,7 +104,7 @@ async function loadOverview() {
   // Upcoming list
   const { data: upcoming } = await supabaseClient
     .from('bookings')
-    .select('booking_ref, party_date, party_time, guest_count, status, party_rooms(name, emoji), users(email)')
+    .select('booking_ref, party_date, party_time, guest_count, status, contact_email, party_rooms(name, emoji)')
     .gte('party_date', new Date().toISOString().split('T')[0])
     .neq('status', 'cancelled')
     .order('party_date', { ascending: true })
@@ -122,7 +122,7 @@ async function loadOverview() {
         <span class="text-2xl">${b.party_rooms?.emoji || '🎉'}</span>
         <div>
           <div class="font-semibold text-sm text-gray-900">${b.party_rooms?.name || '—'} · ${b.guest_count} kids</div>
-          <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.users?.email || ''}</div>
+          <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.contact_email || ''}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -145,9 +145,8 @@ async function loadBookings() {
     .select(`
       id, booking_ref, party_date, party_time, guest_count,
       food_choice, total_amount, status, allergy_notes,
-      party_room_id, created_at,
-      party_rooms ( name, emoji ),
-      users ( first_name, last_name, email )
+      party_room_id, user_id, contact_email, created_at,
+      party_rooms ( name, emoji )
     `)
     .order('created_at', { ascending: false })
     .limit(200);
@@ -173,8 +172,7 @@ function renderBookingsTable(bookings) {
     <tr>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.booking_ref}</span></td>
       <td>
-        <div class="font-semibold text-sm">${b.users?.first_name || ''} ${b.users?.last_name || ''}</div>
-        <div class="text-xs text-gray-400">${b.users?.email || '—'}</div>
+        <div class="text-xs text-gray-400">${b.contact_email || '—'}</div>
       </td>
       <td>${b.party_rooms?.emoji || ''} ${b.party_rooms?.name || '—'}</td>
       <td>
@@ -231,8 +229,7 @@ async function viewBooking(bookingId) {
       </div>
       <div class="bg-gray-50 rounded-xl p-4">
         <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
-        <div class="font-semibold">${booking.users?.first_name || ''} ${booking.users?.last_name || ''}</div>
-        <div class="text-sm text-gray-500">${booking.users?.email || '—'}</div>
+        <div class="text-sm text-gray-500">${booking.contact_email || '—'}</div>
       </div>
       ${booking.allergy_notes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
