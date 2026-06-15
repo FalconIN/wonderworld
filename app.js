@@ -148,6 +148,11 @@ async function validateStep(n) {
       showFieldError('Please choose a food option for your guests.');
       return false;
     }
+    const waiver = document.getElementById('liabilityWaiver');
+    if (waiver && !waiver.checked) {
+      showFieldError('Please read and accept the Terms of Entry & Liability Waiver to continue.');
+      return false;
+    }
   }
   return true;
 }

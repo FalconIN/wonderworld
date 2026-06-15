@@ -53,12 +53,12 @@
     <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
       <a href="#about" class="hover:text-indigo-500 transition-colors">About</a>
       <a href="#rooms" class="hover:text-indigo-500 transition-colors">Party Rooms</a>
-      <a href="#prices" class="hover:text-indigo-500 transition-colors">Prices</a>
+      <a href="#menu" class="hover:text-indigo-500 transition-colors">Menu</a>
+      <a href="#rules" class="hover:text-indigo-500 transition-colors">Rules</a>
       <a href="#hours" class="hover:text-indigo-500 transition-colors">Hours</a>
       <a href="#faq" class="hover:text-indigo-500 transition-colors">FAQs</a>
     </div>
     <div class="flex items-center gap-3">
-      <!-- Auth nav button — swapped by auth.js -->
       <div id="navAuthArea">
         <button onclick="openBooking()" class="btn-primary text-sm py-2.5 px-5">Book a Party 🎉</button>
       </div>
@@ -135,7 +135,7 @@
       <div class="bg-white rounded-3xl p-7 shadow-soft text-center hover:shadow-card transition-shadow">
         <div class="w-16 h-16 rounded-2xl bg-amber-light flex items-center justify-center text-3xl mx-auto mb-4">🍔</div>
         <h3 class="font-display font-bold text-xl mb-2 text-gray-900">Real Kids' Food</h3>
-        <p class="text-gray-500 text-sm leading-relaxed">Choose from nuggets, burgers, or mini pizzas — all freshly prepared. Allergy-friendly options available for every guest.</p>
+        <p class="text-gray-500 text-sm leading-relaxed">Choose from nuggets or mini burgers — all freshly prepared daily. Fries and blackcurrant drinks included. Outside birthday cake is welcome!</p>
       </div>
       <div class="bg-white rounded-3xl p-7 shadow-soft text-center hover:shadow-card transition-shadow">
         <div class="w-16 h-16 rounded-2xl bg-teal-light flex items-center justify-center text-3xl mx-auto mb-4">🎉</div>
@@ -166,19 +166,19 @@
           </div>
           <div class="flex gap-4 mb-4">
             <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
-              <div class="font-display font-bold text-2xl text-indigo-500">16–24</div>
-              <div class="text-xs text-gray-500 mt-0.5">Kids</div>
+              <div class="font-display font-bold text-2xl text-indigo-500">12–24</div>
+              <div class="text-xs text-gray-500 mt-0.5">Kids min 12</div>
             </div>
             <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
               <div class="font-display font-bold text-2xl text-indigo-500">$39+</div>
               <div class="text-xs text-gray-500 mt-0.5">Per child</div>
             </div>
             <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
-              <div class="font-display font-bold text-2xl text-indigo-500">$49–59</div>
-              <div class="text-xs text-gray-500 mt-0.5">Total / child</div>
+              <div class="font-display font-bold text-2xl text-indigo-500">90 min</div>
+              <div class="text-xs text-gray-500 mt-0.5">Party room</div>
             </div>
           </div>
-          <p class="text-gray-500 text-sm mb-5">Our largest and most spectacular space — perfect for big friend groups. Private entry, stage area, and VIP play access included.</p>
+          <p class="text-gray-500 text-sm mb-5">Our largest and most spectacular space — perfect for big friend groups. Includes playground entry ($26.80 value), 90 min party room access, 15 min early setup entry, and choice of food & snacks.</p>
           <button onclick="openBooking()" class="btn-primary w-full py-3 text-base">Book The Big Room →</button>
         </div>
       </div>
@@ -187,7 +187,7 @@
           <div class="w-12 h-12 rounded-xl bg-yellow-400 flex items-center justify-center text-2xl flex-shrink-0">☀️</div>
           <div class="flex-1">
             <div class="font-display font-bold text-lg">Sunshine Room <span class="text-yellow-600 text-sm font-normal">(Yellow)</span></div>
-            <div class="text-xs text-gray-500">8–15 kids · Bright & cheerful</div>
+            <div class="text-xs text-gray-500">Min 8 kids · Bright & cheerful</div>
           </div>
           <div class="text-right">
             <div class="font-display font-bold text-lg text-yellow-600">$39/child</div>
@@ -198,7 +198,7 @@
           <div class="w-12 h-12 rounded-xl bg-purple-400 flex items-center justify-center text-2xl flex-shrink-0">🌙</div>
           <div class="flex-1">
             <div class="font-display font-bold text-lg">Dream Room <span class="text-purple-600 text-sm font-normal">(Purple)</span></div>
-            <div class="text-xs text-gray-500">8–15 kids · Magical & dreamy</div>
+            <div class="text-xs text-gray-500">Min 8 kids · Magical & dreamy</div>
           </div>
           <div class="text-right">
             <div class="font-display font-bold text-lg text-purple-600">$39/child</div>
@@ -209,7 +209,7 @@
           <div class="w-12 h-12 rounded-xl bg-green-400 flex items-center justify-center text-2xl flex-shrink-0">🌿</div>
           <div class="flex-1">
             <div class="font-display font-bold text-lg">Wonder Forest Room <span class="text-green-600 text-sm font-normal">(Green)</span></div>
-            <div class="text-xs text-gray-500">8–15 kids · Nature adventure</div>
+            <div class="text-xs text-gray-500">Min 8 kids · Nature adventure</div>
           </div>
           <div class="text-right">
             <div class="font-display font-bold text-lg text-green-600">$39/child</div>
@@ -218,14 +218,132 @@
         </div>
       </div>
     </div>
-    <div class="mt-10 text-center">
+    <div class="mt-8 bg-indigo-light rounded-2xl p-5 text-sm text-indigo-800 flex flex-wrap gap-6 justify-center text-center">
+      <div><strong>⏰ Booking Times</strong><br/>9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</div>
+      <div class="w-px bg-indigo-200 hidden md:block"></div>
+      <div><strong>🎂 Outside Cake</strong><br/>Welcome — bring your own!</div>
+      <div class="w-px bg-indigo-200 hidden md:block"></div>
+      <div><strong>⚠️ Allergies</strong><br/>Please inform us in advance</div>
+      <div class="w-px bg-indigo-200 hidden md:block"></div>
+      <div><strong>👦 Extra Kids</strong><br/>Charged at package rate</div>
+    </div>
+    <div class="mt-8 text-center">
       <button onclick="openBooking()" class="btn-primary text-lg py-4 px-10">Start Booking — It's Quick & Easy 🎈</button>
     </div>
   </div>
 </section>
 
+<!-- ── PARTY MENU ─────────────────────────────────────────── -->
+<section id="menu" class="py-16 bg-offwhite">
+  <div class="max-w-6xl mx-auto px-5">
+    <div class="text-center mb-12">
+      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Party Room Menu</h2>
+      <p class="text-gray-500 text-lg max-w-xl mx-auto">Everything is made fresh daily with kid-friendly ingredients.</p>
+    </div>
+
+    <!-- Basic Package -->
+    <div class="bg-white rounded-3xl shadow-soft p-8 mb-8 border-2 border-indigo-light">
+      <div class="flex flex-col md:flex-row md:items-center gap-6 mb-6">
+        <div class="bg-indigo-500 text-white rounded-2xl px-6 py-4 text-center flex-shrink-0">
+          <div class="font-display font-bold text-4xl">$39</div>
+          <div class="text-sm font-semibold opacity-90">per kid</div>
+          <div class="text-xs opacity-75 mt-1">Basic Party</div>
+        </div>
+        <div>
+          <h3 class="font-display font-bold text-2xl text-gray-900 mb-1">What's Included</h3>
+          <p class="text-gray-500 text-sm mb-3">Everything you need for a fun and easy party!</p>
+          <div class="flex flex-wrap gap-3">
+            <span class="bg-indigo-light text-indigo-700 text-xs font-semibold rounded-full px-3 py-1.5">🎢 Playground Entry (Value $26.80)</span>
+            <span class="bg-indigo-light text-indigo-700 text-xs font-semibold rounded-full px-3 py-1.5">⏰ 90 Min Party Room Access</span>
+            <span class="bg-indigo-light text-indigo-700 text-xs font-semibold rounded-full px-3 py-1.5">🚪 15 Min Early Entry for Setup</span>
+            <span class="bg-indigo-light text-indigo-700 text-xs font-semibold rounded-full px-3 py-1.5">🍽️ Choice of Food & Snacks</span>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-offwhite rounded-2xl p-4">
+          <div class="font-display font-bold text-base text-gray-900 mb-2">🍽️ Food <span class="text-xs font-normal text-gray-500">(choose one)</span></div>
+          <div class="space-y-1 text-sm text-gray-600">
+            <div class="flex items-center gap-2">🍗 Nuggets</div>
+            <div class="flex items-center gap-2">🍔 Mini Burger</div>
+          </div>
+        </div>
+        <div class="bg-offwhite rounded-2xl p-4">
+          <div class="font-display font-bold text-base text-gray-900 mb-2">🍟 Snacks</div>
+          <div class="text-sm text-gray-600">🍟 Fries</div>
+        </div>
+        <div class="bg-offwhite rounded-2xl p-4">
+          <div class="font-display font-bold text-base text-gray-900 mb-2">🥤 Drinks</div>
+          <div class="text-sm text-gray-600">🫐 Blackcurrant Drink</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add-ons & Extras -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">➕ Add-Ons</div>
+        <div class="space-y-2 text-sm text-gray-600">
+          <div class="flex justify-between"><span>🍕 Extra Ham & Cheese Pizza (11-inch)</span><span class="font-bold text-gray-800">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Vegetarian Pizza (11-inch)</span><span class="font-bold text-gray-800">$25</span></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">🥪 Adult Platter</div>
+        <div class="space-y-1 text-sm text-gray-600">
+          <div class="flex justify-between"><span>15 pcs Ham & Cheese Sandwiches</span><span class="font-bold text-gray-800">$60</span></div>
+          <div class="flex justify-between"><span>40 pcs Sushi Platter</span><span class="font-bold text-gray-800">$60</span></div>
+          <div class="flex justify-between"><span>24 pcs Sushi Platter</span><span class="font-bold text-gray-800">$30</span></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-display font-bold text-lg text-gray-900">🍗 Fried Chicken Platter</div>
+          <span class="bg-amber-400 text-gray-900 text-xs font-bold rounded-full px-2 py-1">$39</span>
+        </div>
+        <div class="space-y-1 text-sm text-gray-600">
+          <div>10 Chicken Nuggets</div>
+          <div>6 Fried Chicken</div>
+          <div>6 Chicken Karaage</div>
+          <div>Fries · Tomato Sauce · Aioli Sauce</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-display font-bold text-lg text-gray-900">🦐 Seafood Platter</div>
+          <span class="bg-teal text-white text-xs font-bold rounded-full px-2 py-1">$49</span>
+        </div>
+        <div class="space-y-1 text-sm text-gray-600">
+          <div>8 Crumbed Fish Bites · 6 Prawn Twister</div>
+          <div>6 Prawn Tempura · 6 Calamari</div>
+          <div>Fries · Tomato Sauce · Aioli Sauce</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">🍣 Sushi Platters</div>
+        <div class="space-y-2 text-sm text-gray-600">
+          <div class="flex justify-between"><span>Salmon Supreme Platter</span><span class="font-bold text-indigo-600">$28.90</span></div>
+          <div class="text-xs text-gray-400 -mt-1">4 pcs Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
+          <div class="flex justify-between"><span>Ocean Deluxe Set</span><span class="font-bold text-indigo-600">$39.90</span></div>
+          <div class="text-xs text-gray-400 -mt-1">4 pcs Tempura Prawn Dragon Roll · 4 pcs Salmon Avocado Roll · 4 Nigiri · 2 Aburi Salmon</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">🍱 More Sushi</div>
+        <div class="space-y-2 text-sm text-gray-600">
+          <div class="flex justify-between"><span>Kids Party Platter (48 pcs)</span><span class="font-bold text-indigo-600">$49.90</span></div>
+          <div class="text-xs text-gray-400 -mt-1">Fresh Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
+          <div class="flex justify-between"><span>Green Garden Platter (28 pcs)</span><span class="font-bold text-indigo-600">$42.90</span></div>
+          <div class="text-xs text-gray-400 -mt-1">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
+        </div>
+      </div>
+    </div>
+    <p class="text-center text-xs text-gray-400">Made fresh daily · Kid-friendly ingredients · Please inform us of any allergies in advance · Outside birthday cake allowed</p>
+  </div>
+</section>
+
 <!-- ── PRICES ─────────────────────────────────────────────── -->
-<section id="prices" class="py-16 bg-offwhite">
+<section id="prices" class="py-16 bg-white">
   <div class="max-w-5xl mx-auto px-5">
     <div class="text-center mb-12">
       <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Playground Admission</h2>
@@ -281,13 +399,84 @@
         <span class="text-2xl flex-shrink-0">🍔</span>
         <div>
           <div class="font-display font-bold text-lg text-gray-900 mb-1">Food &amp; drinks</div>
-          <p class="text-gray-500 text-sm leading-relaxed">Our café is open during all sessions. No outside food please.</p>
+          <p class="text-gray-500 text-sm leading-relaxed">Our café is open during all sessions. No outside food or drink in the playground — water bottles permitted.</p>
         </div>
       </div>
     </div>
     <div class="text-center">
       <p class="text-gray-400 text-sm mb-4">Planning a bigger celebration? Party packages start from $39/child with a dedicated room &amp; host.</p>
       <button onclick="openBooking()" class="btn-primary text-base py-3 px-8">Book a Party Room 🎉</button>
+    </div>
+  </div>
+</section>
+
+<!-- ── RULES & POLICY ─────────────────────────────────────── -->
+<section id="rules" class="py-16 bg-offwhite">
+  <div class="max-w-4xl mx-auto px-5">
+    <div class="text-center mb-12">
+      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Rules & Safety Policy</h2>
+      <p class="text-gray-500 text-lg max-w-xl mx-auto">Please read before visiting — keeping Wonder World safe and fun for everyone!</p>
+    </div>
+
+    <!-- Key Rules -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center text-xl flex-shrink-0">🧦</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">Grip Socks Required</div>
+          <p class="text-gray-500 text-sm">For safety and hygiene, grip or non-slip socks must be worn on all play equipment at all times. No shoes in the playground.</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-orange-100 flex items-center justify-center text-xl flex-shrink-0">👨‍👩‍👧</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">Parent Supervision Required</div>
+          <p class="text-gray-500 text-sm">Children must be supervised by a parent or legal guardian at all times. Our staff assist but are not responsible for child supervision.</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-red-100 flex items-center justify-center text-xl flex-shrink-0">⚠️</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">Play at Your Own Risk</div>
+          <p class="text-gray-500 text-sm">Use of playground equipment involves inherent risks including slips, falls, collisions, and injuries. By entering, you acknowledge and accept these risks.</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center text-xl flex-shrink-0">🚫</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">No Outside Food or Drinks</div>
+          <p class="text-gray-500 text-sm">For safety and cleanliness of our play area, no outside food or drinks are allowed in the playground. Water bottles are permitted.</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-green-100 flex items-center justify-center text-xl flex-shrink-0">🏗️</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">No Climbing on Exterior Structures</div>
+          <p class="text-gray-500 text-sm">Do not climb on exterior structures, nets, or fences. No rough play, pushing or misuse of equipment. Follow all staff instructions at all times.</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-soft flex gap-4 items-start">
+        <div class="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-xl flex-shrink-0">📷</div>
+        <div>
+          <div class="font-display font-bold text-base text-gray-900 mb-1">Photography & CCTV</div>
+          <p class="text-gray-500 text-sm">Photos or videos may be taken for promotional purposes and CCTV is in operation. Please inform staff upon entry if you do not wish to be included.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Liability Waiver -->
+    <div class="bg-gray-900 text-white rounded-3xl p-8">
+      <h3 class="font-display font-bold text-2xl mb-5">⚖️ Terms of Entry & Liability Waiver</h3>
+      <div class="space-y-4 text-sm text-gray-300 leading-relaxed">
+        <div><strong class="text-white">1. Play at Your Own Risk</strong> — Use of the playground equipment involves inherent risks including slips, falls, collisions, and injuries. By entering the premises, all guests acknowledge and accept these risks.</div>
+        <div><strong class="text-white">2. Parent / Guardian Supervision</strong> — Children must be supervised by a parent or legal guardian at all times. Our staff are present to assist but are not responsible for child supervision.</div>
+        <div><strong class="text-white">3. Health & Safety Rules</strong> — Grip socks must be worn on all play equipment. No rough play or pushing. No climbing on exterior structures. Do not use equipment when unwell or injured. Follow all staff instructions at all times.</div>
+        <div><strong class="text-white">4. Liability Disclaimer</strong> — To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for: injury or accidents occurring during use of the facilities, or loss, theft, or damage to personal belongings.</div>
+        <div><strong class="text-white">5. Personal Belongings</strong> — All personal items are brought onto the premises at the owner's risk.</div>
+        <div><strong class="text-white">6. Photography & Media</strong> — Photos or videos may be taken for promotional purposes. Please inform staff upon entry if you do not wish to be included.</div>
+        <div><strong class="text-white">7. Right of Refusal</strong> — Management reserves the right to refuse entry or remove any person behaving in an unsafe, disruptive, or inappropriate manner.</div>
+        <div><strong class="text-white">8. Acceptance of Terms</strong> — By entering the premises, you confirm that you have read, understood, and agreed to these Terms of Entry.</div>
+      </div>
     </div>
   </div>
 </section>
@@ -369,12 +558,17 @@
     <div class="flex gap-12 text-sm">
       <div>
         <div class="font-semibold text-gray-300 mb-3">Explore</div>
-        <div class="text-gray-400 space-y-2"><div>Party Rooms</div><div>General Admission</div><div>School Groups</div></div>
+        <div class="text-gray-400 space-y-2">
+          <div><a href="#rooms" class="hover:text-white transition-colors">Party Rooms</a></div>
+          <div><a href="#menu" class="hover:text-white transition-colors">Party Menu</a></div>
+          <div><a href="#rules" class="hover:text-white transition-colors">Rules & Policy</a></div>
+        </div>
       </div>
       <div>
         <div class="font-semibold text-gray-300 mb-3">Info</div>
         <div class="text-gray-400 space-y-2">
-          <div>Opening Hours</div><div>Pricing</div>
+          <div><a href="#hours" class="hover:text-white transition-colors">Opening Hours</a></div>
+          <div><a href="#prices" class="hover:text-white transition-colors">Pricing</a></div>
           <div><a href="/admin" class="hover:text-white transition-colors">Admin</a></div>
         </div>
       </div>
@@ -457,7 +651,7 @@
               <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
             </span>
           </button>
-          <p class="text-xs text-gray-400 text-center mt-3">By continuing you agree to our <span class="text-indigo-500 cursor-pointer">Terms of Service</span> and <span class="text-indigo-500 cursor-pointer">Privacy Policy</span>.</p>
+          <p class="text-xs text-gray-400 text-center mt-3">By continuing you agree to our <span class="text-indigo-500 cursor-pointer" onclick="document.getElementById('rulesLink').scrollIntoView()">Terms of Entry & Liability Waiver</span>.</p>
         </div>
       </div>
 
@@ -483,7 +677,7 @@
       <!-- ── STEP 2: DATE & TIME ──────────────────────────── -->
       <div id="step2" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">When's the big day?</h2>
-        <p class="text-gray-500 text-sm mb-5">Select your preferred date and time slot below.</p>
+        <p class="text-gray-500 text-sm mb-5">Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label class="lbl">Select Date</label>
@@ -509,9 +703,12 @@
       <!-- ── STEP 3: FOOD ─────────────────────────────────── -->
       <div id="step3" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">What's on the menu?</h2>
-        <p class="text-gray-500 text-sm mb-5">Choose the food for your party guests — we'll prepare enough for everyone!</p>
-        <label class="lbl mb-3 block">Choose a food option</label>
-        <div class="grid grid-cols-3 gap-3 mb-7">
+        <p class="text-gray-500 text-sm mb-2">Choose the food for your party guests — includes fries and blackcurrant drink!</p>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">
+          🎂 Outside birthday cake is welcome · 🍟 Fries & 🫐 Blackcurrant Drink included with all options
+        </div>
+        <label class="lbl mb-3 block">Choose a food option <span class="text-gray-400 font-normal">(included in package)</span></label>
+        <div class="grid grid-cols-2 gap-3 mb-7">
           <div class="food-card p-4 text-center" onclick="selectFood('nuggets', this)">
             <div class="text-4xl mb-2">🍗</div>
             <div class="font-display font-bold text-base">Chicken Nuggets</div>
@@ -519,19 +716,14 @@
           </div>
           <div class="food-card p-4 text-center" onclick="selectFood('burgers', this)">
             <div class="text-4xl mb-2">🍔</div>
-            <div class="font-display font-bold text-base">Kid-Sized Burgers</div>
+            <div class="font-display font-bold text-base">Mini Burger</div>
             <div class="text-xs text-gray-400 mt-1">Mini & delicious</div>
-          </div>
-          <div class="food-card p-4 text-center" onclick="selectFood('pizza', this)">
-            <div class="text-4xl mb-2">🍕</div>
-            <div class="font-display font-bold text-base">Mini Pizzas</div>
-            <div class="text-xs text-gray-400 mt-1">Crowd favourite</div>
           </div>
         </div>
         <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5">
           <div class="flex items-center gap-2 mb-4">
             <span class="text-2xl">⚠️</span>
-            <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergy Changes</h3>
+            <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3>
           </div>
           <p class="text-amber-700 text-sm mb-4">Please let us know about any allergies or dietary needs — your guests' safety is our top priority.</p>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -548,9 +740,20 @@
               <span class="text-sm font-medium">🥜 Nut Allergy</span>
             </label>
           </div>
-          <label class="lbl">Please specify any exact food changes or ingredient substitutions required.</label>
-          <textarea class="field" rows="3" placeholder="e.g. 2 children require gluten-free nuggets (no shared fryer). 1 child has a severe tree nut allergy." id="allergyNotes" style="resize:vertical;"></textarea>
+          <label class="lbl">Specify any exact allergies or dietary requirements.</label>
+          <textarea class="field" rows="3" placeholder="e.g. 2 children require gluten-free nuggets. 1 child has a severe tree nut allergy." id="allergyNotes" style="resize:vertical;"></textarea>
         </div>
+
+        <!-- Liability Waiver Checkbox -->
+        <div class="mt-5 bg-gray-50 border-2 border-gray-200 rounded-2xl p-5">
+          <h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3>
+          <p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p>
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="liabilityWaiver" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry & Liability Waiver on behalf of all guests attending this party.</span>
+          </label>
+        </div>
+
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(2)" class="btn-secondary py-3 px-6">← Back</button>
           <button onclick="goToStep(4)" class="btn-primary py-3 px-8">Payment →</button>
@@ -564,7 +767,6 @@
 
         <div id="orderSummaryPill" class="bg-indigo-light rounded-xl p-4 mb-5 text-sm"></div>
 
-        <!-- Apple Pay / Google Pay via Stripe Payment Request Button -->
         <div id="payment-request-button" class="mb-4"></div>
         <div id="paymentRequestDivider" class="flex items-center gap-3 mb-5" style="display:none!important">
           <div class="flex-1 h-px bg-gray-200"></div>
@@ -572,7 +774,6 @@
           <div class="flex-1 h-px bg-gray-200"></div>
         </div>
 
-        <!-- Stripe Card Element -->
         <div class="space-y-3 mb-5">
           <div>
             <label class="lbl">Card Details</label>
@@ -641,8 +842,11 @@
           <h2 class="font-display font-bold text-3xl text-gray-900 mb-2">It's officially booked!</h2>
           <p class="text-gray-500 mb-6">Get ready for an amazing party. We've sent your receipt and digital entry passes — check your email and phone!</p>
           <div id="bookingSummaryCard" class="bg-gradient-to-br from-indigo-light to-teal-light rounded-2xl p-6 text-left mb-6"></div>
-          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-6">
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-4">
             <strong>📅 What happens next?</strong> Our events team will call you within 24 hours to finalise room decorations, confirm food quantities, and answer any questions.
+          </div>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 mb-6">
+            <strong>🧦 Reminder:</strong> All guests must wear grip or non-slip socks. No shoes in the playground. Outside birthday cake is welcome!
           </div>
           <button onclick="viewMyBookings()" class="btn-secondary py-3 px-8 mb-3 mr-3">View My Bookings</button>
           <button onclick="closeBooking()" class="btn-primary py-4 px-10 text-lg">Close & Head Back Home</button>
