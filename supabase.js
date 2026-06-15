@@ -11,7 +11,7 @@
 // Public Supabase credentials (safe to expose in frontend JS)
 // ---------------------------------------------------------------------------
 const SUPABASE_URL  = window.__ENV__?.SUPABASE_URL  || 'https://YOUR_PROJECT.supabase.co';
-const SUPABASE_ANON = window.__ENV__?.SUPABASE_ANON_KEY || 'YOUR_ANON_KEY';
+const SUPABASE_ANON = window.__ENV__?.SUPABASE_ANON || window.__ENV__?.SUPABASE_ANON_KEY || 'YOUR_ANON_KEY';
 
 // ---------------------------------------------------------------------------
 // Stripe publishable key (safe to expose)
