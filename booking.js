@@ -426,8 +426,12 @@ async function finaliseBooking() {
 }
 
 function buildConfirmationCard() {
-  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Kid-Sized Burgers 🍔', pizza: 'Mini Pizzas 🍕' };
+  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
   const room = state.selectedRoom;
+  const addonLines = getAddonSummaryLines();
+  const addonHtml = addonLines.length > 0
+    ? addonLines.map(a => `<div class="text-gray-500">+ ${a.label} ×${a.qty}</div><div class="font-semibold">$${a.subtotal.toFixed(2)}</div>`).join('')
+    : '';
 
   document.getElementById('bookingSummaryCard').innerHTML = `
     <div class="font-display font-bold text-xl text-gray-800 mb-1">🎂 Booking Confirmed!</div>
@@ -437,6 +441,7 @@ function buildConfirmationCard() {
       <div class="text-gray-500">Date & Time</div><div class="font-semibold">${state.selectedDate} at ${state.selectedTime}</div>
       <div class="text-gray-500">Guests</div><div class="font-semibold">${state.guests} kids</div>
       <div class="text-gray-500">Food</div><div class="font-semibold">${foodLabels[state.selectedFood] || '—'}</div>
+      ${addonHtml}
       <div class="text-gray-500">Total Paid</div><div class="font-bold text-indigo-600">$${state.calculatedTotal?.toFixed(2)} NZD</div>
       <div class="text-gray-500">Receipt to</div><div class="font-semibold text-sm truncate">${state.confirmEmail}</div>
       <div class="text-gray-500">SMS to</div><div class="font-semibold">+64 ${state.confirmPhone}</div>
@@ -444,8 +449,62 @@ function buildConfirmationCard() {
 }
 
 // ---------------------------------------------------------------------------
-// Order summary pill
+// Add-on prices
 // ---------------------------------------------------------------------------
+const ADDON_PRICES = {
+  pizza_ham:       { label: 'Ham & Cheese Pizza',       price: 25 },
+  pizza_veg:       { label: 'Vegetarian Pizza',         price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',    price: 39 },
+  platter_seafood: { label: 'Seafood Platter',          price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter',   price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)',   price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)',   price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter',   price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',         price: 39.90 },
+  sushi_kids48:    { label: 'Kids Party Platter (48p)', price: 49.90 },
+  sushi_garden:    { label: 'Green Garden Platter',     price: 42.90 },
+};
+
+function changeAddon(id, delta) {
+  if (!state.addons) state.addons = {};
+  const current = state.addons[id] || 0;
+  const next = Math.max(0, current + delta);
+  state.addons[id] = next;
+  const el = document.getElementById('addon_' + id);
+  if (el) el.textContent = next;
+  updateAddonSubtotal();
+  renderOrderSummary();
+}
+
+function updateAddonSubtotal() {
+  const subtotal = getAddonTotal();
+  const el = document.getElementById('addonSubtotal');
+  const amt = document.getElementById('addonSubtotalAmount');
+  if (!el || !amt) return;
+  if (subtotal > 0) {
+    el.classList.remove('hidden');
+    amt.textContent = '$' + subtotal.toFixed(2);
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+function getAddonTotal() {
+  if (!state.addons) return 0;
+  return Object.entries(state.addons).reduce((sum, [id, qty]) => {
+    return sum + (ADDON_PRICES[id]?.price || 0) * qty;
+  }, 0);
+}
+
+function getAddonSummaryLines() {
+  if (!state.addons) return [];
+  return Object.entries(state.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => {
+      const a = ADDON_PRICES[id];
+      return { label: a.label, qty, price: a.price, subtotal: a.price * qty };
+    });
+}
 function renderOrderSummary() {
   if (!state.selectedRoom) return;
   const room = state.selectedRoom;
@@ -453,10 +512,20 @@ function renderOrderSummary() {
   const pricePerChild = isBig
     ? (state.isWeekend ? room.weekendTotal : room.weekdayTotal)
     : room.basePricePerChild;
-  const total = pricePerChild * state.guests;
+  const baseTotal = pricePerChild * state.guests;
+  const addonTotal = getAddonTotal();
+  const total = baseTotal + addonTotal;
   state.calculatedTotal = total;
 
-  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Kid-Sized Burgers 🍔', pizza: 'Mini Pizzas 🍕' };
+  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
+  const addonLines = getAddonSummaryLines();
+
+  let addonHtml = '';
+  if (addonLines.length > 0) {
+    addonHtml = addonLines.map(a =>
+      `<div class="flex justify-between text-indigo-700"><span>+ ${a.label} ×${a.qty}</span><span class="font-semibold">$${a.subtotal.toFixed(2)}</span></div>`
+    ).join('');
+  }
 
   document.getElementById('orderSummaryPill').innerHTML = `
     <div class="font-display font-bold text-indigo-700 mb-3 text-base">📋 Your Order Summary</div>
@@ -465,7 +534,8 @@ function renderOrderSummary() {
       <div class="flex justify-between"><span>Date:</span><span class="font-semibold">${state.selectedDate} @ ${state.selectedTime}</span></div>
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
       <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${foodLabels[state.selectedFood] || 'Not selected'}</span></div>
-      <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests}</span></div>
+      <div class="flex justify-between"><span>Package rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
+      ${addonHtml}
       <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
         <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
       </div>

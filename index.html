@@ -704,25 +704,199 @@
       <!-- ── STEP 3: FOOD ─────────────────────────────────── -->
       <div id="step3" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">What's on the menu?</h2>
-        <p class="text-gray-500 text-sm mb-2">Choose the food for your party guests — includes fries and blackcurrant drink!</p>
+        <p class="text-gray-500 text-sm mb-2">Pick your main meal (included) and add any extras you'd like.</p>
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">
-          🎂 Outside birthday cake is welcome · 🍟 Fries & 🫐 Blackcurrant Drink included with all options
+          🎂 Outside birthday cake welcome · 🍟 Fries & 🫐 Blackcurrant Drink included · Extra kids charged at package rate
         </div>
-        <label class="lbl mb-3 block">Choose a food option <span class="text-gray-400 font-normal">(included in package)</span></label>
-        <div class="grid grid-cols-2 gap-3 mb-7">
+
+        <!-- Main food choice -->
+        <label class="lbl mb-3 block">Main meal <span class="text-gray-400 font-normal">(included in package)</span></label>
+        <div class="grid grid-cols-2 gap-3 mb-6">
           <div class="food-card p-4 text-center" onclick="selectFood('nuggets', this)">
             <div class="text-4xl mb-2">🍗</div>
             <div class="font-display font-bold text-base">Chicken Nuggets</div>
             <div class="text-xs text-gray-400 mt-1">Kids' classic</div>
+            <div class="text-xs text-green-600 font-semibold mt-1">Included</div>
           </div>
           <div class="food-card p-4 text-center" onclick="selectFood('burgers', this)">
             <div class="text-4xl mb-2">🍔</div>
             <div class="font-display font-bold text-base">Mini Burger</div>
             <div class="text-xs text-gray-400 mt-1">Mini & delicious</div>
+            <div class="text-xs text-green-600 font-semibold mt-1">Included</div>
           </div>
         </div>
-        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5">
-          <div class="flex items-center gap-2 mb-4">
+
+        <!-- Add-ons -->
+        <div class="mb-6">
+          <div class="font-display font-bold text-base text-gray-900 mb-1">➕ Add-Ons <span class="text-gray-400 font-normal text-sm">(optional extras)</span></div>
+          <p class="text-xs text-gray-400 mb-3">Prices are per item — added to your total.</p>
+          <div class="space-y-2" id="addonList">
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍕</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Ham & Cheese Pizza (11-inch)</div>
+                <div class="text-xs text-gray-400">Extra pizza for the party</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$25</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('pizza_ham', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_ham">0</span>
+                <button onclick="changeAddon('pizza_ham', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍕</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Vegetarian Pizza (11-inch)</div>
+                <div class="text-xs text-gray-400">Mushroom, Tomato & Spinach</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$25</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('pizza_veg', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_veg">0</span>
+                <button onclick="changeAddon('pizza_veg', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍗</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Fried Chicken Platter</div>
+                <div class="text-xs text-gray-400">10 Nuggets · 6 Fried Chicken · 6 Karaage · Fries · Sauces</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$39</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('platter_chicken', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_chicken">0</span>
+                <button onclick="changeAddon('platter_chicken', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🦐</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Seafood Platter</div>
+                <div class="text-xs text-gray-400">8 Fish Bites · 6 Prawn Twister · 6 Tempura · 6 Calamari · Fries · Sauces</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$49</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('platter_seafood', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_seafood">0</span>
+                <button onclick="changeAddon('platter_seafood', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🥪</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Adult Platter — 15 pcs Sandwiches</div>
+                <div class="text-xs text-gray-400">Ham & Cheese Sandwiches</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$60</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('adult_sandwich', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_adult_sandwich">0</span>
+                <button onclick="changeAddon('adult_sandwich', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍣</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Sushi Platter — 40 pcs</div>
+                <div class="text-xs text-gray-400">Adult sushi platter</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$60</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_40', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_40">0</span>
+                <button onclick="changeAddon('sushi_40', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍣</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Sushi Platter — 24 pcs</div>
+                <div class="text-xs text-gray-400">Smaller sushi platter</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$30</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_24', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_24">0</span>
+                <button onclick="changeAddon('sushi_24', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍣</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Salmon Supreme Platter</div>
+                <div class="text-xs text-gray-400">4 Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$28.90</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_salmon', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_salmon">0</span>
+                <button onclick="changeAddon('sushi_salmon', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍱</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Ocean Deluxe Set</div>
+                <div class="text-xs text-gray-400">4 Tempura Prawn Dragon Roll · 4 Salmon Avocado · 4 Nigiri · 2 Aburi Salmon</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$39.90</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_ocean', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_ocean">0</span>
+                <button onclick="changeAddon('sushi_ocean', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🍱</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Kids Party Platter (48 pcs)</div>
+                <div class="text-xs text-gray-400">Salmon · Teriyaki · Katsu · Tuna Mayo · Crab Stick · Avocado</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$49.90</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_kids48', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_kids48">0</span>
+                <button onclick="changeAddon('sushi_kids48', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+            <div class="addon-row flex items-center gap-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="text-2xl">🥗</div>
+              <div class="flex-1">
+                <div class="font-semibold text-sm text-gray-800">Green Garden Platter (28 pcs)</div>
+                <div class="text-xs text-gray-400">Garden Veggie · Avocado Roll · Tofu Veggie · Seaweed Inari · Avo Nigiri</div>
+              </div>
+              <div class="font-bold text-indigo-600 text-sm w-12 text-right">$42.90</div>
+              <div class="flex items-center gap-1">
+                <button onclick="changeAddon('sushi_garden', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_garden">0</span>
+                <button onclick="changeAddon('sushi_garden', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Running add-on subtotal -->
+          <div id="addonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold">
+            <span>Add-ons subtotal:</span><span id="addonSubtotalAmount">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Allergies -->
+        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5">
+          <div class="flex items-center gap-2 mb-3">
             <span class="text-2xl">⚠️</span>
             <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3>
           </div>
@@ -745,8 +919,8 @@
           <textarea class="field" rows="3" placeholder="e.g. 2 children require gluten-free nuggets. 1 child has a severe tree nut allergy." id="allergyNotes" style="resize:vertical;"></textarea>
         </div>
 
-        <!-- Liability Waiver Checkbox -->
-        <div class="mt-5 bg-gray-50 border-2 border-gray-200 rounded-2xl p-5">
+        <!-- Liability Waiver -->
+        <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5">
           <h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3>
           <p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p>
           <label class="flex items-start gap-3 cursor-pointer">
