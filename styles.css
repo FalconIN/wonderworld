@@ -1,0 +1,142 @@
+/* ── Base ─────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; background: #F9FAFB; color: #1F2937; margin: 0; }
+h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
+html { scroll-behavior: smooth; }
+
+/* ── Hero Background ─────────────────────────────────── */
+.hero-bg {
+  position: relative;
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.92) 0%, rgba(6, 95, 70, 0.92) 100%),
+              url('wonder.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: multiply;
+  filter: saturate(0.8) brightness(0.9);
+}
+
+/* ── Confetti dots pattern ───────────────────────────── */
+.dots-pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+/* ── Step indicator ──────────────────────────────────── */
+.step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; transition: all .3s; }
+.step-dot.active { background: #4F46E5; color: #fff; box-shadow: 0 0 0 4px rgba(79,70,229,0.2); }
+.step-dot.done { background: #0E9F6E; color: #fff; }
+.step-dot.pending { background: #E5E7EB; color: #9CA3AF; }
+.step-line { flex: 1; height: 3px; background: #E5E7EB; transition: background .3s; }
+.step-line.done { background: #0E9F6E; }
+
+/* ── Room cards ──────────────────────────────────────── */
+.room-card { border: 2px solid #E5E7EB; border-radius: 1.25rem; cursor: pointer; transition: all .25s; background: white; }
+.room-card:hover { border-color: #4F46E5; box-shadow: 0 8px 32px rgba(79,70,229,0.12); transform: translateY(-2px); }
+.room-card.selected { border-color: #4F46E5; background: #EEF2FF; box-shadow: 0 0 0 4px rgba(79,70,229,0.15); }
+
+/* ── Food cards ──────────────────────────────────────── */
+.food-card { border: 2px solid #E5E7EB; border-radius: 1rem; cursor: pointer; transition: all .2s; background: white; user-select: none; }
+.food-card:hover { border-color: #F59E0B; transform: translateY(-2px); }
+.food-card.selected { border-color: #F59E0B; background: #FEF3C7; box-shadow: 0 0 0 3px rgba(245,158,11,0.18); }
+
+/* ── Time slots ──────────────────────────────────────── */
+.time-slot { border: 2px solid #E5E7EB; border-radius: .75rem; cursor: pointer; transition: all .2s; background: white; text-align: center; padding: 10px 12px; }
+.time-slot:hover:not(.unavailable) { border-color: #4F46E5; background: #EEF2FF; }
+.time-slot.selected { border-color: #4F46E5; background: #4F46E5; color: white; }
+.time-slot.unavailable { opacity: 0.4; cursor: not-allowed; background: #F3F4F6; }
+.time-slot.held { border-color: #F59E0B; background: #FEF3C7; color: #B45309; cursor: not-allowed; opacity: 0.7; }
+
+/* ── Modal ───────────────────────────────────────────── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); backdrop-filter: blur(6px); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-box { background: white; border-radius: 1.5rem; width: 100%; max-width: 460px; padding: 2.5rem 2rem; box-shadow: 0 24px 80px rgba(0,0,0,.2); }
+
+/* ── Countdown timer ─────────────────────────────────── */
+.timer-bar { background: linear-gradient(90deg, #4F46E5, #0E9F6E); padding: 10px 20px; border-radius: .875rem; display: flex; align-items: center; gap: 10px; color: white; }
+.timer-bar.urgent { background: linear-gradient(90deg, #EF4444, #DC2626); animation: timerPulse 1s infinite; }
+@keyframes timerPulse { 0%,100% { opacity: 1; } 50% { opacity: .8; } }
+
+/* ── Input style ─────────────────────────────────────── */
+.field { width: 100%; border: 2px solid #E5E7EB; border-radius: .75rem; padding: 12px 16px; font-size: 15px; font-family: 'Inter', sans-serif; outline: none; transition: border-color .2s, box-shadow .2s; background: white; }
+.field:focus { border-color: #4F46E5; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+label.lbl { display: block; font-weight: 600; font-size: 13px; color: #4B5563; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── Stripe Element override ─────────────────────────── */
+#stripe-card-element.field { padding: 14px 16px; }
+.StripeElement--focus { border-color: #4F46E5 !important; box-shadow: 0 0 0 3px rgba(79,70,229,0.12) !important; }
+
+/* ── CTA button ──────────────────────────────────────── */
+.btn-primary { background: linear-gradient(135deg, #4F46E5, #4338CA); color: white; font-weight: 700; font-size: 16px; border: none; border-radius: 1rem; padding: 15px 32px; cursor: pointer; transition: all .2s; font-family: 'Fredoka', sans-serif; letter-spacing: .02em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(79,70,229,0.35); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary { background: white; color: #4F46E5; font-weight: 600; border: 2px solid #4F46E5; border-radius: 1rem; padding: 13px 28px; cursor: pointer; transition: all .2s; font-family: 'Fredoka', sans-serif; }
+.btn-secondary:hover { background: #EEF2FF; }
+
+/* ── Confetti animation ──────────────────────────────── */
+@keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0deg); opacity:1; } 100% { transform: translateY(80px) rotate(360deg); opacity:0; } }
+.confetti-piece { position: absolute; width: 8px; height: 8px; border-radius: 2px; animation: confettiFall 1.4s ease forwards; }
+
+/* ── Page transitions ────────────────────────────────── */
+.step-panel { animation: fadeUp .35s ease; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Allergy checkbox ────────────────────────────────── */
+.allergy-check { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border: 2px solid #E5E7EB; border-radius: .75rem; cursor: pointer; transition: all .2s; }
+.allergy-check:has(input:checked) { border-color: #0E9F6E; background: #D1FAE5; }
+.allergy-check input[type=checkbox] { width: 18px; height: 18px; accent-color: #0E9F6E; cursor: pointer; }
+
+/* ── Success checkmark ───────────────────────────────── */
+@keyframes scaleIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.success-icon { animation: scaleIn .5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+/* ── Navbar ──────────────────────────────────────────── */
+nav { position: sticky; top: 0; z-index: 40; background: rgba(255,255,255,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,.06); }
+
+/* ── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #C7D2FE; border-radius: 999px; }
+
+/* ── Spinner ─────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* ── Loading overlay ─────────────────────────────────── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 18px;
+  color: #4F46E5;
+}
+
+/* ── Admin table ─────────────────────────────────────── */
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th { background: #F3F4F6; text-align: left; padding: 12px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #6B7280; font-weight: 600; }
+.admin-table td { padding: 14px 16px; border-bottom: 1px solid #F3F4F6; font-size: 14px; color: #374151; }
+.admin-table tr:hover td { background: #F9FAFB; }
+
+/* ── Status badges ───────────────────────────────────── */
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge-green { background: #D1FAE5; color: #065F46; }
+.badge-yellow { background: #FEF3C7; color: #B45309; }
+.badge-red { background: #FEE2E2; color: #991B1B; }
+.badge-gray { background: #F3F4F6; color: #6B7280; }
+.badge-blue { background: #EEF2FF; color: #3730A3; }
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 640px) {
+  .modal-box { padding: 1.75rem 1.25rem; }
+}
