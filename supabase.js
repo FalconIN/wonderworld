@@ -16,7 +16,7 @@ const SUPABASE_ANON = window.__ENV__?.SUPABASE_ANON || window.__ENV__?.SUPABASE_
 // ---------------------------------------------------------------------------
 // Stripe publishable key (safe to expose)
 // ---------------------------------------------------------------------------
-const STRIPE_PK = window.__ENV__?.STRIPE_PUBLIC_KEY || 'pk_live_YOUR_STRIPE_KEY';
+const STRIPE_PK = window.__ENV__?.STRIPE_PK || window.__ENV__?.STRIPE_PUBLIC_KEY || '';
 
 // ---------------------------------------------------------------------------
 // Supabase client singleton
