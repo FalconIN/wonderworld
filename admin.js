@@ -144,7 +144,7 @@ async function loadBookings() {
     .select(`
       id, booking_ref, party_date, party_time, guest_count,
       food_choice, total_amount, status, allergy_notes,
-      created_at,
+      party_room_id, created_at,
       party_rooms ( name, emoji ),
       users ( first_name, last_name, email )
     `)
@@ -173,7 +173,7 @@ function renderBookingsTable(bookings) {
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.booking_ref}</span></td>
       <td>
         <div class="font-semibold text-sm">${b.users?.first_name || ''} ${b.users?.last_name || ''}</div>
-        <div class="text-xs text-gray-400">${b.contact_email}</div>
+        <div class="text-xs text-gray-400">${b.users?.email || '—'}</div>
       </td>
       <td>${b.party_rooms?.emoji || ''} ${b.party_rooms?.name || '—'}</td>
       <td>
@@ -186,7 +186,7 @@ function renderBookingsTable(bookings) {
       <td>
         <div class="flex gap-2">
           <button onclick="viewBooking('${b.id}')" class="text-xs text-indigo-500 hover:underline font-semibold">View</button>
-          ${b.status === 'confirmed' ? `<button onclick="cancelBooking('${b.id}', '${b.booking_ref}')" class="text-xs text-red-500 hover:underline font-semibold">Cancel</button>` : ''}
+          ${b.status !== 'cancelled' ? `<button onclick="cancelBooking('${b.id}', '${b.booking_ref}')" class="text-xs text-red-500 hover:underline font-semibold">Cancel</button>` : ''}
         </div>
       </td>
     </tr>`).join('');
@@ -227,25 +227,19 @@ async function viewBooking(bookingId) {
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Total Paid</div>
           <div class="font-bold text-indigo-600">$${parseFloat(booking.total_amount || 0).toFixed(2)} NZD</div>
         </div>
-        <div class="bg-gray-50 rounded-xl p-4">
-          <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Pricing</div>
-          <div class="font-semibold">${booking.is_weekend ? 'Weekend' : 'Weekday'}</div>
-        </div>
       </div>
       <div class="bg-gray-50 rounded-xl p-4">
         <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
         <div class="font-semibold">${booking.users?.first_name || ''} ${booking.users?.last_name || ''}</div>
-        <div class="text-sm text-gray-500">${booking.contact_email}</div>
-        <div class="text-sm text-gray-500">${booking.contact_phone || '—'}</div>
+        <div class="text-sm text-gray-500">${booking.users?.email || '—'}</div>
       </div>
-      ${(booking.allergies?.length || booking.allergy_notes) ? `
+      ${booking.allergy_notes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
-        <div class="font-semibold text-sm">${(booking.allergies || []).join(', ') || '—'}</div>
-        ${booking.allergy_notes ? `<div class="text-sm text-gray-600 mt-1">${booking.allergy_notes}</div>` : ''}
+        <div class="text-sm text-gray-600">${booking.allergy_notes}</div>
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.created_at).toLocaleString('en-NZ')}</div>
-      ${booking.status === 'confirmed' ? `
+      ${booking.status !== 'cancelled' ? `
       <button onclick="cancelBooking('${booking.id}', '${booking.booking_ref}')" class="btn-primary w-full py-3 mt-2" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
         Cancel This Booking
       </button>` : ''}
@@ -263,7 +257,7 @@ async function cancelBooking(bookingId, bookingRef) {
 
   const { error } = await supabaseClient
     .from('bookings')
-    .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', bookingId);
 
   if (error) {
@@ -271,11 +265,16 @@ async function cancelBooking(bookingId, bookingRef) {
     return;
   }
 
-  // Release the timeslot
-  await supabaseClient
-    .from('booking_timeslots')
-    .update({ status: 'released' })
-    .eq('booking_id', bookingId);
+  // Release the timeslot by finding the booking's room/date/time
+  const booking = allBookings.find(b => b.id === bookingId);
+  if (booking) {
+    await supabaseClient
+      .from('booking_timeslots')
+      .update({ status: 'released' })
+      .eq('party_room_id', booking.party_room_id)
+      .eq('slot_date', booking.party_date)
+      .eq('slot_time', booking.party_time);
+  }
 
   closeBookingModal();
   alert('✅ Booking cancelled. Process refund in the Payments tab if needed.');
@@ -459,10 +458,10 @@ async function callEdgeFunction(name, body = {}) {
 // Add Booking Modal
 // ---------------------------------------------------------------------------
 const ROOM_SLUGS = {
-  big: 'big-room',
-  sunshine: 'sunshine-room',
-  dream: 'dream-room',
-  forest: 'forest-room',
+  big: 'big',
+  sunshine: 'sunshine',
+  dream: 'dream',
+  forest: 'forest',
 };
 
 function openAddBookingModal() {
