@@ -106,6 +106,7 @@ async function loadOverview() {
     .from('bookings')
     .select('booking_ref, party_date, party_time, guest_count, status, party_rooms(name, emoji), users(email)')
     .gte('party_date', new Date().toISOString().split('T')[0])
+    .neq('status', 'cancelled')
     .order('party_date', { ascending: true })
     .limit(10);
 
@@ -499,11 +500,14 @@ async function submitAddBooking() {
   const status    = document.getElementById('ab_status').value;
 
   // Validate
-  if (!firstName || !lastName || !email || !date || !time) {
-    errEl.textContent = 'Please fill in all required fields.';
-    errEl.classList.remove('hidden');
-    return;
-  }
+  if (!firstName) { errEl.textContent = 'First name is required.'; errEl.classList.remove('hidden'); return; }
+  if (!lastName)  { errEl.textContent = 'Last name is required.';  errEl.classList.remove('hidden'); return; }
+  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { errEl.textContent = 'Valid email is required.'; errEl.classList.remove('hidden'); return; }
+  if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
+  if (!time)   { errEl.textContent = 'Time slot is required.';   errEl.classList.remove('hidden'); return; }
+  if (!guests || guests < 1) { errEl.textContent = 'Number of kids is required.'; errEl.classList.remove('hidden'); return; }
+  if (!food)   { errEl.textContent = 'Food choice is required.'; errEl.classList.remove('hidden'); return; }
+  if (!amount || amount <= 0) { errEl.textContent = 'Amount paid is required.'; errEl.classList.remove('hidden'); return; }
 
   btn.disabled = true;
   btnText.classList.add('hidden');
@@ -577,6 +581,8 @@ async function submitAddBooking() {
         allergy_notes: notes,
         total_amount: amount,
         status: status,
+        contact_email: email,
+        contact_phone: phone || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
