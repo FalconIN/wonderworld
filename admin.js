@@ -104,7 +104,7 @@ async function loadOverview() {
   // Upcoming list
   const { data: upcoming } = await supabaseClient
     .from('bookings')
-    .select('booking_ref, party_date, party_time, guest_count, status, contact_email, party_rooms(name, emoji)')
+    .select('booking_ref, party_date, party_time, guest_count, status, party_rooms(name, emoji), users(email)')
     .gte('party_date', new Date().toISOString().split('T')[0])
     .order('party_date', { ascending: true })
     .limit(10);
@@ -121,7 +121,7 @@ async function loadOverview() {
         <span class="text-2xl">${b.party_rooms?.emoji || '🎉'}</span>
         <div>
           <div class="font-semibold text-sm text-gray-900">${b.party_rooms?.name || '—'} · ${b.guest_count} kids</div>
-          <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.contact_email}</div>
+          <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.users?.email || ''}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -143,8 +143,8 @@ async function loadBookings() {
     .from('bookings')
     .select(`
       id, booking_ref, party_date, party_time, guest_count,
-      food_choice, total_amount, status, contact_email, contact_phone,
-      created_at, allergy_notes, allergies, is_weekend,
+      food_choice, total_amount, status, allergy_notes,
+      created_at,
       party_rooms ( name, emoji ),
       users ( first_name, last_name, email )
     `)
@@ -453,4 +453,179 @@ async function callEdgeFunction(name, body = {}) {
   const { data, error } = await supabaseClient.functions.invoke(name, { body });
   if (error) throw new Error(error.message);
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Add Booking Modal
+// ---------------------------------------------------------------------------
+const ROOM_SLUGS = {
+  big: 'big-room',
+  sunshine: 'sunshine-room',
+  dream: 'dream-room',
+  forest: 'forest-room',
+};
+
+function openAddBookingModal() {
+  // Set min date to today
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('ab_date').min = today;
+  document.getElementById('ab_date').value = today;
+  document.getElementById('addBookingModal').style.display = 'flex';
+  document.getElementById('addBookingError').classList.add('hidden');
+}
+
+function closeAddBookingModal() {
+  document.getElementById('addBookingModal').style.display = 'none';
+}
+
+async function submitAddBooking() {
+  const btn = document.getElementById('addBookingBtn');
+  const btnText = document.getElementById('addBookingBtnText');
+  const spinner = document.getElementById('addBookingBtnSpinner');
+  const errEl = document.getElementById('addBookingError');
+
+  // Get values
+  const firstName = document.getElementById('ab_firstName').value.trim();
+  const lastName  = document.getElementById('ab_lastName').value.trim();
+  const email     = document.getElementById('ab_email').value.trim().toLowerCase();
+  const phone     = document.getElementById('ab_phone').value.trim();
+  const roomId    = document.getElementById('ab_room').value;
+  const date      = document.getElementById('ab_date').value;
+  const time      = document.getElementById('ab_time').value;
+  const guests    = parseInt(document.getElementById('ab_guests').value);
+  const food      = document.getElementById('ab_food').value;
+  const notes     = document.getElementById('ab_notes').value.trim();
+  const amount    = parseFloat(document.getElementById('ab_amount').value) || 0;
+  const payStatus = document.getElementById('ab_payStatus').value;
+  const status    = document.getElementById('ab_status').value;
+
+  // Validate
+  if (!firstName || !lastName || !email || !date || !time) {
+    errEl.textContent = 'Please fill in all required fields.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btnText.classList.add('hidden');
+  spinner.classList.remove('hidden');
+  errEl.classList.add('hidden');
+
+  try {
+    // 1. Get the party room DB id from slug
+    const slug = ROOM_SLUGS[roomId];
+    const { data: roomData, error: roomErr } = await supabaseClient
+      .from('party_rooms')
+      .select('id, name')
+      .eq('slug', slug)
+      .single();
+
+    if (roomErr || !roomData) throw new Error('Room not found. Make sure the schema is set up correctly.');
+
+    // 2. Check if slot is already taken
+    const { data: existingSlot } = await supabaseClient
+      .from('booking_timeslots')
+      .select('id, status')
+      .eq('party_room_id', roomData.id)
+      .eq('slot_date', date)
+      .eq('slot_time', time)
+      .single();
+
+    if (existingSlot && existingSlot.status === 'confirmed') {
+      throw new Error(`That time slot is already booked for ${roomData.name} on ${date}.`);
+    }
+
+    // 3. Upsert a user profile (or find existing)
+    // We look up by email in auth — if not found we create a placeholder user row
+    let userId = null;
+    const { data: existingUser } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      userId = existingUser.id;
+      // Update their name/phone if we have it
+      await supabaseClient.from('users').update({
+        first_name: firstName, last_name: lastName, phone, updated_at: new Date().toISOString()
+      }).eq('id', userId);
+    } else {
+      // Create a placeholder user row with a generated UUID
+      const newId = crypto.randomUUID();
+      const { error: userErr } = await supabaseClient.from('users').insert({
+        id: newId, first_name: firstName, last_name: lastName, email, phone,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      });
+      if (userErr) throw new Error('Could not create user: ' + userErr.message);
+      userId = newId;
+    }
+
+    // 4. Generate booking ref
+    const bookingRef = 'WW-' + Date.now().toString(36).toUpperCase();
+
+    // 5. Insert booking
+    const { data: booking, error: bookingErr } = await supabaseClient
+      .from('bookings')
+      .insert({
+        user_id: userId,
+        party_room_id: roomData.id,
+        booking_ref: bookingRef,
+        party_date: date,
+        party_time: time,
+        guest_count: guests,
+        food_choice: food,
+        allergy_notes: notes,
+        total_amount: amount,
+        status: status,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (bookingErr) throw new Error('Booking insert failed: ' + bookingErr.message);
+
+    // 6. Lock the time slot as confirmed so it greys out on the live site
+    if (existingSlot) {
+      await supabaseClient.from('booking_timeslots').update({
+        status: 'confirmed', held_by_user_id: userId,
+      }).eq('id', existingSlot.id);
+    } else {
+      await supabaseClient.from('booking_timeslots').insert({
+        party_room_id: roomData.id,
+        slot_date: date,
+        slot_time: time,
+        status: 'confirmed',
+        held_by_user_id: userId,
+      });
+    }
+
+    // 7. Insert payment record if paid
+    if (amount > 0) {
+      await supabaseClient.from('payments').insert({
+        user_id: userId,
+        booking_id: booking.id,
+        amount: amount,
+        currency: 'nzd',
+        status: payStatus === 'paid' ? 'succeeded' : payStatus === 'partial' ? 'succeeded' : 'pending',
+        payment_method: 'manual',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    // 8. Done!
+    closeAddBookingModal();
+    alert(`✅ Booking created!\nRef: ${bookingRef}\nThe time slot is now greyed out on the live site.`);
+    refreshCurrentTab();
+
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btnText.classList.remove('hidden');
+    spinner.classList.add('hidden');
+  }
 }

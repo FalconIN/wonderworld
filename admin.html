@@ -4,11 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Admin Dashboard — Wonder World Westgate</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -26,26 +28,21 @@
 </head>
 <body class="bg-gray-50 font-body">
 
-<!-- ── Sidebar ──────────────────────────────────────────── -->
 <div class="flex h-screen overflow-hidden">
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
   <div class="w-64 bg-gray-900 flex flex-col flex-shrink-0">
-    <div class="p-6 border-b border-gray-800">
-      <div class="font-display font-bold text-xl text-white">Wonder World</div>
-      <div class="text-gray-400 text-xs mt-0.5">Admin Dashboard</div>
+    <div class="p-6 border-b border-gray-800 flex items-center gap-3">
+      <img src="wwmascot-64.png" class="w-8 h-8 rounded-lg" style="image-rendering:pixelated" />
+      <div>
+        <div class="font-display font-bold text-lg text-white">Wonder World</div>
+        <div class="text-gray-400 text-xs">Admin Dashboard</div>
+      </div>
     </div>
     <nav class="flex-1 p-4 space-y-1">
-      <button onclick="showTab('overview')" id="nav-overview" class="admin-nav-btn active w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">
-        📊 Overview
-      </button>
-      <button onclick="showTab('bookings')" id="nav-bookings" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">
-        📋 Bookings
-      </button>
-      <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">
-        💳 Payments
-      </button>
-      <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">
-        👥 Customers
-      </button>
+      <button onclick="showTab('overview')" id="nav-overview" class="admin-nav-btn active w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📊 Overview</button>
+      <button onclick="showTab('bookings')" id="nav-bookings" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📋 Bookings</button>
+      <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">💳 Payments</button>
+      <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">👥 Customers</button>
     </nav>
     <div class="p-4 border-t border-gray-800">
       <div id="adminUserInfo" class="text-gray-400 text-xs mb-3"></div>
@@ -54,21 +51,21 @@
     </div>
   </div>
 
-  <!-- ── Main content ─────────────────────────────────── -->
+  <!-- ── Main content ──────────────────────────────────────── -->
   <div class="flex-1 overflow-y-auto">
-    <!-- Header -->
     <div class="bg-white border-b border-gray-200 px-8 py-5 flex items-center justify-between">
       <div>
         <h1 id="pageTitle" class="font-display font-bold text-2xl text-gray-900">Overview</h1>
         <p id="pageSubtitle" class="text-gray-400 text-sm">Wonder World Westgate booking system</p>
       </div>
       <div class="flex items-center gap-3">
-        <input id="searchInput" type="text" placeholder="Search..." class="field w-64 py-2.5 text-sm" oninput="handleSearch(this.value)" />
+        <input id="searchInput" type="text" placeholder="Search..." class="field w-52 py-2.5 text-sm" oninput="handleSearch(this.value)" />
+        <button onclick="openAddBookingModal()" class="btn-primary py-2.5 px-5 text-sm">+ Add Booking</button>
         <button onclick="refreshCurrentTab()" class="btn-secondary py-2.5 px-5 text-sm">↻ Refresh</button>
       </div>
     </div>
 
-    <!-- ── OVERVIEW TAB ──────────────────────────────── -->
+    <!-- ── OVERVIEW TAB ──────────────────────────────────── -->
     <div id="tab-overview" class="p-8">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
         <div class="bg-white rounded-2xl p-5 shadow-soft">
@@ -92,14 +89,13 @@
           <div class="text-gray-400 text-sm">Upcoming Parties</div>
         </div>
       </div>
-
       <div class="bg-white rounded-2xl shadow-soft p-6">
         <h2 class="font-display font-bold text-xl text-gray-900 mb-4">Upcoming Bookings (Next 7 Days)</h2>
         <div id="upcoming-bookings-list">Loading...</div>
       </div>
     </div>
 
-    <!-- ── BOOKINGS TAB ──────────────────────────────── -->
+    <!-- ── BOOKINGS TAB ──────────────────────────────────── -->
     <div id="tab-bookings" class="p-8" style="display:none">
       <div class="bg-white rounded-2xl shadow-soft overflow-hidden">
         <div class="p-5 border-b border-gray-100 flex items-center justify-between">
@@ -115,14 +111,7 @@
           <table class="admin-table" id="bookings-table">
             <thead>
               <tr>
-                <th>Ref</th>
-                <th>Customer</th>
-                <th>Room</th>
-                <th>Date & Time</th>
-                <th>Guests</th>
-                <th>Total</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>Ref</th><th>Customer</th><th>Room</th><th>Date & Time</th><th>Guests</th><th>Total</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="bookings-tbody">
@@ -133,7 +122,7 @@
       </div>
     </div>
 
-    <!-- ── PAYMENTS TAB ─────────────────────────────── -->
+    <!-- ── PAYMENTS TAB ──────────────────────────────────── -->
     <div id="tab-payments" class="p-8" style="display:none">
       <div class="bg-white rounded-2xl shadow-soft overflow-hidden">
         <div class="p-5 border-b border-gray-100">
@@ -143,13 +132,7 @@
           <table class="admin-table" id="payments-table">
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Customer</th>
-                <th>Booking Ref</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Date</th>
-                <th>Actions</th>
+                <th>Payment ID</th><th>Customer</th><th>Booking Ref</th><th>Amount</th><th>Status</th><th>Date</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="payments-tbody">
@@ -160,7 +143,7 @@
       </div>
     </div>
 
-    <!-- ── CUSTOMERS TAB ─────────────────────────────── -->
+    <!-- ── CUSTOMERS TAB ─────────────────────────────────── -->
     <div id="tab-customers" class="p-8" style="display:none">
       <div class="bg-white rounded-2xl shadow-soft overflow-hidden">
         <div class="p-5 border-b border-gray-100">
@@ -170,12 +153,7 @@
           <table class="admin-table" id="customers-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Bookings</th>
-                <th>Total Spent</th>
-                <th>Joined</th>
+                <th>Name</th><th>Email</th><th>Phone</th><th>Bookings</th><th>Total Spent</th><th>Joined</th>
               </tr>
             </thead>
             <tbody id="customers-tbody">
@@ -196,6 +174,105 @@
       <button onclick="closeBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
     </div>
     <div id="bookingDetailContent"></div>
+  </div>
+</div>
+
+<!-- ── Add Booking Modal ─────────────────────────────────── -->
+<div id="addBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddBookingModal()">
+  <div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="font-display font-bold text-2xl text-gray-900">➕ Add Manual Booking</h2>
+      <button onclick="closeAddBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Customer info -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">👤 Customer Details</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">First Name</label><input class="field" id="ab_firstName" placeholder="Sarah" /></div>
+          <div><label class="lbl">Last Name</label><input class="field" id="ab_lastName" placeholder="Thompson" /></div>
+        </div>
+        <div><label class="lbl">Email</label><input class="field" id="ab_email" type="email" placeholder="sarah@example.co.nz" /></div>
+        <div><label class="lbl">Phone</label><input class="field" id="ab_phone" placeholder="021 234 5678" /></div>
+      </div>
+
+      <!-- Booking details -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">🎉 Booking Details</div>
+        <div>
+          <label class="lbl">Party Room</label>
+          <select class="field" id="ab_room">
+            <option value="big">🌟 The Big Room (min 12 kids)</option>
+            <option value="sunshine">☀️ Sunshine Room (min 8 kids)</option>
+            <option value="dream">🌙 Dream Room (min 8 kids)</option>
+            <option value="forest">🌿 Wonder Forest Room (min 8 kids)</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Party Date</label><input class="field" id="ab_date" type="date" /></div>
+          <div>
+            <label class="lbl">Time Slot</label>
+            <select class="field" id="ab_time">
+              <option value="9:30 AM">9:30 AM – 11:00 AM</option>
+              <option value="11:30 AM">11:30 AM – 1:00 PM</option>
+              <option value="1:30 PM">1:30 PM – 3:00 PM</option>
+              <option value="3:30 PM">3:30 PM – 5:00 PM</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Number of Kids</label>
+          <input class="field" id="ab_guests" type="number" min="1" max="30" value="10" />
+        </div>
+        <div>
+          <label class="lbl">Food Choice</label>
+          <select class="field" id="ab_food">
+            <option value="nuggets">🍗 Chicken Nuggets</option>
+            <option value="burgers">🍔 Mini Burger</option>
+          </select>
+        </div>
+        <div><label class="lbl">Allergy / Notes</label><textarea class="field" id="ab_notes" rows="2" placeholder="Any allergies or special requests..."></textarea></div>
+      </div>
+
+      <!-- Payment -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">💰 Payment</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="lbl">Amount Paid (NZD)</label>
+            <input class="field" id="ab_amount" type="number" min="0" step="0.01" placeholder="390.00" />
+          </div>
+          <div>
+            <label class="lbl">Payment Status</label>
+            <select class="field" id="ab_payStatus">
+              <option value="paid">✅ Paid</option>
+              <option value="unpaid">⏳ Unpaid / Invoice</option>
+              <option value="partial">🔸 Partial</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Booking Status</label>
+          <select class="field" id="ab_status">
+            <option value="confirmed">Confirmed</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="addBookingError" class="text-red-500 text-sm hidden"></div>
+
+      <div class="flex gap-3">
+        <button onclick="closeAddBookingModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="submitAddBooking()" class="btn-primary flex-1 py-3" id="addBookingBtn">
+          <span id="addBookingBtnText">Create Booking</span>
+          <span id="addBookingBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
