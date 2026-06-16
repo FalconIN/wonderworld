@@ -518,12 +518,12 @@ function renderOrderSummary() {
   const isBig = room.id === 'big';
   const duration = state.duration || 90;
   const basePricePerChild = room.basePricePerChild;
-  // 2-hour adds $29/child extra
-  const extraPerChild = duration === 120 ? 29 : 0;
-  const pricePerChild = basePricePerChild + extraPerChild;
+  const pricePerChild = basePricePerChild;
   const baseTotal = pricePerChild * state.guests;
+  // 2-hour flat fee: $199 for small rooms, $299 for big room
+  const durationFee = duration === 120 ? (room.id === 'big' ? 299 : 199) : 0;
   const addonTotal = getAddonTotal();
-  const total = baseTotal + addonTotal;
+  const total = baseTotal + durationFee + addonTotal;
   state.calculatedTotal = total;
 
   const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
@@ -546,6 +546,7 @@ function renderOrderSummary() {
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
       <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${foodLabels[state.selectedFood] || 'Not selected'}</span></div>
       <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
+      ${durationFee > 0 ? `<div class="flex justify-between text-indigo-700"><span>+ 2 hour extension fee:</span><span class="font-semibold">$${durationFee.toFixed(2)}</span></div>` : ''}
       ${addonHtml}
       <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
         <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
