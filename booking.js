@@ -103,24 +103,22 @@ function buildRoomCard(room, dimmed) {
   const selected = state.selectedRoom && state.selectedRoom.id === room.id;
   const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
   const selClass = selected ? 'room-card selected' : 'room-card';
-  const priceNote = room.id === 'big'
-    ? `$${room.basePricePerChild}/child · $${room.weekdayTotal}–$${room.weekendTotal} total`
-    : `$${room.basePricePerChild}/child`;
 
   return `
-    <div class="${selClass} ${dimClass} p-4 flex items-center gap-4" onclick="selectRoom('${room.id}')">
-      <div class="w-12 h-12 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white">${room.emoji}</div>
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="font-display font-bold text-lg">${room.name}</span>
-          ${room.badge ? `<span class="bg-amber-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full">${room.badge}</span>` : ''}
+    <div class="${selClass} ${dimClass} p-4" onclick="selectRoom('${room.id}')">
+      <div class="flex items-start gap-3">
+        <div class="w-11 h-11 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white">${room.emoji}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap mb-0.5">
+            <span class="font-display font-bold text-base leading-tight">${room.name}</span>
+            ${room.badge ? `<span class="bg-amber-400 text-gray-900 text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap">${room.badge}</span>` : ''}
+          </div>
+          <div class="text-xs text-gray-400 leading-snug">${room.minGuests}–${room.maxGuests} kids · ${room.tagLine}</div>
+          <div class="flex items-center justify-between mt-1.5 flex-wrap gap-1">
+            <div class="${c.text} font-display font-bold text-sm">$${room.basePricePerChild}/child</div>
+            ${selected ? '<div class="text-indigo-500 text-xs font-semibold">✓ Selected</div>' : ''}
+          </div>
         </div>
-        <div class="text-xs text-gray-400">${room.tagLine} · ${room.minGuests}–${room.maxGuests} kids</div>
-        <div class="text-xs text-gray-500 mt-1 truncate">${room.description}</div>
-      </div>
-      <div class="text-right flex-shrink-0">
-        <div class="${c.text} font-display font-bold text-base">${priceNote}</div>
-        ${selected ? '<div class="text-indigo-500 text-xs font-semibold mt-1">✓ Selected</div>' : ''}
       </div>
     </div>`;
 }
