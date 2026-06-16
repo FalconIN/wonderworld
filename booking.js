@@ -16,8 +16,8 @@ const ROOMS = [
   {
     id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
     tagLine: 'Exclusive Extra Large Zone',
-    minGuests: 16, maxGuests: 24,
-    basePricePerChild: 39, weekdayTotal: 49, weekendTotal: 59,
+    minGuests: 12, maxGuests: 24,
+    basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
     description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
     badge: 'BEST VALUE',
   },
@@ -469,8 +469,7 @@ const ADDON_PRICES = {
   sushi_24:        { label: 'Sushi Platter (24 pcs)',   price: 30 },
   sushi_salmon:    { label: 'Salmon Supreme Platter',   price: 28.90 },
   sushi_ocean:     { label: 'Ocean Deluxe Set',         price: 39.90 },
-  sushi_kids48:    { label: 'Kids Party Platter (48p)', price: 49.90 },
-  sushi_garden:    { label: 'Green Garden Platter',     price: 42.90 },
+
 };
 
 function changeAddon(id, delta) {
@@ -518,9 +517,7 @@ function renderOrderSummary() {
   const room = state.selectedRoom;
   const isBig = room.id === 'big';
   const duration = state.duration || 90;
-  const basePricePerChild = isBig
-    ? (state.isWeekend ? room.weekendTotal : room.weekdayTotal)
-    : room.basePricePerChild;
+  const basePricePerChild = room.basePricePerChild;
   // 2-hour adds $29/child extra
   const extraPerChild = duration === 120 ? 29 : 0;
   const pricePerChild = basePricePerChild + extraPerChild;

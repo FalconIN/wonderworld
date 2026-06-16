@@ -146,10 +146,13 @@ async function validateStep(n) {
     }
   }
   if (n === 3) {
-    if (!state.selectedFood) {
-      showFieldError('Please choose a food option for your guests.');
+    const nuggets = parseInt(document.getElementById('nuggetCount')?.textContent) || 0;
+    const burgers = parseInt(document.getElementById('burgerCount')?.textContent) || 0;
+    if (nuggets + burgers !== state.guests) {
+      showFieldError(`Food selection must add up to ${state.guests} kids. Currently ${nuggets + burgers} selected.`);
       return false;
     }
+    state.selectedFood = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
     const waiver = document.getElementById('liabilityWaiver');
     if (waiver && !waiver.checked) {
       showFieldError('Please read and accept the Terms of Entry & Liability Waiver to continue.');
@@ -458,4 +461,58 @@ function selectDuration(mins, el) {
   el.classList.add('border-indigo-500', 'bg-indigo-50');
   // Recalculate total if room already selected
   if (state.selectedRoom) renderOrderSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Food split (nuggets + burgers must add up to guest count)
+// ---------------------------------------------------------------------------
+function changeFoodSplit(type, delta) {
+  const total = state.guests;
+  const nuggets = parseInt(document.getElementById('nuggetCount').textContent) || 0;
+  const burgers = parseInt(document.getElementById('burgerCount').textContent) || 0;
+  const current = type === 'nuggets' ? nuggets : burgers;
+  const other   = type === 'nuggets' ? burgers : nuggets;
+  const next = Math.max(0, Math.min(current + delta, total - other));
+
+  if (type === 'nuggets') {
+    document.getElementById('nuggetCount').textContent = next;
+  } else {
+    document.getElementById('burgerCount').textContent = next;
+  }
+
+  const newTotal = type === 'nuggets' ? next + burgers : nuggets + next;
+  const totalEl = document.getElementById('foodSplitTotal');
+  const ofEl    = document.getElementById('foodSplitOf');
+  if (totalEl) totalEl.textContent = `${newTotal} / ${total} selected`;
+  if (ofEl)    ofEl.textContent = total;
+
+  const errEl = document.getElementById('foodSplitError');
+  if (newTotal === total) {
+    if (errEl) errEl.classList.add('hidden');
+    // Store as combined food choice
+    state.selectedFood = `${next > 0 ? next + ' Nuggets' : ''}${next > 0 && (type === 'burgers' ? delta > 0 : burgers > 0) ? ' + ' : ''}${(type === 'burgers' ? next : burgers) > 0 ? (type === 'burgers' ? next : burgers) + ' Burgers' : ''}`;
+    if (type === 'nuggets') {
+      state.selectedFood = `${next} Nuggets${burgers > 0 ? ' + ' + burgers + ' Burgers' : ''}`;
+    } else {
+      state.selectedFood = `${nuggets > 0 ? nuggets + ' Nuggets + ' : ''}${next} Burgers`;
+    }
+  } else {
+    state.selectedFood = null;
+  }
+}
+
+function initFoodSplit() {
+  const total = state.guests;
+  const targetEl = document.getElementById('foodGuestTarget');
+  const ofEl     = document.getElementById('foodSplitOf');
+  const totalEl  = document.getElementById('foodSplitTotal');
+  if (targetEl) targetEl.textContent = total;
+  if (ofEl)     ofEl.textContent = total;
+  if (totalEl)  totalEl.textContent = `0 / ${total} selected`;
+  // Reset counts
+  const nuggetEl = document.getElementById('nuggetCount');
+  const burgerEl = document.getElementById('burgerCount');
+  if (nuggetEl) nuggetEl.textContent = '0';
+  if (burgerEl) burgerEl.textContent = '0';
+  state.selectedFood = null;
 }
