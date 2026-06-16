@@ -530,9 +530,9 @@
      BOOKING WIZARD MODAL
 ═══════════════════════════════════════════════════════════ -->
 <div id="bookingOverlay" class="modal-overlay" style="display:none;" onclick="handleOverlayClick(event)">
-  <div id="bookingBox" class="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
-    
-    <button onclick="closeBooking()" class="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors text-lg">×</button>
+  <div class="relative w-full max-w-2xl flex flex-col items-end">
+    <button onclick="closeBooking()" class="mb-2 mr-1 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors text-xl font-bold z-20">×</button>
+  <div id="bookingBox" class="w-full bg-white rounded-3xl shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
 
     <div id="wizardTopBar" class="bg-white border-b border-gray-100 px-6 pt-5 pb-4">
       <div id="stepIndicator" class="flex items-center mb-4" style="display:none!important"></div>
@@ -980,6 +980,7 @@
       </div>
 
     </div>
+  </div>
   </div>
 </div>
 
