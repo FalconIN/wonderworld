@@ -293,6 +293,50 @@ function resetWizard() {
   const gc = document.getElementById('guestCount');
   if (gc) gc.textContent = '10';
 
+  // Reset addon quantity displays
+  if (typeof ADDON_PRICES !== 'undefined') {
+    Object.keys(ADDON_PRICES).forEach(id => {
+      const el = document.getElementById('addon_' + id);
+      if (el) el.textContent = '0';
+    });
+  }
+  const addonSubtotalEl = document.getElementById('addonSubtotal');
+  if (addonSubtotalEl) addonSubtotalEl.classList.add('hidden');
+
+  // Reset food split counters
+  const nuggetEl = document.getElementById('nuggetCount');
+  const burgerEl = document.getElementById('burgerCount');
+  if (nuggetEl) nuggetEl.textContent = '0';
+  if (burgerEl) burgerEl.textContent = '0';
+  const foodSplitTotal = document.getElementById('foodSplitTotal');
+  if (foodSplitTotal) foodSplitTotal.textContent = '0 / 10 selected';
+  const foodSplitError = document.getElementById('foodSplitError');
+  if (foodSplitError) foodSplitError.classList.add('hidden');
+
+  // Reset duration selector to 90 min default
+  const dur90 = document.getElementById('dur90');
+  const dur120 = document.getElementById('dur120');
+  if (dur90 && dur120) {
+    dur90.classList.add('border-indigo-500', 'bg-indigo-50');
+    dur90.classList.remove('border-gray-200', 'bg-white');
+    dur120.classList.add('border-gray-200', 'bg-white');
+    dur120.classList.remove('border-indigo-500', 'bg-indigo-50');
+  }
+
+  // Reset allergy fields
+  const allergyNotes = document.getElementById('allergyNotes');
+  if (allergyNotes) allergyNotes.value = '';
+  ['allergyGluten', 'allergyDairy', 'allergyNuts'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  const waiver = document.getElementById('liabilityWaiver');
+  if (waiver) waiver.checked = false;
+
+  // Reset cardholder name field
+  const cardName = document.getElementById('cardholderName');
+  if (cardName) cardName.value = '';
+
   // Set min date
   const dateInput = document.getElementById('partyDate');
   if (dateInput) {

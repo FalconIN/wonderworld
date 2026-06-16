@@ -66,7 +66,7 @@ let slotSubscription = null;
 // Guest count adjustment
 // ---------------------------------------------------------------------------
 function adjustGuests(delta) {
-  state.guests = Math.max(1, Math.min(30, state.guests + delta));
+  state.guests = Math.max(1, Math.min(24, state.guests + delta));
   document.getElementById('guestCount').textContent = state.guests;
   renderRooms();
 }
@@ -432,7 +432,6 @@ async function finaliseBooking() {
 }
 
 function buildConfirmationCard() {
-  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
   const room = state.selectedRoom;
   const addonLines = getAddonSummaryLines();
   const addonHtml = addonLines.length > 0
@@ -446,7 +445,7 @@ function buildConfirmationCard() {
       <div class="text-gray-500">Room</div><div class="font-semibold">${room?.name || ''}</div>
       <div class="text-gray-500">Date & Time</div><div class="font-semibold">${state.selectedDate} at ${state.selectedTime}</div>
       <div class="text-gray-500">Guests</div><div class="font-semibold">${state.guests} kids</div>
-      <div class="text-gray-500">Food</div><div class="font-semibold">${foodLabels[state.selectedFood] || '—'}</div>
+      <div class="text-gray-500">Food</div><div class="font-semibold">${state.selectedFood || '—'}</div>
       ${addonHtml}
       <div class="text-gray-500">Total Paid</div><div class="font-bold text-indigo-600">$${state.calculatedTotal?.toFixed(2)} NZD</div>
       <div class="text-gray-500">Receipt to</div><div class="font-semibold text-sm truncate">${state.confirmEmail}</div>
@@ -524,7 +523,6 @@ function renderOrderSummary() {
   const total = baseTotal + durationFee + addonTotal;
   state.calculatedTotal = total;
 
-  const foodLabels = { nuggets: 'Chicken Nuggets 🍗', burgers: 'Mini Burger 🍔' };
   const addonLines = getAddonSummaryLines();
   const durationLabel = duration === 120 ? '2 hours' : '90 minutes';
 
@@ -542,7 +540,7 @@ function renderOrderSummary() {
       <div class="flex justify-between"><span>Date:</span><span class="font-semibold">${state.selectedDate} @ ${state.selectedTime}</span></div>
       <div class="flex justify-between"><span>Duration:</span><span class="font-semibold">${durationLabel}</span></div>
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
-      <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${foodLabels[state.selectedFood] || 'Not selected'}</span></div>
+      <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${state.selectedFood || 'Not selected'}</span></div>
       <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
       ${durationFee > 0 ? `<div class="flex justify-between text-indigo-700"><span>+ 2 hour extension fee:</span><span class="font-semibold">$${durationFee.toFixed(2)}</span></div>` : ''}
       ${addonHtml}
