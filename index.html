@@ -286,22 +286,22 @@
       <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
         <div class="font-display font-bold text-lg text-gray-900 mb-3">➕ Add-Ons</div>
         <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>🍕 Extra Ham & Cheese Pizza (11-inch)</span><span class="font-bold text-gray-800">$25</span></div>
-          <div class="flex justify-between"><span>🍕 Vegetarian Pizza (11-inch)</span><span class="font-bold text-gray-800">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Extra Ham & Cheese Pizza (11-inch)</span><span class="font-bold text-green-600">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Vegetarian Pizza (11-inch)</span><span class="font-bold text-green-600">$25</span></div>
         </div>
       </div>
       <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
         <div class="font-display font-bold text-lg text-gray-900 mb-3">🥪 Adult Platter</div>
         <div class="space-y-1 text-sm text-gray-600">
-          <div class="flex justify-between"><span>15 pcs Ham & Cheese Sandwiches</span><span class="font-bold text-gray-800">$60</span></div>
-          <div class="flex justify-between"><span>40 pcs Sushi Platter</span><span class="font-bold text-gray-800">$60</span></div>
-          <div class="flex justify-between"><span>24 pcs Sushi Platter</span><span class="font-bold text-gray-800">$30</span></div>
+          <div class="flex justify-between"><span>15 pcs Ham & Cheese Sandwiches</span><span class="font-bold text-green-600">$60</span></div>
+          <div class="flex justify-between"><span>40 pcs Sushi Platter</span><span class="font-bold text-green-600">$60</span></div>
+          <div class="flex justify-between"><span>24 pcs Sushi Platter</span><span class="font-bold text-green-600">$30</span></div>
         </div>
       </div>
       <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
         <div class="flex items-center justify-between mb-3">
           <div class="font-display font-bold text-lg text-gray-900">🍗 Fried Chicken Platter</div>
-          <span class="bg-amber-400 text-gray-900 text-xs font-bold rounded-full px-2 py-1">$39</span>
+          <span class="bg-green-500 text-white text-xs font-bold rounded-full px-2 py-1">$39</span>
         </div>
         <div class="space-y-1 text-sm text-gray-600">
           <div>10 Chicken Nuggets</div>
@@ -324,9 +324,9 @@
       <div class="bg-white rounded-2xl shadow-soft p-5 border border-gray-100">
         <div class="font-display font-bold text-lg text-gray-900 mb-3">🍣 Sushi Platters</div>
         <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>Salmon Supreme Platter</span><span class="font-bold text-indigo-600">$28.90</span></div>
+          <div class="flex justify-between"><span>Salmon Supreme Platter</span><span class="font-bold text-green-600">$28.90</span></div>
           <div class="text-xs text-gray-400 -mt-1">4 pcs Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
-          <div class="flex justify-between"><span>Ocean Deluxe Set</span><span class="font-bold text-indigo-600">$39.90</span></div>
+          <div class="flex justify-between"><span>Ocean Deluxe Set</span><span class="font-bold text-green-600">$39.90</span></div>
           <div class="text-xs text-gray-400 -mt-1">4 pcs Tempura Prawn Dragon Roll · 4 pcs Salmon Avocado Roll · 4 Nigiri · 2 Aburi Salmon</div>
         </div>
       </div>
@@ -360,9 +360,17 @@
 <!-- ── RULES & POLICY ─────────────────────────────────────── -->
 <section id="rules" class="py-16 bg-offwhite">
   <div class="max-w-4xl mx-auto px-5">
-    <div class="text-center mb-12">
+    <div class="text-center mb-8">
       <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Rules & Safety Policy</h2>
       <p class="text-gray-500 text-lg max-w-xl mx-auto">Please read before visiting — keeping Wonder World safe and fun for everyone!</p>
+    </div>
+
+    <div class="bg-red-600 text-white rounded-2xl p-5 mb-8 flex items-center gap-4 shadow-lg">
+      <span class="text-4xl flex-shrink-0">🚫</span>
+      <div>
+        <div class="font-display font-bold text-xl">NO OUTSIDE FOOD OR DRINKS ALLOWED</div>
+        <div class="text-sm text-red-100 mt-0.5">For the safety and cleanliness of our play area. Water bottles are permitted.</div>
+      </div>
     </div>
 
     <!-- Key Rules -->
@@ -625,24 +633,6 @@
       <div id="step2" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">When's the big day?</h2>
         <p class="text-gray-500 text-sm mb-5">Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</p>
-
-        <!-- Duration picker -->
-        <div class="mb-5">
-          <label class="lbl">Party Duration</label>
-          <div class="grid grid-cols-2 gap-3 mt-1">
-            <div id="dur90" onclick="selectDuration(90, this)" class="duration-card selected border-2 border-indigo-500 bg-indigo-50 rounded-2xl p-4 cursor-pointer text-center transition-all">
-              <div class="font-display font-bold text-lg text-indigo-700">90 min</div>
-              <div class="text-xs text-gray-500 mt-1">Standard package</div>
-              <div class="text-xs font-semibold text-indigo-600 mt-1">$39/child</div>
-            </div>
-            <div id="dur120" onclick="selectDuration(120, this)" class="duration-card border-2 border-gray-200 bg-white rounded-2xl p-4 cursor-pointer text-center transition-all hover:border-indigo-300">
-              <div class="font-display font-bold text-lg text-gray-700">2 hours</div>
-              <div class="text-xs text-gray-500 mt-1">Extended party</div>
-              <div class="text-xs font-semibold text-teal mt-1">+$199 <span class="text-gray-400 font-normal">flat fee (small rooms)</span></div>
-              <div class="text-xs text-gray-400 mt-0.5">+$299 for The Big Room</div>
-            </div>
-          </div>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -944,7 +934,7 @@
             <label class="lbl">Mobile Number (NZ)</label>
             <div class="flex gap-2">
               <span class="field w-20 text-center font-semibold text-gray-600 bg-gray-50 flex-shrink-0 flex items-center justify-center">🇳🇿 +64</span>
-              <input class="field flex-1" type="tel" id="confirmPhone" placeholder="21 234 5678" />
+              <input class="field flex-1" type="tel" inputmode="numeric" id="confirmPhone" placeholder="21 234 5678" />
             </div>
             <p class="text-xs text-gray-400 mt-1">Your digital entry passes and booking updates will be texted here.</p>
           </div>

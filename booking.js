@@ -16,7 +16,7 @@ const ROOMS = [
   {
     id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
     tagLine: 'Exclusive Extra Large Zone',
-    minGuests: 12, maxGuests: 24,
+    minGuests: 16, maxGuests: 24,
     basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
     description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
     badge: 'BEST VALUE',
@@ -323,11 +323,15 @@ function selectFood(type, el) {
 // Save confirmed booking to Supabase
 // ---------------------------------------------------------------------------
 async function saveBookingToSupabase(paymentIntentId, amountPaid) {
-  const allergies = [];
-  if (document.getElementById('allergyGluten')?.checked) allergies.push('gluten-free');
-  if (document.getElementById('allergyDairy')?.checked)  allergies.push('dairy-free');
-  if (document.getElementById('allergyNuts')?.checked)   allergies.push('nut-allergy');
   const allergyNotes = document.getElementById('allergyNotes')?.value.trim() || '';
+
+  // Build itemized addon summary text (matches what the customer saw)
+  const addonLines = getAddonSummaryLines();
+  const addonsSummary = addonLines.length > 0
+    ? addonLines.map(a => `${a.label} ×${a.qty} ($${a.subtotal.toFixed(2)})`).join(', ')
+    : '';
+  const addonsAmount = getAddonTotal();
+  const baseAmount = amountPaid - addonsAmount;
 
   // Generate booking ref
   const bookingRef = 'WW-' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -344,13 +348,14 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
       guest_count:      state.guests,
       food_choice:      state.selectedFood,
       allergy_notes:    allergyNotes,
-      allergies:        allergies,
+      addons_summary:   addonsSummary,
+      base_amount:      baseAmount,
+      addons_amount:    addonsAmount,
       total_amount:     amountPaid,
       status:           'confirmed',
       contact_email:    state.confirmEmail,
       contact_phone:    '+64' + state.confirmPhone.replace(/\s/g, ''),
       stripe_payment_intent_id: paymentIntentId,
-      is_weekend:       state.isWeekend,
     })
     .select('id')
     .single();
@@ -390,6 +395,10 @@ async function finaliseBooking() {
 
   if (!email || !phone) { showFieldError('Please enter both your email and mobile number.'); return; }
   if (!isValidEmail(email)) { showFieldError('Please enter a valid email address.'); return; }
+  if (!isValidNzMobile(phone)) {
+    showFieldError('Please enter a valid NZ mobile number (e.g. 021 234 5678).');
+    return;
+  }
 
   state.confirmEmail = email;
   state.confirmPhone = phone;
@@ -416,7 +425,6 @@ async function finaliseBooking() {
       roomName:     state.selectedRoom.name,
       partyDate:    state.selectedDate,
       partyTime:    state.selectedTime,
-      duration:     state.duration,
       guestCount:   state.guests,
       foodChoice:   state.selectedFood,
       totalAmount:  state.calculatedTotal,
@@ -514,19 +522,13 @@ function getAddonSummaryLines() {
 function renderOrderSummary() {
   if (!state.selectedRoom) return;
   const room = state.selectedRoom;
-  const isBig = room.id === 'big';
-  const duration = state.duration || 90;
-  const basePricePerChild = room.basePricePerChild;
-  const pricePerChild = basePricePerChild;
+  const pricePerChild = room.basePricePerChild;
   const baseTotal = pricePerChild * state.guests;
-  // 2-hour flat fee: $199 for small rooms, $299 for big room
-  const durationFee = duration === 120 ? (room.id === 'big' ? 299 : 199) : 0;
   const addonTotal = getAddonTotal();
-  const total = baseTotal + durationFee + addonTotal;
+  const total = baseTotal + addonTotal;
   state.calculatedTotal = total;
 
   const addonLines = getAddonSummaryLines();
-  const durationLabel = duration === 120 ? '2 hours' : '90 minutes';
 
   let addonHtml = '';
   if (addonLines.length > 0) {
@@ -540,11 +542,9 @@ function renderOrderSummary() {
     <div class="space-y-1.5 text-sm text-indigo-800">
       <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${room.name}</span></div>
       <div class="flex justify-between"><span>Date:</span><span class="font-semibold">${state.selectedDate} @ ${state.selectedTime}</span></div>
-      <div class="flex justify-between"><span>Duration:</span><span class="font-semibold">${durationLabel}</span></div>
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
       <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${state.selectedFood || 'Not selected'}</span></div>
       <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
-      ${durationFee > 0 ? `<div class="flex justify-between text-indigo-700"><span>+ 2 hour extension fee:</span><span class="font-semibold">$${durationFee.toFixed(2)}</span></div>` : ''}
       ${addonHtml}
       <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
         <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
@@ -620,4 +620,12 @@ function setFinaliseLoading(loading) {
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidNzMobile(phone) {
+  // Strip spaces, dashes, and an optional leading +64 / 0064 / 64
+  let cleaned = phone.replace(/[\s-]/g, '');
+  cleaned = cleaned.replace(/^(\+?64|0064)/, '0');
+  // NZ mobiles: 02x followed by 7-9 digits (total 9-10 digits starting with 02)
+  return /^02[0-9]\d{6,8}$/.test(cleaned);
 }

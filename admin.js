@@ -83,6 +83,7 @@ async function loadOverview() {
     { data: revenueData },
     { count: totalCustomers },
     { count: upcomingCount },
+    { count: cancelledCount },
   ] = await Promise.all([
     supabaseClient.from('bookings').select('*', { count: 'exact', head: true }),
     supabaseClient.from('bookings').select('total_amount').neq('status', 'cancelled'),
@@ -92,6 +93,7 @@ async function loadOverview() {
       .gte('party_date', new Date().toISOString().split('T')[0])
       .lte('party_date', new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0])
       .eq('status', 'confirmed'),
+    supabaseClient.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'cancelled'),
   ]);
 
   const totalRevenue = (revenueData || []).reduce((s, r) => s + parseFloat(r.total_amount || 0), 0);
@@ -101,12 +103,16 @@ async function loadOverview() {
   document.getElementById('stat-customers').textContent = totalCustomers ?? '—';
   document.getElementById('stat-upcoming').textContent  = upcomingCount ?? '—';
 
-  // Upcoming list
+  const cancelledNote = document.getElementById('stat-cancelled-note');
+  if (cancelledNote) {
+    cancelledNote.textContent = cancelledCount > 0 ? `(${cancelledCount} cancelled)` : '';
+  }
+
+  // Upcoming list (includes cancelled so admins see the full picture)
   const { data: upcoming } = await supabaseClient
     .from('bookings')
     .select('booking_ref, party_date, party_time, guest_count, status, contact_email, party_rooms(name, emoji)')
     .gte('party_date', new Date().toISOString().split('T')[0])
-    .neq('status', 'cancelled')
     .order('party_date', { ascending: true })
     .limit(10);
 
@@ -117,16 +123,16 @@ async function loadOverview() {
   }
 
   list.innerHTML = upcoming.map(b => `
-    <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+    <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 ${b.status === 'cancelled' ? 'opacity-60' : ''}">
       <div class="flex items-center gap-3">
         <span class="text-2xl">${b.party_rooms?.emoji || '🎉'}</span>
         <div>
-          <div class="font-semibold text-sm text-gray-900">${b.party_rooms?.name || '—'} · ${b.guest_count} kids</div>
+          <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${b.party_rooms?.name || '—'} · ${b.guest_count} kids</div>
           <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.contact_email || ''}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <span class="badge ${b.status === 'confirmed' ? 'badge-green' : 'badge-yellow'}">${b.status}</span>
+        <span class="badge ${statusBadgeClass(b.status)}">${b.status}</span>
         <span class="text-xs text-gray-400 font-mono">${b.booking_ref}</span>
       </div>
     </div>`).join('');
@@ -145,7 +151,7 @@ async function loadBookings() {
     .select(`
       id, booking_ref, party_date, party_time, guest_count,
       food_choice, total_amount, status, allergy_notes,
-      party_room_id, user_id, contact_email, created_at,
+      party_room_id, user_id, contact_email, addons_summary, base_amount, addons_amount, created_at,
       party_rooms ( name, emoji )
     `)
     .order('created_at', { ascending: false })
@@ -195,6 +201,11 @@ async function viewBooking(bookingId) {
   const booking = allBookings.find(b => b.id === bookingId);
   if (!booking) return;
 
+  const guestCount = booking.guest_count || 0;
+  const baseAmount = booking.base_amount !== null && booking.base_amount !== undefined
+    ? parseFloat(booking.base_amount) : null;
+  const ratePerChild = (baseAmount !== null && guestCount > 0) ? baseAmount / guestCount : null;
+
   document.getElementById('bookingDetailContent').innerHTML = `
     <div class="space-y-3">
       <div class="grid grid-cols-2 gap-3">
@@ -214,19 +225,21 @@ async function viewBooking(bookingId) {
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Date & Time</div>
           <div class="font-semibold">${booking.party_date} @ ${booking.party_time}</div>
         </div>
-        <div class="bg-gray-50 rounded-xl p-4">
-          <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Guests</div>
-          <div class="font-semibold">${booking.guest_count} children</div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-4">
-          <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Food</div>
-          <div class="font-semibold">${booking.food_choice || '—'}</div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-4">
-          <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Total Paid</div>
-          <div class="font-bold text-indigo-600">$${parseFloat(booking.total_amount || 0).toFixed(2)} NZD</div>
+      </div>
+
+      <div class="bg-indigo-light rounded-xl p-4">
+        <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
+        <div class="space-y-1.5 text-sm text-indigo-800">
+          <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${guestCount} children</span></div>
+          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${booking.food_choice || '—'}</span></div>
+          ${ratePerChild ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guestCount} = $${baseAmount.toFixed(2)}</span></div>` : ''}
+          ${booking.addons_summary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${booking.addons_summary}</span></div>` : ''}
+          <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
+            <span>Total:</span><span class="text-indigo-600">$${parseFloat(booking.total_amount || 0).toFixed(2)} NZD</span>
+          </div>
         </div>
       </div>
+
       <div class="bg-gray-50 rounded-xl p-4">
         <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
         <div class="text-sm text-gray-500">${booking.contact_email || '—'}</div>

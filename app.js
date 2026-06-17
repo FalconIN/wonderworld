@@ -29,7 +29,6 @@ const state = {
   allergyNotes:   '',
   allergies:      [],
   addons:         {},
-  duration:       90,
   confirmEmail:   '',
   confirmPhone:   '',
   bookingRef:     '',
@@ -268,7 +267,6 @@ function resetWizard() {
     allergyNotes: '',
     allergies: [],
     addons: {},
-    duration: 90,
     confirmEmail: '',
     confirmPhone: '',
     bookingRef: '',
@@ -312,16 +310,6 @@ function resetWizard() {
   if (foodSplitTotal) foodSplitTotal.textContent = '0 / 10 selected';
   const foodSplitError = document.getElementById('foodSplitError');
   if (foodSplitError) foodSplitError.classList.add('hidden');
-
-  // Reset duration selector to 90 min default
-  const dur90 = document.getElementById('dur90');
-  const dur120 = document.getElementById('dur120');
-  if (dur90 && dur120) {
-    dur90.classList.add('border-indigo-500', 'bg-indigo-50');
-    dur90.classList.remove('border-gray-200', 'bg-white');
-    dur120.classList.add('border-gray-200', 'bg-white');
-    dur120.classList.remove('border-indigo-500', 'bg-indigo-50');
-  }
 
   // Reset allergy fields
   const allergyNotes = document.getElementById('allergyNotes');
@@ -490,22 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
     dateInput.min = today;
   }
 });
-
-// ---------------------------------------------------------------------------
-// Duration selector
-// ---------------------------------------------------------------------------
-function selectDuration(mins, el) {
-  state.duration = mins;
-  // Update UI
-  document.querySelectorAll('.duration-card').forEach(c => {
-    c.classList.remove('border-indigo-500', 'bg-indigo-50');
-    c.classList.add('border-gray-200', 'bg-white');
-  });
-  el.classList.remove('border-gray-200', 'bg-white');
-  el.classList.add('border-indigo-500', 'bg-indigo-50');
-  // Recalculate total if room already selected
-  if (state.selectedRoom) renderOrderSummary();
-}
 
 // ---------------------------------------------------------------------------
 // Food split (nuggets + burgers must add up to guest count)

@@ -31,13 +31,13 @@
 <div class="flex h-screen overflow-hidden">
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <div class="w-64 bg-gray-900 flex flex-col flex-shrink-0">
-    <div class="p-6 border-b border-gray-800 flex items-center gap-3">
+    <a href="/" class="p-6 border-b border-gray-800 flex items-center gap-3 hover:bg-gray-800 transition-colors">
       <img src="wwmascot-64.png" class="w-8 h-8 rounded-lg" style="image-rendering:pixelated" />
       <div>
         <div class="font-display font-bold text-lg text-white">Wonder World</div>
         <div class="text-gray-400 text-xs">Admin Dashboard</div>
       </div>
-    </div>
+    </a>
     <nav class="flex-1 p-4 space-y-1">
       <button onclick="showTab('overview')" id="nav-overview" class="admin-nav-btn active w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📊 Overview</button>
       <button onclick="showTab('bookings')" id="nav-bookings" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📋 Bookings</button>
@@ -72,6 +72,7 @@
           <div class="text-2xl mb-2">📋</div>
           <div class="font-display font-bold text-3xl text-gray-900" id="stat-bookings">—</div>
           <div class="text-gray-400 text-sm">Total Bookings</div>
+          <div class="text-xs text-red-400 mt-1" id="stat-cancelled-note"></div>
         </div>
         <div class="bg-white rounded-2xl p-5 shadow-soft">
           <div class="text-2xl mb-2">💰</div>
