@@ -372,6 +372,7 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
   }
 
   // Save payment record
+  const cardholderName = document.getElementById('cardholderName')?.value.trim() || null;
   await supabaseClient
     .from('payments')
     .insert({
@@ -381,6 +382,7 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
       amount:                  amountPaid,
       currency:                'nzd',
       status:                  'succeeded',
+      cardholder_name:         cardholderName,
     });
 
   return booking.id;

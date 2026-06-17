@@ -303,9 +303,9 @@ async function loadPayments() {
     .from('payments')
     .select(`
       id, stripe_payment_intent_id, amount, currency, status,
+      card_brand, card_last4, cardholder_name,
       created_at, error_message,
-      bookings ( booking_ref ),
-      users ( first_name, last_name, email )
+      bookings ( booking_ref, contact_email )
     `)
     .order('created_at', { ascending: false })
     .limit(200);
@@ -324,12 +324,18 @@ function renderPaymentsTable(payments) {
     return;
   }
 
-  tbody.innerHTML = payments.map(p => `
+  tbody.innerHTML = payments.map(p => {
+    const cardInfo = (p.card_brand && p.card_last4)
+      ? `${p.card_brand.toUpperCase()} •••• ${p.card_last4}`
+      : '—';
+    return `
     <tr>
-      <td><span class="font-mono text-xs text-gray-500">${(p.stripe_payment_intent_id || '—').slice(0, 20)}...</span></td>
       <td>
-        <div class="font-semibold text-sm">${p.users?.first_name || ''} ${p.users?.last_name || ''}</div>
-        <div class="text-xs text-gray-400">${p.users?.email || '—'}</div>
+        <div class="font-semibold text-sm">${p.cardholder_name || '—'}</div>
+        <div class="text-xs text-gray-400">${cardInfo}</div>
+      </td>
+      <td>
+        <div class="text-xs text-gray-400">${p.bookings?.contact_email || '—'}</div>
       </td>
       <td><span class="font-mono text-xs text-indigo-600">${p.bookings?.booking_ref || '—'}</span></td>
       <td class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
@@ -338,7 +344,8 @@ function renderPaymentsTable(payments) {
       <td>
         ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripe_payment_intent_id}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 async function refundPayment(paymentId, stripePaymentIntentId, amount) {
@@ -369,19 +376,36 @@ async function refundPayment(paymentId, stripePaymentIntentId, amount) {
 // ---------------------------------------------------------------------------
 async function loadCustomers() {
   const tbody = document.getElementById('customers-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
-  const { data, error } = await supabaseClient
+  const { data: users, error: usersError } = await supabaseClient
     .from('users')
-    .select(`
-      id, first_name, last_name, email, phone, created_at,
-      bookings ( id, total_amount, status )
-    `)
+    .select('id, first_name, last_name, email, phone, created_at')
     .order('created_at', { ascending: false })
     .limit(200);
 
-  if (error) { console.error(error); return; }
-  allCustomers = data || [];
+  if (usersError) { console.error(usersError); return; }
+
+  const { data: bookings, error: bookingsError } = await supabaseClient
+    .from('bookings')
+    .select('contact_email, total_amount, status');
+
+  if (bookingsError) { console.error(bookingsError); return; }
+
+  // Group bookings by contact_email for quick lookup
+  const bookingsByEmail = {};
+  (bookings || []).forEach(b => {
+    const key = (b.contact_email || '').toLowerCase();
+    if (!key) return;
+    if (!bookingsByEmail[key]) bookingsByEmail[key] = [];
+    bookingsByEmail[key].push(b);
+  });
+
+  allCustomers = (users || []).map(u => ({
+    ...u,
+    bookings: bookingsByEmail[(u.email || '').toLowerCase()] || [],
+  }));
+
   renderCustomersTable(allCustomers);
 }
 
@@ -390,29 +414,19 @@ function renderCustomersTable(customers) {
   if (!tbody) return;
 
   if (!customers || customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = customers.map(c => {
-    const confirmedBookings = (c.bookings || []).filter(b => b.status === 'confirmed');
-    const totalSpent = confirmedBookings.reduce((s, b) => s + parseFloat(b.total_amount || 0), 0);
+    const nonCancelled = (c.bookings || []).filter(b => b.status !== 'cancelled');
+    const totalSpent = nonCancelled.reduce((s, b) => s + parseFloat(b.total_amount || 0), 0);
+    const name = `${c.first_name || ''} ${c.last_name || ''}`.trim() || '—';
     return `<tr>
-      <td>
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-            ${(c.first_name?.[0] || '?').toUpperCase()}
-          </div>
-          <div>
-            <div class="font-semibold text-sm">${c.first_name || ''} ${c.last_name || ''}</div>
-          </div>
-        </div>
-      </td>
-      <td class="text-sm">${c.email}</td>
+      <td class="font-semibold text-sm">${name}</td>
+      <td class="text-sm">${c.email || '—'}</td>
       <td class="text-sm">${c.phone || '—'}</td>
-      <td>${confirmedBookings.length}</td>
       <td class="font-semibold">$${totalSpent.toFixed(2)}</td>
-      <td class="text-xs text-gray-400">${new Date(c.created_at).toLocaleDateString('en-NZ')}</td>
     </tr>`;
   }).join('');
 }
