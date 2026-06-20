@@ -489,11 +489,64 @@ const ROOM_SLUGS = {
   forest: 'forest',
 };
 
+// Mirrors the customer-facing ROOMS array in booking.js
+const AB_ROOMS = [
+  { id: 'big',      name: 'The Big Room',      emoji: '🌟', minGuests: 12, maxGuests: 24, pricePerChild: 39 },
+  { id: 'sunshine', name: 'Sunshine Room',     emoji: '☀️', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
+  { id: 'dream',    name: 'Dream Room',        emoji: '🌙', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
+  { id: 'forest',   name: 'Wonder Forest Room',emoji: '🌿', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
+];
+
+const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+const AB_SLOT_END_TIMES = {
+  '9:30 AM':  '11:00 AM',
+  '11:30 AM': '1:00 PM',
+  '1:30 PM':  '3:00 PM',
+  '3:30 PM':  '5:00 PM',
+};
+
+// Mirrors the customer-facing ADDON_PRICES in booking.js
+const AB_ADDON_PRICES = {
+  pizza_ham:       { label: 'Ham & Cheese Pizza',     price: 25 },
+  pizza_veg:       { label: 'Vegetarian Pizza',       price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',  price: 39 },
+  platter_seafood: { label: 'Seafood Platter',        price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter', price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)', price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)', price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter', price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',       price: 39.90 },
+};
+
+// Local state for the manual booking modal
+let abState = {
+  guests: 10,
+  selectedRoomId: null,
+  selectedRoomDbId: null,
+  selectedDate: null,
+  selectedTime: null,
+  addons: {},
+};
+
 function openAddBookingModal() {
-  // Set min date to today
+  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {} };
+
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('ab_date').min = today;
-  document.getElementById('ab_date').value = today;
+  document.getElementById('ab_date').value = '';
+  document.getElementById('ab_guests').value = 10;
+  document.getElementById('ab_notes').value = '';
+  document.getElementById('ab_nuggetCount').textContent = '0';
+  document.getElementById('ab_burgerCount').textContent = '0';
+  document.getElementById('ab_foodSplitTotal').textContent = '0 / 10 selected';
+  document.getElementById('ab_foodTarget').textContent = '10';
+  document.getElementById('ab_payStatus').value = 'paid';
+  document.getElementById('ab_status').value = 'confirmed';
+  document.getElementById('ab_timeSlotGrid').innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room and date first</div>';
+  document.getElementById('ab_orderSummary').innerHTML = '<div class="text-indigo-400">Select a room and guests to see pricing</div>';
+
+  abRenderRoomCards();
+  abRenderAddonsList();
   document.getElementById('addBookingModal').style.display = 'flex';
   document.getElementById('addBookingError').classList.add('hidden');
 }
@@ -502,36 +555,259 @@ function closeAddBookingModal() {
   document.getElementById('addBookingModal').style.display = 'none';
 }
 
+function abOnGuestsChange() {
+  abState.guests = Math.max(1, Math.min(24, parseInt(document.getElementById('ab_guests').value) || 1));
+  document.getElementById('ab_guests').value = abState.guests;
+  document.getElementById('ab_foodTarget').textContent = abState.guests;
+  abRenderRoomCards();
+  // Reset food split since target changed
+  document.getElementById('ab_nuggetCount').textContent = '0';
+  document.getElementById('ab_burgerCount').textContent = '0';
+  document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
+  abUpdateOrderSummary();
+}
+
+function abRenderRoomCards() {
+  const container = document.getElementById('ab_roomCards');
+  if (!container) return;
+
+  const eligible = AB_ROOMS.filter(r => abState.guests >= r.minGuests && abState.guests <= r.maxGuests);
+  const ineligible = AB_ROOMS.filter(r => abState.guests < r.minGuests || abState.guests > r.maxGuests);
+
+  let html = '';
+  eligible.forEach(r => { html += abBuildRoomCard(r, false); });
+  if (ineligible.length > 0) {
+    html += `<div class="text-xs text-gray-400 font-semibold pt-2">OTHER ROOMS (outside guest count)</div>`;
+    ineligible.forEach(r => { html += abBuildRoomCard(r, true); });
+  }
+  container.innerHTML = html;
+
+  // If previously selected room is no longer eligible, clear it
+  if (abState.selectedRoomId && !eligible.find(r => r.id === abState.selectedRoomId)) {
+    abState.selectedRoomId = null;
+    abState.selectedRoomDbId = null;
+  }
+}
+
+function abBuildRoomCard(room, dimmed) {
+  const selected = abState.selectedRoomId === room.id;
+  const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
+  const selClass = selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white';
+  return `
+    <div class="border-2 ${selClass} ${dimClass} rounded-xl p-3 cursor-pointer transition-all" onclick="abSelectRoom('${room.id}')">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">${room.emoji}</span>
+          <div>
+            <div class="font-semibold text-sm">${room.name}</div>
+            <div class="text-xs text-gray-400">${room.minGuests}–${room.maxGuests} kids</div>
+          </div>
+        </div>
+        <div class="text-sm font-bold text-indigo-600">$${room.pricePerChild}/child</div>
+      </div>
+    </div>`;
+}
+
+async function abSelectRoom(roomId) {
+  abState.selectedRoomId = roomId;
+  abRenderRoomCards();
+
+  const slug = ROOM_SLUGS[roomId];
+  const { data: roomRow } = await supabaseClient
+    .from('party_rooms')
+    .select('id')
+    .eq('slug', slug)
+    .single();
+
+  abState.selectedRoomDbId = roomRow?.id || null;
+
+  // Re-fetch slots if a date is already chosen
+  const dateVal = document.getElementById('ab_date').value;
+  if (dateVal) await abUpdateTimeSlots();
+  abUpdateOrderSummary();
+}
+
+async function abUpdateTimeSlots() {
+  const dateVal = document.getElementById('ab_date').value;
+  abState.selectedDate = dateVal;
+  abState.selectedTime = null;
+
+  const grid = document.getElementById('ab_timeSlotGrid');
+  if (!dateVal) {
+    grid.innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a date</div>';
+    return;
+  }
+  if (!abState.selectedRoomDbId) {
+    grid.innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room first</div>';
+    return;
+  }
+
+  grid.innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Checking availability...</div>';
+
+  const { data: bookedSlots } = await supabaseClient
+    .from('booking_timeslots')
+    .select('slot_time, status, hold_expires_at')
+    .eq('party_room_id', abState.selectedRoomDbId)
+    .eq('slot_date', dateVal)
+    .in('status', ['confirmed', 'held']);
+
+  const unavailable = (bookedSlots || [])
+    .filter(s => s.status === 'confirmed' || (s.status === 'held' && new Date(s.hold_expires_at) > new Date()))
+    .map(s => s.slot_time);
+
+  let html = '';
+  AB_ALL_SLOTS.forEach(slot => {
+    const isUnavailable = unavailable.includes(slot);
+    const selected = abState.selectedTime === slot;
+    const cls = isUnavailable
+      ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+      : selected
+        ? 'border-indigo-500 bg-indigo-50 text-indigo-700 cursor-pointer'
+        : 'border-gray-200 bg-white hover:border-indigo-300 cursor-pointer';
+    html += `
+      <div class="border-2 ${cls} rounded-xl p-2.5 text-center transition-all" ${isUnavailable ? '' : `onclick="abSelectTime('${slot}', this)"`}>
+        <div class="font-semibold text-sm">${slot}</div>
+        <div class="text-xs opacity-70">– ${AB_SLOT_END_TIMES[slot]}</div>
+        ${isUnavailable ? '<div class="text-xs font-semibold mt-0.5">Full</div>' : ''}
+      </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function abSelectTime(slot, el) {
+  abState.selectedTime = slot;
+  document.querySelectorAll('#ab_timeSlotGrid > div').forEach(c => {
+    c.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+    c.classList.add('border-gray-200', 'bg-white');
+  });
+  el.classList.remove('border-gray-200', 'bg-white');
+  el.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+}
+
+function abChangeFoodSplit(type, delta) {
+  const total = abState.guests;
+  const nuggets = parseInt(document.getElementById('ab_nuggetCount').textContent) || 0;
+  const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
+  const current = type === 'nuggets' ? nuggets : burgers;
+  const other = type === 'nuggets' ? burgers : nuggets;
+  const next = Math.max(0, Math.min(current + delta, total - other));
+
+  if (type === 'nuggets') {
+    document.getElementById('ab_nuggetCount').textContent = next;
+  } else {
+    document.getElementById('ab_burgerCount').textContent = next;
+  }
+
+  const newTotal = type === 'nuggets' ? next + burgers : nuggets + next;
+  document.getElementById('ab_foodSplitTotal').textContent = `${newTotal} / ${total} selected`;
+}
+
+function abRenderAddonsList() {
+  const container = document.getElementById('ab_addonsList');
+  if (!container) return;
+  let html = '';
+  Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    html += `
+      <div class="flex items-center justify-between bg-white rounded-lg p-2.5 border border-gray-100">
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button onclick="abChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+          <span class="w-5 text-center text-xs font-bold" id="ab_addon_${id}">0</span>
+          <button onclick="abChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+        </div>
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function abChangeAddon(id, delta) {
+  const current = abState.addons[id] || 0;
+  const next = Math.max(0, current + delta);
+  abState.addons[id] = next;
+  document.getElementById('ab_addon_' + id).textContent = next;
+  abUpdateOrderSummary();
+}
+
+function abGetAddonTotal() {
+  return Object.entries(abState.addons).reduce((sum, [id, qty]) => sum + (AB_ADDON_PRICES[id]?.price || 0) * qty, 0);
+}
+
+function abUpdateOrderSummary() {
+  const summaryEl = document.getElementById('ab_orderSummary');
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  if (!room) {
+    summaryEl.innerHTML = '<div class="text-indigo-400">Select a room and guests to see pricing</div>';
+    return;
+  }
+  const baseTotal = room.pricePerChild * abState.guests;
+  const addonTotal = abGetAddonTotal();
+  const total = baseTotal + addonTotal;
+
+  const addonLines = Object.entries(abState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .join('');
+
+  summaryEl.innerHTML = `
+    <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${room.name}</span></div>
+    <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${room.pricePerChild}/child × ${abState.guests} = $${baseTotal.toFixed(2)}</span></div>
+    ${addonLines}
+    <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
+      <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
+    </div>`;
+}
+
+function abGetCalculatedTotal() {
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  if (!room) return 0;
+  return (room.pricePerChild * abState.guests) + abGetAddonTotal();
+}
+
 async function submitAddBooking() {
   const btn = document.getElementById('addBookingBtn');
   const btnText = document.getElementById('addBookingBtnText');
   const spinner = document.getElementById('addBookingBtnSpinner');
   const errEl = document.getElementById('addBookingError');
 
-  // Get values
   const firstName = document.getElementById('ab_firstName').value.trim();
   const lastName  = document.getElementById('ab_lastName').value.trim();
   const email     = document.getElementById('ab_email').value.trim().toLowerCase();
   const phone     = document.getElementById('ab_phone').value.trim();
-  const roomId    = document.getElementById('ab_room').value;
-  const date      = document.getElementById('ab_date').value;
-  const time      = document.getElementById('ab_time').value;
-  const guests    = parseInt(document.getElementById('ab_guests').value);
-  const food      = document.getElementById('ab_food').value;
+  const date      = abState.selectedDate;
+  const time      = abState.selectedTime;
+  const guests    = abState.guests;
   const notes     = document.getElementById('ab_notes').value.trim();
-  const amount    = parseFloat(document.getElementById('ab_amount').value) || 0;
   const payStatus = document.getElementById('ab_payStatus').value;
   const status    = document.getElementById('ab_status').value;
+
+  const nuggets = parseInt(document.getElementById('ab_nuggetCount').textContent) || 0;
+  const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
 
   // Validate
   if (!firstName) { errEl.textContent = 'First name is required.'; errEl.classList.remove('hidden'); return; }
   if (!lastName)  { errEl.textContent = 'Last name is required.';  errEl.classList.remove('hidden'); return; }
   if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { errEl.textContent = 'Valid email is required.'; errEl.classList.remove('hidden'); return; }
+  if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
   if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
-  if (!time)   { errEl.textContent = 'Time slot is required.';   errEl.classList.remove('hidden'); return; }
-  if (!guests || guests < 1) { errEl.textContent = 'Number of kids is required.'; errEl.classList.remove('hidden'); return; }
-  if (!food)   { errEl.textContent = 'Food choice is required.'; errEl.classList.remove('hidden'); return; }
-  if (!amount || amount <= 0) { errEl.textContent = 'Amount paid is required.'; errEl.classList.remove('hidden'); return; }
+  if (!time)   { errEl.textContent = 'Please select a time slot.'; errEl.classList.remove('hidden'); return; }
+  if (nuggets + burgers !== guests) {
+    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
+  const addonLines = Object.entries(abState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+  const addonsSummary = addonLines.join(', ');
+  const addonsAmount = abGetAddonTotal();
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  const baseAmount = room.pricePerChild * guests;
+  const totalAmount = baseAmount + addonsAmount;
 
   btn.disabled = true;
   btnText.classList.add('hidden');
@@ -539,17 +815,10 @@ async function submitAddBooking() {
   errEl.classList.add('hidden');
 
   try {
-    // 1. Get the party room DB id from slug
-    const slug = ROOM_SLUGS[roomId];
-    const { data: roomData, error: roomErr } = await supabaseClient
-      .from('party_rooms')
-      .select('id, name')
-      .eq('slug', slug)
-      .single();
+    const roomData = { id: abState.selectedRoomDbId, name: room.name };
+    if (!roomData.id) throw new Error('Room not found. Make sure the schema is set up correctly.');
 
-    if (roomErr || !roomData) throw new Error('Room not found. Make sure the schema is set up correctly.');
-
-    // 2. Check if slot is already taken
+    // Check if slot is already taken (race condition guard)
     const { data: existingSlot } = await supabaseClient
       .from('booking_timeslots')
       .select('id, status')
@@ -562,8 +831,7 @@ async function submitAddBooking() {
       throw new Error(`That time slot is already booked for ${roomData.name} on ${date}.`);
     }
 
-    // 3. Upsert a user profile (or find existing)
-    // We look up by email in auth — if not found we create a placeholder user row
+    // Upsert user
     let userId = null;
     const { data: existingUser } = await supabaseClient
       .from('users')
@@ -573,12 +841,10 @@ async function submitAddBooking() {
 
     if (existingUser) {
       userId = existingUser.id;
-      // Update their name/phone if we have it
       await supabaseClient.from('users').update({
         first_name: firstName, last_name: lastName, phone, updated_at: new Date().toISOString()
       }).eq('id', userId);
     } else {
-      // Create a placeholder user row with a generated UUID
       const newId = crypto.randomUUID();
       const { error: userErr } = await supabaseClient.from('users').insert({
         id: newId, first_name: firstName, last_name: lastName, email, phone,
@@ -588,10 +854,8 @@ async function submitAddBooking() {
       userId = newId;
     }
 
-    // 4. Generate booking ref
     const bookingRef = 'WW-' + Date.now().toString(36).toUpperCase();
 
-    // 5. Insert booking
     const { data: booking, error: bookingErr } = await supabaseClient
       .from('bookings')
       .insert({
@@ -601,9 +865,12 @@ async function submitAddBooking() {
         party_date: date,
         party_time: time,
         guest_count: guests,
-        food_choice: food,
+        food_choice: foodChoice,
         allergy_notes: notes,
-        total_amount: amount,
+        addons_summary: addonsSummary,
+        base_amount: baseAmount,
+        addons_amount: addonsAmount,
+        total_amount: totalAmount,
         status: status,
         contact_email: email,
         contact_phone: phone || null,
@@ -615,7 +882,7 @@ async function submitAddBooking() {
 
     if (bookingErr) throw new Error('Booking insert failed: ' + bookingErr.message);
 
-    // 6. Lock the time slot as confirmed so it greys out on the live site
+    // Lock the time slot
     if (existingSlot) {
       await supabaseClient.from('booking_timeslots').update({
         status: 'confirmed', held_by_user_id: userId,
@@ -630,23 +897,22 @@ async function submitAddBooking() {
       });
     }
 
-    // 7. Insert payment record if paid
-    if (amount > 0) {
+    // Insert payment record
+    if (totalAmount > 0) {
       await supabaseClient.from('payments').insert({
         user_id: userId,
         booking_id: booking.id,
-        amount: amount,
+        amount: totalAmount,
         currency: 'nzd',
-        status: payStatus === 'paid' ? 'succeeded' : payStatus === 'partial' ? 'succeeded' : 'pending',
+        status: payStatus === 'paid' ? 'succeeded' : 'pending',
         payment_method: 'manual',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
     }
 
-    // 8. Done!
     closeAddBookingModal();
-    alert(`✅ Booking created!\nRef: ${bookingRef}\nThe time slot is now greyed out on the live site.`);
+    alert(`✅ Booking created!\nRef: ${bookingRef}\nTotal: $${totalAmount.toFixed(2)}\nThe time slot is now greyed out on the live site.`);
     refreshCurrentTab();
 
   } catch (err) {

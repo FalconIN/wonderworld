@@ -180,7 +180,7 @@
 
 <!-- ── Add Booking Modal ─────────────────────────────────── -->
 <div id="addBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddBookingModal()">
-  <div class="modal-box" style="max-width:560px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+  <div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
     <div class="flex justify-between items-center mb-5">
       <h2 class="font-display font-bold text-2xl text-gray-900">➕ Add Manual Booking</h2>
       <button onclick="closeAddBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
@@ -198,61 +198,77 @@
         <div><label class="lbl">Phone</label><input class="field" id="ab_phone" placeholder="021 234 5678" /></div>
       </div>
 
-      <!-- Booking details -->
+      <!-- Room -->
       <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
-        <div class="font-semibold text-gray-800 text-sm">🎉 Booking Details</div>
-        <div>
-          <label class="lbl">Party Room</label>
-          <select class="field" id="ab_room">
-            <option value="big">🌟 The Big Room (min 12 kids)</option>
-            <option value="sunshine">☀️ Sunshine Room (min 8 kids)</option>
-            <option value="dream">🌙 Dream Room (min 8 kids)</option>
-            <option value="forest">🌿 Wonder Forest Room (min 8 kids)</option>
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="lbl">Party Date</label><input class="field" id="ab_date" type="date" /></div>
-          <div>
-            <label class="lbl">Time Slot</label>
-            <select class="field" id="ab_time">
-              <option value="9:30 AM">9:30 AM – 11:00 AM</option>
-              <option value="11:30 AM">11:30 AM – 1:00 PM</option>
-              <option value="1:30 PM">1:30 PM – 3:00 PM</option>
-              <option value="3:30 PM">3:30 PM – 5:00 PM</option>
-            </select>
-          </div>
-        </div>
+        <div class="font-semibold text-gray-800 text-sm">🎉 Party Room</div>
         <div>
           <label class="lbl">Number of Kids</label>
-          <input class="field" id="ab_guests" type="number" min="1" max="24" value="10" />
+          <input class="field" id="ab_guests" type="number" min="1" max="24" value="10" onchange="abOnGuestsChange()" />
         </div>
+        <div id="ab_roomCards" class="space-y-2"></div>
+      </div>
+
+      <!-- Date & Time -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">📅 Date & Time</div>
+        <div><label class="lbl">Party Date</label><input class="field" id="ab_date" type="date" onchange="abUpdateTimeSlots()" /></div>
         <div>
-          <label class="lbl">Food Choice</label>
-          <select class="field" id="ab_food">
-            <option value="nuggets">🍗 Chicken Nuggets</option>
-            <option value="burgers">🍔 Mini Burger</option>
-          </select>
+          <label class="lbl">Available Time Slots</label>
+          <div id="ab_timeSlotGrid" class="grid grid-cols-2 gap-2 mt-1">
+            <div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room and date first</div>
+          </div>
         </div>
+      </div>
+
+      <!-- Food split -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">🍽️ Food Choice</div>
+        <div class="text-xs text-gray-400">Must add up to <span id="ab_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white border-2 border-gray-200 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">🍗</div>
+            <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="abChangeFoodSplit('nuggets', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="ab_nuggetCount">0</span>
+              <button onclick="abChangeFoodSplit('nuggets', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+          <div class="bg-white border-2 border-gray-200 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">🍔</div>
+            <div class="font-semibold text-xs mb-2">Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="abChangeFoodSplit('burgers', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="ab_burgerCount">0</span>
+              <button onclick="abChangeFoodSplit('burgers', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+        </div>
+        <div id="ab_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
         <div><label class="lbl">Allergy / Notes</label><textarea class="field" id="ab_notes" rows="2" placeholder="Any allergies or special requests..."></textarea></div>
       </div>
 
-      <!-- Payment -->
-      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
-        <div class="font-semibold text-gray-800 text-sm">💰 Payment</div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="lbl">Amount Paid (NZD)</label>
-            <input class="field" id="ab_amount" type="number" min="0" step="0.01" placeholder="390.00" />
-          </div>
-          <div>
-            <label class="lbl">Payment Status</label>
-            <select class="field" id="ab_payStatus">
-              <option value="paid">✅ Paid</option>
-              <option value="unpaid">⏳ Unpaid / Invoice</option>
-              <option value="partial">🔸 Partial</option>
-            </select>
-          </div>
+      <!-- Add-ons -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-2">
+        <div class="font-semibold text-gray-800 text-sm mb-1">➕ Add-Ons (optional)</div>
+        <div id="ab_addonsList" class="space-y-2"></div>
+      </div>
+
+      <!-- Order summary -->
+      <div class="bg-indigo-light rounded-2xl p-4">
+        <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
+        <div id="ab_orderSummary" class="space-y-1.5 text-sm text-indigo-800">
+          <div class="text-indigo-400">Select a room and guests to see pricing</div>
         </div>
+      </div>
+
+      <!-- Payment status -->
+      <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+        <div class="font-semibold text-gray-800 text-sm">💰 Payment Status</div>
+        <select class="field" id="ab_payStatus">
+          <option value="paid">✅ Paid</option>
+          <option value="unpaid">⏳ Not Paid</option>
+        </select>
         <div>
           <label class="lbl">Booking Status</label>
           <select class="field" id="ab_status">
