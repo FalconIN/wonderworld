@@ -57,6 +57,11 @@ function toggleAdminTheme() {
   const isDark = document.documentElement.classList.toggle('dark');
   localStorage.setItem('admin_theme', isDark ? 'dark' : 'light');
   updateThemeToggleUI(isDark);
+  if (currentTab === 'overview') {
+    if (document.getElementById('revenueChartPanel')?.style.display !== 'none') renderRevenueChart();
+    renderBookingsDotChart();
+    renderRoomPopularityChart();
+  }
 }
 
 function updateThemeToggleUI(isDark) {
@@ -132,6 +137,8 @@ async function loadOverview() {
   }
 
   await loadOverviewBookingsList();
+  await renderBookingsDotChart();
+  await renderRoomPopularityChart();
 }
 
 async function loadOverviewBookingsList(fromDate, toDate) {
@@ -266,6 +273,216 @@ async function exportBookingsToExcel() {
     ? `bookings_${from}_to_${to}.xlsx`
     : `bookings_all_${new Date().toISOString().split('T')[0]}.xlsx`;
   XLSX.writeFile(wb, filename);
+}
+
+// ---------------------------------------------------------------------------
+// Charts
+// ---------------------------------------------------------------------------
+let revenueChartInstance = null;
+let bookingsDotChartInstance = null;
+let roomPopularityChartInstance = null;
+
+function chartTextColor() {
+  return document.documentElement.classList.contains('dark') ? '#9CA3AF' : '#6B7280';
+}
+function chartGridColor() {
+  return document.documentElement.classList.contains('dark') ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+}
+
+function toggleRevenueChart() {
+  const panel = document.getElementById('revenueChartPanel');
+  const chevron = document.getElementById('revenueChevron');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  chevron.textContent = isHidden ? '▲' : '▼';
+  if (isHidden) renderRevenueChart();
+}
+
+async function renderRevenueChart() {
+  const rangeVal = document.getElementById('revenueChartRange')?.value || '30';
+  const canvas = document.getElementById('revenueChartCanvas');
+  if (!canvas) return;
+
+  let query = supabaseClient
+    .from('bookings')
+    .select('party_date, total_amount, created_at')
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: true });
+
+  if (rangeVal !== 'all') {
+    const days = parseInt(rangeVal);
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    query = query.gte('created_at', cutoff);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) { console.error(error); return; }
+
+  // Group revenue by the date the booking was MADE (created_at), since that's
+  // what "revenue per day" means for a business tracking cashflow
+  const byDate = {};
+  (rows || []).forEach(r => {
+    const day = (r.created_at || '').split('T')[0];
+    if (!day) return;
+    byDate[day] = (byDate[day] || 0) + parseFloat(r.total_amount || 0);
+  });
+
+  const labels = Object.keys(byDate).sort();
+  const values = labels.map(d => byDate[d]);
+
+  if (revenueChartInstance) revenueChartInstance.destroy();
+  revenueChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels.map(d => new Date(d + 'T00:00:00').toLocaleDateString('en-NZ', { month: 'short', day: 'numeric' })),
+      datasets: [{
+        label: 'Revenue (NZD)',
+        data: values,
+        borderColor: '#4F46E5',
+        backgroundColor: 'rgba(79,70,229,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointBackgroundColor: '#4F46E5',
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `$${ctx.parsed.y.toFixed(2)} NZD` } },
+      },
+      scales: {
+        x: { ticks: { color: chartTextColor() }, grid: { color: chartGridColor() } },
+        y: { ticks: { color: chartTextColor(), callback: (v) => '$' + v }, grid: { color: chartGridColor() } },
+      },
+    },
+  });
+}
+
+async function renderBookingsDotChart() {
+  const canvas = document.getElementById('bookingsDotChartCanvas');
+  if (!canvas) return;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  const { data: rows, error } = await supabaseClient
+    .from('bookings')
+    .select('party_date, status')
+    .neq('status', 'cancelled')
+    .gte('party_date', monthStart)
+    .lte('party_date', monthEnd);
+
+  if (error) { console.error(error); return; }
+
+  const byDate = {};
+  (rows || []).forEach(r => {
+    byDate[r.party_date] = (byDate[r.party_date] || 0) + 1;
+  });
+
+  const points = Object.entries(byDate).map(([date, count]) => ({
+    x: date,
+    y: count,
+  })).sort((a, b) => a.x.localeCompare(b.x));
+
+  if (bookingsDotChartInstance) bookingsDotChartInstance.destroy();
+  bookingsDotChartInstance = new Chart(canvas, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Rooms booked',
+        data: points,
+        backgroundColor: '#0E9F6E',
+        pointRadius: 6,
+        pointHoverRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => new Date(items[0].raw.x + 'T00:00:00').toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }),
+            label: (ctx) => `${ctx.raw.y} room${ctx.raw.y === 1 ? '' : 's'} booked`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: 'day', tooltipFormat: 'MMM d' },
+          ticks: { color: chartTextColor() },
+          grid: { color: chartGridColor() },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: chartTextColor(), stepSize: 1 },
+          grid: { color: chartGridColor() },
+        },
+      },
+    },
+  });
+}
+
+async function renderRoomPopularityChart() {
+  const canvas = document.getElementById('roomPopularityChartCanvas');
+  if (!canvas) return;
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+  const { data: rows, error } = await supabaseClient
+    .from('bookings')
+    .select('party_date, status, party_rooms ( name )')
+    .neq('status', 'cancelled')
+    .gte('party_date', monthStart)
+    .lte('party_date', monthEnd);
+
+  if (error) { console.error(error); return; }
+
+  const byRoom = {};
+  (rows || []).forEach(r => {
+    const name = r.party_rooms?.name || 'Unknown';
+    byRoom[name] = (byRoom[name] || 0) + 1;
+  });
+
+  const labels = Object.keys(byRoom);
+  const values = labels.map(l => byRoom[l]);
+  const colors = ['#4F46E5', '#F59E0B', '#A855F7', '#0E9F6E', '#EF4444'];
+
+  if (roomPopularityChartInstance) roomPopularityChartInstance.destroy();
+
+  if (labels.length === 0) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  roomPopularityChartInstance = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: chartTextColor(), padding: 12 } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed} booking${ctx.parsed === 1 ? '' : 's'}` } },
+      },
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -34,6 +34,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://js.stripe.com/v3/"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-950 font-body transition-colors">
 
@@ -53,14 +55,14 @@
       <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">💳 Payments</button>
       <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">👥 Customers</button>
     </nav>
-    <div class="p-4 border-t border-gray-200 dark:border-gray-800">
+    <div class="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
       <div id="adminUserInfo" class="text-gray-500 dark:text-gray-400 text-xs mb-3"></div>
       <button onclick="toggleAdminTheme()" class="w-full flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors mb-3 px-1">
         <span id="themeToggleLabel">🌙 Dark mode</span>
         <span id="themeToggleIcon" class="text-base">🌞</span>
       </button>
       <a href="/" class="text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors block mb-2">← Back to site</a>
-      <button onclick="adminSignOut()" class="text-red-500 dark:text-red-400 text-xs hover:text-red-600 dark:bg-gray-9500 transition-colors">Sign out</button>
+      <button onclick="adminSignOut()" class="text-red-500 dark:text-red-400 text-xs hover:text-red-600 dark:hover:text-red-300 transition-colors">Sign out</button>
     </div>
   </div>
 
@@ -87,10 +89,13 @@
           <div class="text-gray-400 text-sm">Total Bookings</div>
           <div class="text-xs text-red-400 mt-1" id="stat-cancelled-note"></div>
         </div>
-        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
-          <div class="text-2xl mb-2">💰</div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors cursor-pointer hover:shadow-lg" onclick="toggleRevenueChart()" id="revenueCard">
+          <div class="flex items-center justify-between">
+            <div class="text-2xl mb-2">💰</div>
+            <div class="text-gray-300 dark:text-gray-600 text-xs" id="revenueChevron">▼</div>
+          </div>
           <div class="font-display font-bold text-3xl text-indigo-600" id="stat-revenue">—</div>
-          <div class="text-gray-400 text-sm">Total Revenue</div>
+          <div class="text-gray-400 text-sm">Total Revenue <span class="text-gray-300">(click to view chart)</span></div>
         </div>
         <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
           <div class="text-2xl mb-2">👥</div>
@@ -101,6 +106,34 @@
           <div class="text-2xl mb-2">📅</div>
           <div class="font-display font-bold text-3xl text-teal" id="stat-upcoming">—</div>
           <div class="text-gray-400 text-sm">Upcoming Parties</div>
+        </div>
+      </div>
+
+      <!-- Revenue per day chart (collapsible) -->
+      <div id="revenueChartPanel" class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-8 transition-colors" style="display:none">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">💰 Revenue Per Day</h2>
+          <select id="revenueChartRange" onchange="renderRevenueChart()" class="field py-2 text-sm w-40">
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div style="height:280px"><canvas id="revenueChartCanvas"></canvas></div>
+      </div>
+
+      <!-- Bookings per day + room popularity -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">📊 Bookings Per Day</h2>
+          <p class="text-gray-400 text-sm mb-4">How many party rooms are booked, by day, this month</p>
+          <div style="height:260px"><canvas id="bookingsDotChartCanvas"></canvas></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🏆 Most Booked Room</h2>
+          <p class="text-gray-400 text-sm mb-4">Room popularity this month</p>
+          <div style="height:260px"><canvas id="roomPopularityChartCanvas"></canvas></div>
         </div>
       </div>
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
