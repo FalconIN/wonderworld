@@ -168,3 +168,22 @@ nav { position: sticky; top: 0; z-index: 40; background: rgba(255,255,255,0.92);
   word-break: break-word;
   overflow-wrap: break-word;
 }
+
+/* ── Admin Dashboard Dark Mode ───────────────────────────────
+   Scoped under html.dark so it never affects the customer site
+   (the customer site's <html> never gets the .dark class). ── */
+html.dark .modal-overlay { background: rgba(0,0,0,.7); }
+html.dark .modal-box { background: #111827; color: #F3F4F6; box-shadow: 0 24px 80px rgba(0,0,0,.5); }
+html.dark .field { background: #1F2937; border-color: #374151; color: #F3F4F6; }
+html.dark .field::placeholder { color: #6B7280; }
+html.dark .field:focus { border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+html.dark label.lbl { color: #9CA3AF; }
+html.dark .btn-secondary { background: #1F2937; color: #A5B4FC; border-color: #4F46E5; }
+html.dark .btn-secondary:hover { background: #312E81; }
+html.dark .admin-table th { background: #1F2937; color: #9CA3AF; }
+html.dark .admin-table td { color: #D1D5DB; border-bottom-color: #1F2937; }
+html.dark .admin-table tr:hover td { background: #1F2937; }
+html.dark .badge-green { background: #064E3B; color: #6EE7B7; }
+html.dark .badge-yellow { background: #78350F; color: #FCD34D; }
+html.dark .badge-red { background: #7F1D1D; color: #FCA5A5; }
+html.dark .badge-gray { background: #374151; color: #D1D5DB; }

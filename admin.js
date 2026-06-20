@@ -39,9 +39,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('adminUserInfo').textContent =
     `${profile.first_name} ${profile.last_name}`;
 
+  initAdminTheme();
+
   // Load initial tab
   await loadOverview();
 });
+
+// ---------------------------------------------------------------------------
+// Dark mode
+// ---------------------------------------------------------------------------
+function initAdminTheme() {
+  const isDark = document.documentElement.classList.contains('dark');
+  updateThemeToggleUI(isDark);
+}
+
+function toggleAdminTheme() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('admin_theme', isDark ? 'dark' : 'light');
+  updateThemeToggleUI(isDark);
+}
+
+function updateThemeToggleUI(isDark) {
+  const label = document.getElementById('themeToggleLabel');
+  const icon = document.getElementById('themeToggleIcon');
+  if (label) label.textContent = isDark ? '🌞 Light mode' : '🌙 Dark mode';
+  if (icon) icon.textContent = isDark ? '🌙' : '🌞';
+}
 
 // ---------------------------------------------------------------------------
 // Tab navigation
@@ -365,6 +388,49 @@ async function cancelBooking(bookingId, bookingRef) {
   closeBookingModal();
   alert(`✅ Booking cancelled.${refundMsg}`);
   await loadBookings();
+}
+
+async function clearCancelledBookings() {
+  const { count } = await supabaseClient
+    .from('bookings')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'cancelled');
+
+  if (!count || count === 0) {
+    alert('No cancelled bookings to clear.');
+    return;
+  }
+
+  if (!confirm(`Permanently delete all ${count} cancelled booking${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
+
+  const { data: cancelledBookings, error: fetchErr } = await supabaseClient
+    .from('bookings')
+    .select('id')
+    .eq('status', 'cancelled');
+
+  if (fetchErr) {
+    alert('Failed to fetch cancelled bookings: ' + fetchErr.message);
+    return;
+  }
+
+  const ids = (cancelledBookings || []).map(b => b.id);
+  if (ids.length === 0) return;
+
+  // Delete dependent payment records first (no FK cascade assumed)
+  await supabaseClient.from('payments').delete().in('booking_id', ids);
+
+  const { error: deleteErr } = await supabaseClient
+    .from('bookings')
+    .delete()
+    .in('id', ids);
+
+  if (deleteErr) {
+    alert('Failed to delete cancelled bookings: ' + deleteErr.message);
+    return;
+  }
+
+  alert(`✅ Cleared ${ids.length} cancelled booking${ids.length === 1 ? '' : 's'}.`);
+  refreshCurrentTab();
 }
 
 // ---------------------------------------------------------------------------
