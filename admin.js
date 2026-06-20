@@ -200,6 +200,74 @@ function clearOverviewDateRange() {
   loadOverviewBookingsList();
 }
 
+async function exportBookingsToExcel() {
+  const from = document.getElementById('overviewRangeFrom').value;
+  const to = document.getElementById('overviewRangeTo').value;
+  const useRange = from && to;
+
+  let fullQuery = supabaseClient
+    .from('bookings')
+    .select(`
+      booking_ref, party_date, party_time, guest_count, food_choice,
+      addons_summary, total_amount, status, contact_email,
+      party_rooms ( name )
+    `)
+    .order('party_date', { ascending: true });
+  if (useRange) fullQuery = fullQuery.gte('party_date', from).lte('party_date', to);
+
+  const { data: rows, error: rowsError } = await fullQuery;
+
+  if (rowsError) {
+    alert('Failed to export: ' + rowsError.message);
+    return;
+  }
+  if (!rows || rows.length === 0) {
+    alert('No bookings found to export' + (useRange ? ' for this date range.' : '.'));
+    return;
+  }
+
+  // Look up first/last name per booking via contact_email against the users table
+  const emails = [...new Set(rows.map(r => (r.contact_email || '').toLowerCase()).filter(Boolean))];
+  let usersByEmail = {};
+  if (emails.length > 0) {
+    const { data: usersData } = await supabaseClient
+      .from('users')
+      .select('email, first_name, last_name')
+      .in('email', emails);
+    (usersData || []).forEach(u => { usersByEmail[(u.email || '').toLowerCase()] = u; });
+  }
+
+  const exportRows = rows.map(b => {
+    const u = usersByEmail[(b.contact_email || '').toLowerCase()] || {};
+    return {
+      'First Name':  u.first_name || '',
+      'Last Name':   u.last_name || '',
+      'Ref Number':  b.booking_ref || '',
+      'Party Room':  b.party_rooms?.name || '',
+      'Kid Amount':  b.guest_count ?? '',
+      'Food Chosen': b.food_choice || '',
+      'Add-ons':     b.addons_summary || '',
+      'Price Paid':  parseFloat(b.total_amount || 0),
+      'Date':        b.party_date || '',
+      'Time':        b.party_time || '',
+      'Status':      b.status || '',
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  ws['!cols'] = [
+    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 10 },
+    { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
+
+  const filename = useRange
+    ? `bookings_${from}_to_${to}.xlsx`
+    : `bookings_all_${new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
 // ---------------------------------------------------------------------------
 // Bookings
 // ---------------------------------------------------------------------------

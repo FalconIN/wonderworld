@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://js.stripe.com/v3/"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
@@ -123,7 +124,12 @@
         </div>
       </div>
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
-        <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-4" id="upcomingListTitle">Upcoming Bookings (Next 7 Days)</h2>
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white" id="upcomingListTitle">Upcoming Bookings (Next 7 Days)</h2>
+          <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+            📊 Export to Excel
+          </button>
+        </div>
         <div id="upcoming-bookings-list">Loading...</div>
       </div>
     </div>

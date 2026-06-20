@@ -430,7 +430,8 @@
         <div><strong class="text-white">5. Personal Belongings</strong> — All personal items are brought onto the premises at the owner's risk.</div>
         <div><strong class="text-white">6. Photography & Media</strong> — Photos or videos may be taken for promotional purposes. Please inform staff upon entry if you do not wish to be included.</div>
         <div><strong class="text-white">7. Right of Refusal</strong> — Management reserves the right to refuse entry or remove any person behaving in an unsafe, disruptive, or inappropriate manner.</div>
-        <div><strong class="text-white">8. Acceptance of Terms</strong> — By entering the premises, you confirm that you have read, understood, and agreed to these Terms of Entry.</div>
+        <div><strong class="text-white">8. Cancellations & Refunds</strong> — Party room bookings cancelled 14 or more days before the party date receive a full refund. Cancellations made 7–13 days before receive a 50% refund. Cancellations made less than 7 days before the party date are non-refundable.</div>
+        <div><strong class="text-white">9. Acceptance of Terms</strong> — By entering the premises, you confirm that you have read, understood, and agreed to these Terms of Entry.</div>
       </div>
     </div>
   </div>
@@ -649,6 +650,27 @@
         </div>
         <div class="mt-4 bg-indigo-light rounded-xl p-4 text-sm text-indigo-700">
           <strong>Each session includes playground entry, room access, 15 min early setup, and choice of food.</strong>
+        </div>
+
+        <div class="mt-4 border-2 border-amber-300 bg-amber-50 rounded-2xl p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-xl">💰</span>
+            <span class="font-display font-bold text-amber-800">Refund Policy — please note before booking</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+            <div class="bg-white rounded-lg p-3 border border-green-200">
+              <div class="font-bold text-green-700">✅ 14+ days before</div>
+              <div class="text-gray-600 text-xs mt-0.5">Full refund</div>
+            </div>
+            <div class="bg-white rounded-lg p-3 border border-amber-200">
+              <div class="font-bold text-amber-700">🔸 7–13 days before</div>
+              <div class="text-gray-600 text-xs mt-0.5">50% refund</div>
+            </div>
+            <div class="bg-white rounded-lg p-3 border border-red-200">
+              <div class="font-bold text-red-700">🚫 Under 7 days</div>
+              <div class="text-gray-600 text-xs mt-0.5">No refund</div>
+            </div>
+          </div>
         </div>
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(1)" class="btn-secondary py-3 px-6">← Back</button>
@@ -936,6 +958,11 @@
             <label class="lbl">Name on Card</label>
             <input class="field" type="text" placeholder="As it appears on your card" id="cardholderName" />
           </div>
+        </div>
+
+        <div class="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
+          <span class="text-base">💰</span>
+          <span><strong>Refund policy:</strong> Full refund 14+ days before · 50% refund 7–13 days before · No refund under 7 days.</span>
         </div>
 
         <div class="mt-5 flex justify-between">
