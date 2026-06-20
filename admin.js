@@ -108,21 +108,40 @@ async function loadOverview() {
     cancelledNote.textContent = cancelledCount > 0 ? `(${cancelledCount} cancelled)` : '';
   }
 
-  // Upcoming list (includes cancelled so admins see the full picture)
-  const { data: upcoming } = await supabaseClient
+  await loadOverviewBookingsList();
+}
+
+async function loadOverviewBookingsList(fromDate, toDate) {
+  const list = document.getElementById('upcoming-bookings-list');
+  const titleEl = document.getElementById('upcomingListTitle');
+  list.innerHTML = '<p class="text-gray-400 text-sm py-4">Loading...</p>';
+
+  let query = supabaseClient
     .from('bookings')
     .select('booking_ref, party_date, party_time, guest_count, status, contact_email, party_rooms(name, emoji)')
-    .gte('party_date', new Date().toISOString().split('T')[0])
-    .order('party_date', { ascending: true })
-    .limit(10);
+    .order('party_date', { ascending: true });
 
-  const list = document.getElementById('upcoming-bookings-list');
-  if (!upcoming || upcoming.length === 0) {
-    list.innerHTML = '<p class="text-gray-400 text-sm py-4">No upcoming parties.</p>';
+  if (fromDate && toDate) {
+    query = query.gte('party_date', fromDate).lte('party_date', toDate);
+    titleEl.textContent = `Bookings: ${fromDate} → ${toDate}`;
+  } else {
+    query = query.gte('party_date', new Date().toISOString().split('T')[0]).limit(10);
+    titleEl.textContent = 'Upcoming Bookings (Next 7 Days)';
+  }
+
+  const { data: bookings, error } = await query;
+
+  if (error) {
+    list.innerHTML = `<p class="text-red-400 text-sm py-4">Failed to load bookings: ${error.message}</p>`;
     return;
   }
 
-  list.innerHTML = upcoming.map(b => `
+  if (!bookings || bookings.length === 0) {
+    list.innerHTML = '<p class="text-gray-400 text-sm py-4">No bookings found for this range.</p>';
+    return;
+  }
+
+  list.innerHTML = bookings.map(b => `
     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 ${b.status === 'cancelled' ? 'opacity-60' : ''}">
       <div class="flex items-center gap-3">
         <span class="text-2xl">${b.party_rooms?.emoji || '🎉'}</span>
@@ -136,6 +155,26 @@ async function loadOverview() {
         <span class="text-xs text-gray-400 font-mono">${b.booking_ref}</span>
       </div>
     </div>`).join('');
+}
+
+function applyOverviewDateRange() {
+  const from = document.getElementById('overviewRangeFrom').value;
+  const to = document.getElementById('overviewRangeTo').value;
+  if (!from || !to) {
+    alert('Please select both a from and to date.');
+    return;
+  }
+  if (from > to) {
+    alert('The "from" date must be before the "to" date.');
+    return;
+  }
+  loadOverviewBookingsList(from, to);
+}
+
+function clearOverviewDateRange() {
+  document.getElementById('overviewRangeFrom').value = '';
+  document.getElementById('overviewRangeTo').value = '';
+  loadOverviewBookingsList();
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +303,24 @@ function closeBookingModal() {
 }
 
 async function cancelBooking(bookingId, bookingRef) {
-  if (!confirm(`Are you sure you want to cancel booking ${bookingRef}? This cannot be undone.`)) return;
+  // Look up the payment for this booking first so we know whether a refund is needed
+  const { data: payment } = await supabaseClient
+    .from('payments')
+    .select('id, stripe_payment_intent_id, amount, status, payment_method')
+    .eq('booking_id', bookingId)
+    .eq('status', 'succeeded')
+    .maybeSingle();
+
+  const isManualPayment = payment?.payment_method === 'manual';
+  const needsStripeRefund = payment && payment.stripe_payment_intent_id && !isManualPayment;
+
+  let confirmMsg = `Are you sure you want to cancel booking ${bookingRef}? This cannot be undone.`;
+  if (needsStripeRefund) {
+    confirmMsg += `\n\nThis will automatically refund $${parseFloat(payment.amount).toFixed(2)} NZD via Stripe.`;
+  } else if (isManualPayment) {
+    confirmMsg += `\n\nThis booking was paid manually — no automatic Stripe refund will be triggered. Refund the customer directly if needed.`;
+  }
+  if (!confirm(confirmMsg)) return;
 
   const { error } = await supabaseClient
     .from('bookings')
@@ -287,8 +343,27 @@ async function cancelBooking(bookingId, bookingRef) {
       .eq('slot_time', booking.party_time);
   }
 
+  // Auto-refund via Stripe if there's a real payment intent attached
+  let refundMsg = '';
+  if (needsStripeRefund) {
+    try {
+      await callEdgeFunction('refund-payment', {
+        paymentIntentId: payment.stripe_payment_intent_id,
+        paymentId: payment.id,
+        amount: Math.round(parseFloat(payment.amount) * 100),
+      });
+      await supabaseClient
+        .from('payments')
+        .update({ status: 'refunded', refunded_at: new Date().toISOString() })
+        .eq('id', payment.id);
+      refundMsg = `\n💸 Refund of $${parseFloat(payment.amount).toFixed(2)} processed automatically.`;
+    } catch (err) {
+      refundMsg = `\n⚠️ Booking was cancelled but the automatic refund failed: ${err.message}\nPlease process it manually from the Payments tab.`;
+    }
+  }
+
   closeBookingModal();
-  alert('✅ Booking cancelled. Process refund in the Payments tab if needed.');
+  alert(`✅ Booking cancelled.${refundMsg}`);
   await loadBookings();
 }
 

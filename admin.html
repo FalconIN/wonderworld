@@ -90,8 +90,28 @@
           <div class="text-gray-400 text-sm">Upcoming Parties</div>
         </div>
       </div>
+      <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="font-display font-bold text-xl text-gray-900">Bookings by Date Range</h2>
+            <p class="text-gray-400 text-sm mt-0.5">Filter bookings between two dates</p>
+          </div>
+          <div class="flex items-end gap-3 flex-wrap">
+            <div>
+              <label class="lbl">From</label>
+              <input class="field" id="overviewRangeFrom" type="date" />
+            </div>
+            <div>
+              <label class="lbl">To</label>
+              <input class="field" id="overviewRangeTo" type="date" />
+            </div>
+            <button onclick="applyOverviewDateRange()" class="btn-primary py-2.5 px-5 whitespace-nowrap">Filter</button>
+            <button onclick="clearOverviewDateRange()" class="btn-secondary py-2.5 px-5 whitespace-nowrap">Clear</button>
+          </div>
+        </div>
+      </div>
       <div class="bg-white rounded-2xl shadow-soft p-6">
-        <h2 class="font-display font-bold text-xl text-gray-900 mb-4">Upcoming Bookings (Next 7 Days)</h2>
+        <h2 class="font-display font-bold text-xl text-gray-900 mb-4" id="upcomingListTitle">Upcoming Bookings (Next 7 Days)</h2>
         <div id="upcoming-bookings-list">Loading...</div>
       </div>
     </div>
