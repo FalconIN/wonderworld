@@ -39,11 +39,11 @@
 
 <div class="flex h-screen overflow-hidden">
   <!-- ── Sidebar ──────────────────────────────────────────── -->
-  <div class="w-64 bg-gray-900 flex flex-col flex-shrink-0">
-    <a href="/" class="p-6 border-b border-gray-800 flex items-center gap-3 hover:bg-gray-800 transition-colors">
+  <div class="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-0 flex flex-col flex-shrink-0 transition-colors">
+    <a href="/" class="p-6 border-b border-gray-200 dark:border-gray-800 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
       <img src="wwmascot-64.png" class="w-8 h-8 rounded-lg" style="image-rendering:pixelated" />
       <div>
-        <div class="font-display font-bold text-lg text-white">Wonder World</div>
+        <div class="font-display font-bold text-lg text-gray-900 dark:text-white">Wonder World</div>
         <div class="text-gray-400 text-xs">Admin Dashboard</div>
       </div>
     </a>
@@ -53,14 +53,14 @@
       <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">💳 Payments</button>
       <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">👥 Customers</button>
     </nav>
-    <div class="p-4 border-t border-gray-800">
-      <div id="adminUserInfo" class="text-gray-400 text-xs mb-3"></div>
-      <button onclick="toggleAdminTheme()" class="w-full flex items-center justify-between text-gray-400 text-xs hover:text-white transition-colors mb-3 px-1">
+    <div class="p-4 border-t border-gray-200 dark:border-gray-800">
+      <div id="adminUserInfo" class="text-gray-500 dark:text-gray-400 text-xs mb-3"></div>
+      <button onclick="toggleAdminTheme()" class="w-full flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors mb-3 px-1">
         <span id="themeToggleLabel">🌙 Dark mode</span>
         <span id="themeToggleIcon" class="text-base">🌞</span>
       </button>
-      <a href="/" class="text-gray-400 text-xs hover:text-white transition-colors block mb-2">← Back to site</a>
-      <button onclick="adminSignOut()" class="text-red-400 text-xs hover:text-red-300 transition-colors">Sign out</button>
+      <a href="/" class="text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors block mb-2">← Back to site</a>
+      <button onclick="adminSignOut()" class="text-red-500 dark:text-red-400 text-xs hover:text-red-600 dark:hover:text-red-300 transition-colors">Sign out</button>
     </div>
   </div>
 
@@ -337,9 +337,12 @@
 </div>
 
 <style>
-  .admin-nav-btn { color: #9CA3AF; transition: all .2s; }
-  .admin-nav-btn:hover { background: rgba(255,255,255,.05); color: white; }
-  .admin-nav-btn.active { background: rgba(79,70,229,.2); color: #A5B4FC; }
+  .admin-nav-btn { color: #6B7280; transition: all .2s; }
+  .admin-nav-btn:hover { background: rgba(79,70,229,.08); color: #1F2937; }
+  .admin-nav-btn.active { background: rgba(79,70,229,.12); color: #4F46E5; }
+  html.dark .admin-nav-btn { color: #9CA3AF; }
+  html.dark .admin-nav-btn:hover { background: rgba(255,255,255,.05); color: white; }
+  html.dark .admin-nav-btn.active { background: rgba(79,70,229,.2); color: #A5B4FC; }
 </style>
 
 <script src="supabase.js"></script>
