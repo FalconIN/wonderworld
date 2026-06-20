@@ -16,7 +16,7 @@ const ROOMS = [
   {
     id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
     tagLine: 'Exclusive Extra Large Zone',
-    minGuests: 16, maxGuests: 24,
+    minGuests: 12, maxGuests: 24,
     basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
     description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
     badge: 'BEST VALUE',
