@@ -190,6 +190,16 @@ async function fetchAndRenderSlots(dateVal) {
 
   state.partyRoomDbId = roomRow.id;
 
+  // Opportunistically clean up any expired holds for this room/date —
+  // prevents stale rows from permanently blocking slots via the unique constraint
+  await supabaseClient
+    .from('booking_timeslots')
+    .delete()
+    .eq('party_room_id', roomRow.id)
+    .eq('slot_date', dateVal)
+    .eq('status', 'held')
+    .lt('hold_expires_at', new Date().toISOString());
+
   // Fetch booked / held slots for this room on this date
   const { data: bookedSlots } = await supabaseClient
     .from('booking_timeslots')
@@ -271,6 +281,18 @@ async function selectTime(slot, el) {
 // ---------------------------------------------------------------------------
 async function createSlotHold(slot) {
   if (!state.partyRoomDbId || !state.selectedDate) return;
+
+  // Clean up any stale expired hold sitting on this exact slot first —
+  // these can otherwise permanently block the slot via the unique constraint
+  // even though they're logically expired.
+  await supabaseClient
+    .from('booking_timeslots')
+    .delete()
+    .eq('party_room_id', state.partyRoomDbId)
+    .eq('slot_date', state.selectedDate)
+    .eq('slot_time', slot)
+    .eq('status', 'held')
+    .lt('hold_expires_at', new Date().toISOString());
 
   const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
