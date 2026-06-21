@@ -14,14 +14,6 @@
 // ---------------------------------------------------------------------------
 const ROOMS = [
   {
-    id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
-    tagLine: 'Exclusive Extra Large Zone',
-    minGuests: 12, maxGuests: 24,
-    basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
-    description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
-    badge: 'BEST VALUE',
-  },
-  {
     id: 'sunshine', name: 'Sunshine Room', emoji: '☀️', color: 'yellow',
     tagLine: 'Yellow · Warm & Cheerful',
     minGuests: 8, maxGuests: 15, basePricePerChild: 39,
@@ -38,6 +30,14 @@ const ROOMS = [
     tagLine: 'Green · Nature Adventure',
     minGuests: 8, maxGuests: 15, basePricePerChild: 39,
     description: 'An immersive forest theme with climbing elements and nature-inspired details throughout.',
+  },
+  {
+    id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
+    tagLine: 'Exclusive Extra Large Zone',
+    minGuests: 12, maxGuests: 24,
+    basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
+    description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
+    badge: 'BEST VALUE',
   },
 ];
 
