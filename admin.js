@@ -92,6 +92,19 @@ function showTab(tab) {
   const titles = { overview: 'Overview', bookings: 'Bookings', payments: 'Payments', customers: 'Customers' };
   document.getElementById('pageTitle').textContent = titles[tab] || tab;
 
+  // Reset search box for the new tab with a relevant placeholder
+  const searchEl = document.getElementById('searchInput');
+  if (searchEl) {
+    searchEl.value = '';
+    const placeholders = {
+      overview: 'Search...',
+      bookings: 'Search ref, email, room...',
+      payments: 'Search ref, email, cardholder...',
+      customers: 'Search name, email, phone...',
+    };
+    searchEl.placeholder = placeholders[tab] || 'Search...';
+  }
+
   // Load data
   if (tab === 'overview')   loadOverview();
   if (tab === 'bookings')   loadBookings();
@@ -273,8 +286,8 @@ async function exportBookingsToExcel() {
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
   ws['!cols'] = [
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
-    { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+    { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+    { wch: 10 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
@@ -876,19 +889,21 @@ function handleSearch(query) {
     renderBookingsTable(allBookings.filter(b =>
       (b.booking_ref || '').toLowerCase().includes(q) ||
       (b.contact_email || '').toLowerCase().includes(q) ||
-      `${b.users?.first_name} ${b.users?.last_name}`.toLowerCase().includes(q)
+      (b.party_rooms?.name || '').toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'customers') {
     renderCustomersTable(allCustomers.filter(c =>
       (c.email || '').toLowerCase().includes(q) ||
-      `${c.first_name} ${c.last_name}`.toLowerCase().includes(q)
+      (c.phone || '').toLowerCase().includes(q) ||
+      `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'payments') {
     renderPaymentsTable(allPayments.filter(p =>
       (p.bookings?.booking_ref || '').toLowerCase().includes(q) ||
-      (p.users?.email || '').toLowerCase().includes(q)
+      (p.bookings?.contact_email || '').toLowerCase().includes(q) ||
+      (p.cardholder_name || '').toLowerCase().includes(q)
     ));
   }
 }
