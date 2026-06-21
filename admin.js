@@ -560,6 +560,7 @@ async function exportBookingsToExcel() {
       'Date Booked':  bookedOn,
       'First Name':   u.first_name || '',
       'Last Name':    u.last_name || '',
+      'Email':        b.contact_email || '',
       'Ref Number':   b.booking_ref || '',
       'Party Room':   ROOM_COLOR_LABELS[roomName] || roomName,
       'Kid Amount':   b.guest_count ?? '',
@@ -574,12 +575,12 @@ async function exportBookingsToExcel() {
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
   ws['!cols'] = [
-    { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
+    { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 12 }, { wch: 14 },
     { wch: 10 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
   ];
 
   // Format Price Paid column as currency ($X.XX)
-  const priceColIndex = 8; // 0-indexed position of "Price Paid"
+  const priceColIndex = 9; // 0-indexed position of "Price Paid"
   const range = XLSX.utils.decode_range(ws['!ref']);
   for (let row = range.s.r + 1; row <= range.e.r; row++) {
     const cellRef = XLSX.utils.encode_cell({ r: row, c: priceColIndex });
