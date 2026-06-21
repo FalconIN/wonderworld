@@ -44,6 +44,56 @@
 </head>
 <body>
 
+<!-- ── PIN GATE ─────────────────────────────────────────── -->
+<div id="pinGateOverlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1e1b4b,#0E9F6E);display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.4);">
+    <img src="wwmascot-64.png" alt="Wonder World" style="width:56px;height:56px;border-radius:14px;margin:0 auto 16px;image-rendering:pixelated;" />
+    <h1 style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#111827;margin-bottom:6px;">Wonder World Westgate</h1>
+    <p style="color:#6B7280;font-size:14px;margin-bottom:24px;">Site under construction — enter PIN to preview</p>
+    <input id="pinGateInput" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off"
+      style="width:100%;text-align:center;font-size:32px;letter-spacing:12px;font-weight:700;padding:14px;border:2px solid #E5E7EB;border-radius:14px;outline:none;font-family:'Fredoka',sans-serif;color:#111827;" />
+    <div id="pinGateError" style="color:#EF4444;font-size:13px;margin-top:10px;display:none;">Incorrect PIN, try again.</div>
+    <button onclick="checkPinGate()" style="margin-top:18px;width:100%;background:linear-gradient(135deg,#4F46E5,#4338CA);color:white;font-weight:700;font-size:16px;border:none;border-radius:14px;padding:14px;cursor:pointer;font-family:'Fredoka',sans-serif;">Enter</button>
+  </div>
+</div>
+<script>
+  (function() {
+    const CORRECT_PIN = '2626';
+    const STORAGE_KEY = 'ww_pin_verified';
+
+    function unlockSite() {
+      document.getElementById('pinGateOverlay').remove();
+      document.documentElement.style.overflow = '';
+    }
+
+    if (sessionStorage.getItem(STORAGE_KEY) === 'true') {
+      unlockSite();
+    } else {
+      document.documentElement.style.overflow = 'hidden';
+      window.checkPinGate = function() {
+        const val = document.getElementById('pinGateInput').value.trim();
+        if (val === CORRECT_PIN) {
+          sessionStorage.setItem(STORAGE_KEY, 'true');
+          unlockSite();
+        } else {
+          document.getElementById('pinGateError').style.display = 'block';
+          document.getElementById('pinGateInput').value = '';
+          document.getElementById('pinGateInput').focus();
+        }
+      };
+      document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('pinGateInput');
+        if (input) {
+          input.focus();
+          input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') checkPinGate();
+          });
+        }
+      });
+    }
+  })();
+</script>
+
 <!-- ── NAVBAR ───────────────────────────────────────────── -->
 <nav>
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
