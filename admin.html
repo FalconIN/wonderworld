@@ -159,11 +159,41 @@
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white" id="upcomingListTitle">Upcoming Bookings (Next 7 Days)</h2>
-          <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
-            📊 Export to Excel
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="document.getElementById('importFileInput').click()" class="text-xs text-indigo-500 hover:text-indigo-600 font-semibold border border-indigo-200 hover:border-indigo-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📥 Import from Excel
+            </button>
+            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(event)" />
+            <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📊 Export to Excel
+            </button>
+          </div>
         </div>
         <div id="upcoming-bookings-list">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ── IMPORT PREVIEW MODAL ─────────────────────────────── -->
+    <div id="importModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeImportModal()">
+      <div class="modal-box" style="max-width:900px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">📥 Import Bookings Preview</h2>
+          <button onclick="closeImportModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
+        </div>
+        <div id="importSummary" class="text-sm text-gray-600 dark:text-gray-300 mb-4"></div>
+        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+          <table class="admin-table" style="font-size:12px">
+            <thead>
+              <tr id="importTableHead"></tr>
+            </thead>
+            <tbody id="importTableBody"></tbody>
+          </table>
+        </div>
+        <div id="importErrors" class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800" style="display:none"></div>
+        <div class="flex gap-3 mt-5">
+          <button onclick="closeImportModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+          <button onclick="confirmImport()" class="btn-primary flex-1 py-3" id="confirmImportBtn">Import Valid Rows</button>
+        </div>
       </div>
     </div>
 

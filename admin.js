@@ -220,6 +220,293 @@ function clearOverviewDateRange() {
   loadOverviewBookingsList();
 }
 
+// ---------------------------------------------------------------------------
+// Import bookings from Excel/CSV
+// ---------------------------------------------------------------------------
+let importParsedRows = [];
+let importRoomLookup = null;
+
+// Flexible header matching — tries common variations since every old
+// booking system exports columns differently. Edit these alias lists
+// once we see the real export from the old system.
+const IMPORT_FIELD_ALIASES = {
+  firstName: ['first name', 'firstname', 'first'],
+  lastName:  ['last name', 'lastname', 'last', 'surname'],
+  email:     ['email', 'e-mail', 'email address', 'contact email'],
+  phone:     ['phone', 'mobile', 'contact number', 'phone number'],
+  room:      ['room', 'party room', 'package', 'room name'],
+  guests:    ['guests', 'kids', 'kid amount', 'number of kids', 'pax', 'children'],
+  date:      ['date', 'party date', 'booking date', 'event date'],
+  time:      ['time', 'party time', 'start time'],
+  price:     ['price', 'price paid', 'total', 'amount', 'total paid'],
+  food:      ['food', 'food chosen', 'food choice', 'menu'],
+  notes:     ['notes', 'allergy', 'allergies', 'comments'],
+};
+
+function detectColumnMap(headerRow) {
+  const map = {};
+  const normalizedHeaders = headerRow.map(h => (h || '').toString().trim().toLowerCase());
+  Object.entries(IMPORT_FIELD_ALIASES).forEach(([field, aliases]) => {
+    const idx = normalizedHeaders.findIndex(h => aliases.includes(h));
+    if (idx !== -1) map[field] = idx;
+  });
+  return map;
+}
+
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+
+      if (!rows || rows.length < 2) {
+        alert('That file looks empty or has no data rows.');
+        return;
+      }
+
+      const headerRow = rows[0];
+      const dataRows = rows.slice(1).filter(r => r.some(cell => (cell || '').toString().trim() !== ''));
+      const colMap = detectColumnMap(headerRow);
+
+      // Load room slug lookup once
+      if (!importRoomLookup) {
+        const { data: rooms } = await supabaseClient.from('party_rooms').select('id, slug, name');
+        importRoomLookup = rooms || [];
+      }
+
+      importParsedRows = dataRows.map((r, i) => parseImportRow(r, colMap, i));
+      renderImportPreview(headerRow, colMap);
+      document.getElementById('importFileInput').value = '';
+    } catch (err) {
+      alert('Could not read that file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function matchRoom(roomText) {
+  if (!roomText) return null;
+  const t = roomText.toString().trim().toLowerCase();
+  const colorMap = { 'big room': 'big', 'yellow room': 'sunshine', 'sunshine room': 'sunshine',
+    'purple room': 'dream', 'dream room': 'dream', 'green room': 'forest', 'forest room': 'forest',
+    'wonder forest room': 'forest', 'the big room': 'big' };
+  const slug = colorMap[t] || t;
+  return (importRoomLookup || []).find(r => r.slug === slug || r.name.toLowerCase() === t) || null;
+}
+
+function parseDateValue(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString().split('T')[0];
+  const str = val.toString().trim();
+  // Try DD/MM/YYYY (common NZ format)
+  const nzMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (nzMatch) {
+    const [, d, m, y] = nzMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // Try ISO YYYY-MM-DD already
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.split('T')[0];
+  const parsed = new Date(str);
+  if (!isNaN(parsed)) return parsed.toISOString().split('T')[0];
+  return null;
+}
+
+function normalizeTime(val) {
+  if (!val) return null;
+  const str = val.toString().trim().toUpperCase().replace(/\s+/g, ' ');
+  const validSlots = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+  const found = validSlots.find(s => str.includes(s.replace(' ', '')) || str === s);
+  return found || (validSlots.includes(str) ? str : str);
+}
+
+function parseImportRow(row, colMap, index) {
+  const get = (field) => colMap[field] !== undefined ? (row[colMap[field]] || '').toString().trim() : '';
+
+  const firstName = get('firstName');
+  const lastName = get('lastName');
+  const email = get('email').toLowerCase();
+  const phone = get('phone');
+  const roomText = get('room');
+  const guestsRaw = get('guests');
+  const guests = parseInt(guestsRaw) || null;
+  const dateRaw = get('date');
+  const date = parseDateValue(dateRaw);
+  const time = normalizeTime(get('time'));
+  const priceRaw = get('price').replace(/[$,]/g, '');
+  const price = parseFloat(priceRaw) || 0;
+  const food = get('food');
+  const notes = get('notes');
+
+  const matchedRoom = matchRoom(roomText);
+
+  const errors = [];
+  if (!firstName) errors.push('Missing first name');
+  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) errors.push('Invalid/missing email');
+  if (!matchedRoom) errors.push(`Room "${roomText}" not recognized`);
+  if (!date) errors.push(`Date "${dateRaw}" could not be parsed`);
+  if (!guests || guests < 1) errors.push('Missing/invalid guest count');
+  if (!['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'].includes(time)) errors.push(`Time "${get('time')}" not a valid slot`);
+
+  return {
+    index, firstName, lastName, email, phone, roomText, matchedRoom,
+    guests, date, dateRaw, time, price, food, notes, errors, valid: errors.length === 0,
+  };
+}
+
+function renderImportPreview(headerRow, colMap) {
+  const validCount = importParsedRows.filter(r => r.valid).length;
+  const invalidCount = importParsedRows.length - validCount;
+
+  document.getElementById('importSummary').innerHTML = `
+    Found <strong>${importParsedRows.length}</strong> row${importParsedRows.length === 1 ? '' : 's'}.
+    <span class="text-green-600 font-semibold">${validCount} ready to import</span>
+    ${invalidCount > 0 ? `, <span class="text-red-500 font-semibold">${invalidCount} have issues</span> (shown in red, won't be imported)` : ''}.
+  `;
+
+  const head = document.getElementById('importTableHead');
+  head.innerHTML = `<th>Status</th><th>First</th><th>Last</th><th>Email</th><th>Room</th><th>Kids</th><th>Date</th><th>Time</th><th>Price</th>`;
+
+  const body = document.getElementById('importTableBody');
+  body.innerHTML = importParsedRows.map(r => `
+    <tr class="${r.valid ? '' : 'bg-red-50'}">
+      <td>${r.valid ? '✅' : '⚠️'}</td>
+      <td>${r.firstName || '<span class="text-red-400">—</span>'}</td>
+      <td>${r.lastName || ''}</td>
+      <td>${r.email || '<span class="text-red-400">—</span>'}</td>
+      <td>${r.matchedRoom ? r.matchedRoom.name : `<span class="text-red-400">${r.roomText || '—'}</span>`}</td>
+      <td>${r.guests ?? '<span class="text-red-400">—</span>'}</td>
+      <td>${r.date || `<span class="text-red-400">${r.dateRaw || '—'}</span>`}</td>
+      <td>${r.time && ['9:30 AM','11:30 AM','1:30 PM','3:30 PM'].includes(r.time) ? r.time : `<span class="text-red-400">${r.time || '—'}</span>`}</td>
+      <td>$${r.price.toFixed(2)}</td>
+    </tr>`).join('');
+
+  const errEl = document.getElementById('importErrors');
+  const detectedFields = Object.keys(colMap);
+  const missingFields = Object.keys(IMPORT_FIELD_ALIASES).filter(f => !detectedFields.includes(f));
+  if (missingFields.length > 0) {
+    errEl.style.display = 'block';
+    errEl.innerHTML = `<strong>Heads up:</strong> couldn't find a column for: ${missingFields.join(', ')}. Detected columns: ${headerRow.join(', ')}. If this doesn't look right, the column names in the spreadsheet may need adjusting, or tell Claude what they actually are so the import mapping can be updated.`;
+  } else {
+    errEl.style.display = 'none';
+  }
+
+  document.getElementById('importModal').style.display = 'flex';
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+  importParsedRows = [];
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('confirmImportBtn');
+  const validRows = importParsedRows.filter(r => r.valid);
+
+  if (validRows.length === 0) {
+    alert('No valid rows to import.');
+    return;
+  }
+
+  if (!confirm(`Import ${validRows.length} booking${validRows.length === 1 ? '' : 's'}? This will create real confirmed bookings and lock those time slots.`)) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  let successCount = 0;
+  let failCount = 0;
+  const failMessages = [];
+
+  for (const r of validRows) {
+    try {
+      // Upsert user
+      let userId = null;
+      const { data: existingUser } = await supabaseClient
+        .from('users').select('id').eq('email', r.email).single();
+
+      if (existingUser) {
+        userId = existingUser.id;
+      } else {
+        const newId = crypto.randomUUID();
+        const { error: userErr } = await supabaseClient.from('users').insert({
+          id: newId, first_name: r.firstName, last_name: r.lastName,
+          email: r.email, phone: r.phone || null,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        });
+        if (userErr) throw new Error('User creation failed: ' + userErr.message);
+        userId = newId;
+      }
+
+      // Check slot availability
+      const { data: existingSlot } = await supabaseClient
+        .from('booking_timeslots')
+        .select('id, status')
+        .eq('party_room_id', r.matchedRoom.id)
+        .eq('slot_date', r.date)
+        .eq('slot_time', r.time)
+        .single();
+
+      if (existingSlot && existingSlot.status === 'confirmed') {
+        throw new Error(`Slot already booked: ${r.matchedRoom.name} ${r.date} ${r.time}`);
+      }
+
+      const bookingRef = 'WW-IMP-' + Math.random().toString(36).slice(2, 7).toUpperCase();
+
+      const { error: bookingErr } = await supabaseClient.from('bookings').insert({
+        user_id: userId,
+        party_room_id: r.matchedRoom.id,
+        booking_ref: bookingRef,
+        party_date: r.date,
+        party_time: r.time,
+        guest_count: r.guests,
+        food_choice: r.food || '',
+        allergy_notes: r.notes || '',
+        base_amount: r.price,
+        addons_amount: 0,
+        total_amount: r.price,
+        status: 'confirmed',
+        contact_email: r.email,
+        contact_phone: r.phone || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      if (bookingErr) throw new Error('Booking insert failed: ' + bookingErr.message);
+
+      // Lock the slot
+      if (existingSlot) {
+        await supabaseClient.from('booking_timeslots')
+          .update({ status: 'confirmed', held_by_user_id: userId })
+          .eq('id', existingSlot.id);
+      } else {
+        await supabaseClient.from('booking_timeslots').insert({
+          party_room_id: r.matchedRoom.id, slot_date: r.date, slot_time: r.time,
+          status: 'confirmed', held_by_user_id: userId,
+        });
+      }
+
+      successCount++;
+    } catch (err) {
+      failCount++;
+      failMessages.push(`${r.firstName} ${r.lastName} (${r.date} ${r.time}): ${err.message}`);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Import Valid Rows';
+
+  let msg = `✅ Imported ${successCount} booking${successCount === 1 ? '' : 's'}.`;
+  if (failCount > 0) msg += `\n\n⚠️ ${failCount} failed:\n${failMessages.join('\n')}`;
+  alert(msg);
+
+  closeImportModal();
+  refreshCurrentTab();
+}
+
 async function exportBookingsToExcel() {
   const from = document.getElementById('overviewRangeFrom').value;
   const to = document.getElementById('overviewRangeTo').value;
