@@ -289,6 +289,14 @@ async function exportBookingsToExcel() {
     { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 },
     { wch: 10 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
   ];
+
+  // Format Price Paid column as currency ($X.XX)
+  const priceColIndex = 8; // 0-indexed position of "Price Paid"
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let row = range.s.r + 1; row <= range.e.r; row++) {
+    const cellRef = XLSX.utils.encode_cell({ r: row, c: priceColIndex });
+    if (ws[cellRef]) ws[cellRef].z = '"$"#,##0.00';
+  }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
 
