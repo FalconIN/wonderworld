@@ -146,22 +146,30 @@
       </div>
     </div>
     <div class="flex-1 flex items-center justify-center">
-      <div class="relative w-72 h-72 md:w-96 md:h-96">
+      <a href="https://www.google.com/maps/search/Westgate+Shopping+Centre+1+Fernhill+Drive+Auckland" target="_blank" rel="noopener noreferrer" class="relative w-72 h-72 md:w-96 md:h-96 block group">
         <div class="absolute inset-0 rounded-full bg-white/10 backdrop-blur-sm border-2 border-white/20"></div>
-        <div class="absolute inset-6 rounded-full bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center">
-          <div class="text-center text-white">
-            <div class="text-7xl mb-3">🎠</div>
-            <div class="font-display font-bold text-2xl">Party Time!</div>
-            <div class="text-white/75 text-sm mt-1">4 awesome rooms to choose from</div>
+        <div class="absolute inset-6 rounded-full overflow-hidden border border-white/15 shadow-2xl">
+          <iframe
+            src="https://www.google.com/maps?q=Wonder+World+Westgate,+1+Fernhill+Drive,+Auckland&output=embed"
+            class="w-full h-full"
+            style="border:0; filter: saturate(1.1);"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+            title="Wonder World Westgate location map"
+          ></iframe>
+          <div class="absolute inset-0 bg-indigo-900/0 group-hover:bg-indigo-900/10 transition-colors flex items-end justify-center pb-4 pointer-events-none">
+            <div class="bg-white text-gray-900 font-display font-bold text-sm rounded-full px-4 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+              📍 Open in Google Maps
+            </div>
           </div>
         </div>
-        <div class="absolute -top-3 -right-3 bg-amber-400 text-gray-900 font-display font-bold text-sm rounded-2xl px-3 py-2 shadow-lg rotate-3">
-          From $39/child 🎈
+        <div class="absolute -top-3 -right-3 bg-amber-400 text-gray-900 font-display font-bold text-sm rounded-2xl px-3 py-2 shadow-lg rotate-3 pointer-events-none">
+          Find Us! 📍
         </div>
-        <div class="absolute -bottom-3 -left-3 bg-white text-gray-800 font-semibold text-xs rounded-xl px-3 py-2 shadow-lg -rotate-2">
-          🍕 Catering included
+        <div class="absolute -bottom-3 -left-3 bg-white text-gray-800 font-semibold text-xs rounded-xl px-3 py-2 shadow-lg -rotate-2 pointer-events-none">
+          Westgate, Auckland
         </div>
-      </div>
+      </a>
     </div>
   </div>
   <div class="absolute bottom-0 left-0 right-0 overflow-hidden leading-none z-10">
