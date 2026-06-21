@@ -239,6 +239,7 @@ const IMPORT_FIELD_ALIASES = {
   date:      ['date', 'party date', 'booking date', 'event date'],
   time:      ['time', 'party time', 'start time'],
   price:     ['price', 'price paid', 'total', 'amount', 'total paid'],
+  addons:    ['add-ons', 'addons', 'add ons', 'addon', 'extras'],
   food:      ['food', 'food chosen', 'food choice', 'menu'],
   notes:     ['notes', 'allergy', 'allergies', 'comments'],
 };
@@ -340,6 +341,13 @@ function parseImportRow(row, colMap, index) {
   const time = normalizeTime(get('time'));
   const priceRaw = get('price').replace(/[$,]/g, '');
   const price = parseFloat(priceRaw) || 0;
+  const addonsSummary = get('addons');
+  // Extract dollar amounts from the addons text (e.g. "Pizza ×1 ($25.00)") and sum them
+  const addonsAmount = addonsSummary
+    ? (addonsSummary.match(/\$([\d,.]+)/g) || [])
+        .reduce((sum, m) => sum + (parseFloat(m.replace(/[$,]/g, '')) || 0), 0)
+    : 0;
+  const baseAmount = Math.max(0, price - addonsAmount);
   const food = get('food');
   const notes = get('notes');
 
@@ -355,7 +363,8 @@ function parseImportRow(row, colMap, index) {
 
   return {
     index, firstName, lastName, email, phone, roomText, matchedRoom,
-    guests, date, dateRaw, time, price, food, notes, errors, valid: errors.length === 0,
+    guests, date, dateRaw, time, price, addonsSummary, addonsAmount, baseAmount,
+    food, notes, errors, valid: errors.length === 0,
   };
 }
 
@@ -370,7 +379,7 @@ function renderImportPreview(headerRow, colMap) {
   `;
 
   const head = document.getElementById('importTableHead');
-  head.innerHTML = `<th>Status</th><th>First</th><th>Last</th><th>Email</th><th>Room</th><th>Kids</th><th>Date</th><th>Time</th><th>Price</th>`;
+  head.innerHTML = `<th>Status</th><th>First</th><th>Last</th><th>Email</th><th>Room</th><th>Kids</th><th>Date</th><th>Time</th><th>Add-ons</th><th>Price</th>`;
 
   const body = document.getElementById('importTableBody');
   body.innerHTML = importParsedRows.map(r => `
@@ -383,6 +392,7 @@ function renderImportPreview(headerRow, colMap) {
       <td>${r.guests ?? '<span class="text-red-400">—</span>'}</td>
       <td>${r.date || `<span class="text-red-400">${r.dateRaw || '—'}</span>`}</td>
       <td>${r.time && ['9:30 AM','11:30 AM','1:30 PM','3:30 PM'].includes(r.time) ? r.time : `<span class="text-red-400">${r.time || '—'}</span>`}</td>
+      <td class="text-xs">${r.addonsSummary || '<span class="text-gray-300">—</span>'}</td>
       <td>$${r.price.toFixed(2)}</td>
     </tr>`).join('');
 
@@ -467,8 +477,9 @@ async function confirmImport() {
         guest_count: r.guests,
         food_choice: r.food || '',
         allergy_notes: r.notes || '',
-        base_amount: r.price,
-        addons_amount: 0,
+        addons_summary: r.addonsSummary || '',
+        base_amount: r.baseAmount,
+        addons_amount: r.addonsAmount,
         total_amount: r.price,
         status: 'confirmed',
         contact_email: r.email,
