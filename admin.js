@@ -256,6 +256,7 @@ async function exportBookingsToExcel() {
     const bookedOn = b.created_at ? new Date(b.created_at).toLocaleDateString('en-NZ') : '';
     const roomName = b.party_rooms?.name || '';
     return {
+      'Date Booked':  bookedOn,
       'First Name':   u.first_name || '',
       'Last Name':    u.last_name || '',
       'Ref Number':   b.booking_ref || '',
@@ -266,7 +267,6 @@ async function exportBookingsToExcel() {
       'Price Paid':   parseFloat(b.total_amount || 0),
       'Party Date':   b.party_date || '',
       'Party Time':   b.party_time || '',
-      'Date Booked':  bookedOn,
       'Status':       b.status || '',
     };
   });
