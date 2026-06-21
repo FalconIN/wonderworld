@@ -216,7 +216,7 @@ async function exportBookingsToExcel() {
     .from('bookings')
     .select(`
       booking_ref, party_date, party_time, guest_count, food_choice,
-      addons_summary, total_amount, status, contact_email,
+      addons_summary, total_amount, status, contact_email, created_at,
       party_rooms ( name )
     `)
     .order('party_date', { ascending: true });
@@ -244,27 +244,37 @@ async function exportBookingsToExcel() {
     (usersData || []).forEach(u => { usersByEmail[(u.email || '').toLowerCase()] = u; });
   }
 
+  const ROOM_COLOR_LABELS = {
+    'The Big Room': 'Big Room',
+    'Sunshine Room': 'Yellow Room',
+    'Dream Room': 'Purple Room',
+    'Wonder Forest Room': 'Green Room',
+  };
+
   const exportRows = rows.map(b => {
     const u = usersByEmail[(b.contact_email || '').toLowerCase()] || {};
+    const bookedOn = b.created_at ? new Date(b.created_at).toLocaleDateString('en-NZ') : '';
+    const roomName = b.party_rooms?.name || '';
     return {
-      'First Name':  u.first_name || '',
-      'Last Name':   u.last_name || '',
-      'Ref Number':  b.booking_ref || '',
-      'Party Room':  b.party_rooms?.name || '',
-      'Kid Amount':  b.guest_count ?? '',
-      'Food Chosen': b.food_choice || '',
-      'Add-ons':     b.addons_summary || '',
-      'Price Paid':  parseFloat(b.total_amount || 0),
-      'Date':        b.party_date || '',
-      'Time':        b.party_time || '',
-      'Status':      b.status || '',
+      'First Name':   u.first_name || '',
+      'Last Name':    u.last_name || '',
+      'Ref Number':   b.booking_ref || '',
+      'Party Room':   ROOM_COLOR_LABELS[roomName] || roomName,
+      'Kid Amount':   b.guest_count ?? '',
+      'Food Chosen':  b.food_choice || '',
+      'Add-ons':      b.addons_summary || '',
+      'Price Paid':   parseFloat(b.total_amount || 0),
+      'Party Date':   b.party_date || '',
+      'Party Time':   b.party_time || '',
+      'Date Booked':  bookedOn,
+      'Status':       b.status || '',
     };
   });
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
   ws['!cols'] = [
-    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 10 },
-    { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+    { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 10 },
+    { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Bookings');
