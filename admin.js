@@ -388,10 +388,11 @@ function renderImportPreview(headerRow, colMap) {
 
   const errEl = document.getElementById('importErrors');
   const detectedFields = Object.keys(colMap);
-  const missingFields = Object.keys(IMPORT_FIELD_ALIASES).filter(f => !detectedFields.includes(f));
-  if (missingFields.length > 0) {
+  const requiredFields = ['firstName', 'email', 'room', 'guests', 'date', 'time'];
+  const missingRequired = requiredFields.filter(f => !detectedFields.includes(f));
+  if (missingRequired.length > 0) {
     errEl.style.display = 'block';
-    errEl.innerHTML = `<strong>Heads up:</strong> couldn't find a column for: ${missingFields.join(', ')}. Detected columns: ${headerRow.join(', ')}. If this doesn't look right, the column names in the spreadsheet may need adjusting, or tell Claude what they actually are so the import mapping can be updated.`;
+    errEl.innerHTML = `<strong>Heads up:</strong> couldn't find a column for: ${missingRequired.join(', ')}. Detected columns in your file: ${headerRow.join(', ')}. These are needed to import — double-check the spreadsheet's column headers, or adjust them and re-upload.`;
   } else {
     errEl.style.display = 'none';
   }
