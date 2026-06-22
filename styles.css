@@ -172,28 +172,43 @@ nav { position: sticky; top: 0; z-index: 40; background: rgba(255,255,255,0.92);
 /* ── Admin Dashboard Dark Mode ───────────────────────────────
    Scoped under html.dark so it never affects the customer site
    (the customer site's <html> never gets the .dark class). ── */
+html.dark {
+  --dk-bg1:        #111827; /* deepest — sidebar, modal shell    */
+  --dk-bg2:        #1F2937; /* sections, inputs, table rows      */
+  --dk-bg3:        #374151; /* borders, close buttons, hovers    */
+  --dk-text1:      #F3F4F6; /* primary text                      */
+  --dk-text2:      #E5E7EB; /* secondary text                    */
+  --dk-text3:      #D1D5DB; /* table cells, muted                */
+  --dk-text4:      #9CA3AF; /* labels, placeholders              */
+  --dk-text5:      #6B7280; /* input placeholder                 */
+  --dk-indigo:     #4F46E5; /* brand accent                      */
+  --dk-indigo-lt:  #A5B4FC; /* lighter indigo for dark surfaces  */
+  --dk-indigo-hov: #312E81; /* indigo hover                      */
+  --dk-indigo-foc: #6366F1; /* indigo focus ring                 */
+}
+
 html.dark .modal-overlay { background: rgba(0,0,0,.7); }
-html.dark .modal-box { background: #111827; color: #F3F4F6; box-shadow: 0 24px 80px rgba(0,0,0,.5); }
-html.dark .field { background: #1F2937; border-color: #374151; color: #F3F4F6; }
-html.dark .field::placeholder { color: #6B7280; }
-html.dark .field:focus { border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
-html.dark label.lbl { color: #9CA3AF; }
-html.dark .btn-secondary { background: #1F2937; color: #A5B4FC; border-color: #4F46E5; }
-html.dark .btn-secondary:hover { background: #312E81; }
-html.dark .admin-table th { background: #1F2937; color: #9CA3AF; }
-html.dark .admin-table td { color: #D1D5DB; border-bottom-color: #1F2937; }
-html.dark .admin-table tr:hover td { background: #1F2937; }
+html.dark .modal-box { background: var(--dk-bg1); color: var(--dk-text1); box-shadow: 0 24px 80px rgba(0,0,0,.5); }
+html.dark .field { background: var(--dk-bg2); border-color: var(--dk-bg3); color: var(--dk-text1); }
+html.dark .field::placeholder { color: var(--dk-text5); }
+html.dark .field:focus { border-color: var(--dk-indigo-foc); box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+html.dark label.lbl { color: var(--dk-text4); }
+html.dark .btn-secondary { background: var(--dk-bg2); color: var(--dk-indigo-lt); border-color: var(--dk-indigo); }
+html.dark .btn-secondary:hover { background: var(--dk-indigo-hov); }
+html.dark .admin-table th { background: var(--dk-bg2); color: var(--dk-text4); }
+html.dark .admin-table td { color: var(--dk-text3); border-bottom-color: var(--dk-bg2); }
+html.dark .admin-table tr:hover td { background: var(--dk-bg2); }
 html.dark .badge-green { background: #064E3B; color: #6EE7B7; }
 html.dark .badge-yellow { background: #78350F; color: #FCD34D; }
 html.dark .badge-red { background: #7F1D1D; color: #FCA5A5; }
-html.dark .badge-gray { background: #374151; color: #D1D5DB; }
+html.dark .badge-gray { background: var(--dk-bg3); color: var(--dk-text3); }
 html.dark nav { background: transparent; backdrop-filter: none; border-bottom: none; }
-html.dark #adminSidebar { background: #111827; border-right-color: transparent; }
+html.dark #adminSidebar { background: var(--dk-bg1); border-right-color: transparent; }
 html.dark #adminSidebar a:hover { background: rgba(255,255,255,0.05); }
-html.dark .modal-box .bg-gray-50 { background: #1F2937; }
-html.dark .modal-box .bg-white { background: #1F2937; }
-html.dark .modal-box .bg-gray-100 { background: #374151; color: #E5E7EB; }
-html.dark .modal-box .text-gray-800 { color: #F3F4F6; }
-html.dark .modal-box .text-gray-700 { color: #E5E7EB; }
-html.dark .modal-box .border-gray-200 { border-color: #374151; }
-html.dark .modal-box .border-gray-100 { border-color: #1F2937; }
+html.dark .modal-box .bg-gray-50 { background: var(--dk-bg2); }
+html.dark .modal-box .bg-white { background: var(--dk-bg2); }
+html.dark .modal-box .bg-gray-100 { background: var(--dk-bg3); color: var(--dk-text2); }
+html.dark .modal-box .text-gray-800 { color: var(--dk-text1); }
+html.dark .modal-box .text-gray-700 { color: var(--dk-text2); }
+html.dark .modal-box .border-gray-200 { border-color: var(--dk-bg3); }
+html.dark .modal-box .border-gray-100 { border-color: var(--dk-bg2); }
