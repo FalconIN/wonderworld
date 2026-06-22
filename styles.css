@@ -188,3 +188,5 @@ html.dark .badge-yellow { background: #78350F; color: #FCD34D; }
 html.dark .badge-red { background: #7F1D1D; color: #FCA5A5; }
 html.dark .badge-gray { background: #374151; color: #D1D5DB; }
 html.dark nav { background: transparent; backdrop-filter: none; border-bottom: none; }
+html.dark #adminSidebar { background: #111827; border-right-color: transparent; }
+html.dark #adminSidebar a:hover { background: rgba(255,255,255,0.05); }
