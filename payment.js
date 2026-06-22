@@ -53,6 +53,11 @@ async function mountStripeElements() {
     },
   });
 
+  // Dynamically create the mount point so Stripe doesn't detect it on page load
+  const wrapper = document.getElementById('stripe-payment-wrapper');
+  if (!wrapper) return;
+  wrapper.innerHTML = '<div id="stripe-payment-element"></div>';
+
   stripePaymentElement = stripeElements.create('payment', {
     layout: { type: 'tabs', defaultCollapsed: false },
     fields: {
@@ -135,9 +140,11 @@ async function processStripePayment() {
 // ---------------------------------------------------------------------------
 function resetPaymentElement() {
   if (stripePaymentElement) {
-    stripePaymentElement.unmount();
+    try { stripePaymentElement.unmount(); } catch (e) {}
     stripePaymentElement = null;
   }
+  const wrapper = document.getElementById('stripe-payment-wrapper');
+  if (wrapper) wrapper.innerHTML = '';
   stripeElements = null;
   stripeElementsMounted = false;
   clientSecret = null;
