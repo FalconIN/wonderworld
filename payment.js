@@ -1,26 +1,27 @@
-// payment.js — Stripe Payment Element (supports card, Apple Pay, Google Pay, Afterpay, Link, etc.)
+// payment.js — Stripe Payment Element (card + Apple Pay + Google Pay + Afterpay)
 
 let stripeElements = null;
 let stripePaymentElement = null;
 let stripeElementsMounted = false;
 let clientSecret = null;
 
-// ---------------------------------------------------------------------------
-// Mount Stripe Payment Element when step 4 is shown
-// ---------------------------------------------------------------------------
 async function mountStripeElements() {
   if (stripeElementsMounted) return;
 
+  const wrapper = document.getElementById('stripe-payment-wrapper');
+  if (!wrapper) return;
+
   const totalAmount = state.calculatedTotal || 0;
 
-  // Create a PaymentIntent first — the Payment Element needs the client secret
-  // upfront (unlike the legacy card element which could create it on submit)
+  // Show loading state
+  wrapper.innerHTML = '<div class="text-gray-400 text-sm text-center py-6">Loading payment options...</div>';
+
   try {
     const result = await callEdgeFunction('create-payment-intent', {
-      amount:         Math.round(totalAmount * 100),
-      currency:       'nzd',
-      bookingRef:     state.bookingRef || 'PENDING',
-      customerEmail:  state.user?.email || '',
+      amount:        Math.round(totalAmount * 100),
+      currency:      'nzd',
+      bookingRef:    state.bookingRef || 'PENDING',
+      customerEmail: state.user?.email || '',
       metadata: {
         room:   state.selectedRoom?.name || '',
         date:   state.selectedDate || '',
@@ -31,47 +32,37 @@ async function mountStripeElements() {
 
     clientSecret = result.clientSecret;
   } catch (err) {
-    const errEl = document.getElementById('stripe-payment-errors');
-    if (errEl) errEl.textContent = 'Failed to load payment form: ' + err.message;
+    wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-4">Failed to load payment: ${err.message}</div>`;
     return;
   }
 
-  // Mount the unified Payment Element
+  // Create the mount point fresh
+  wrapper.innerHTML = '<div id="stripe-payment-element"></div>';
+
   stripeElements = stripe.elements({
     clientSecret,
     appearance: {
       theme: 'stripe',
       variables: {
         colorPrimary: '#4F46E5',
-        colorBackground: '#ffffff',
         colorText: '#1F2937',
         colorDanger: '#EF4444',
         fontFamily: 'Inter, sans-serif',
         borderRadius: '12px',
-        spacingUnit: '4px',
       },
     },
   });
 
-  // Dynamically create the mount point so Stripe doesn't detect it on page load
-  const wrapper = document.getElementById('stripe-payment-wrapper');
-  if (!wrapper) return;
-  wrapper.innerHTML = '<div id="stripe-payment-element"></div>';
-
   stripePaymentElement = stripeElements.create('payment', {
     layout: { type: 'tabs', defaultCollapsed: false },
     fields: {
-      billingDetails: {
-        address: 'auto', // collect address when required by payment method (e.g. Afterpay)
-      },
+      billingDetails: { address: 'auto' },
     },
     defaultValues: {
       billingDetails: {
         email: state.user?.email || '',
         name: `${state.user?.firstName || ''} ${state.user?.lastName || ''}`.trim(),
-        address: {
-          country: 'NZ',
-        },
+        address: { country: 'NZ' },
       },
     },
   });
@@ -80,12 +71,9 @@ async function mountStripeElements() {
   stripeElementsMounted = true;
 }
 
-// ---------------------------------------------------------------------------
-// Process payment on "Pay & Confirm" click
-// ---------------------------------------------------------------------------
 async function processStripePayment() {
   if (!stripeElements || !clientSecret) {
-    showFieldError('Payment form not loaded. Please try again.');
+    showFieldError('Payment form not ready — please wait a moment and try again.');
     return;
   }
 
@@ -100,30 +88,29 @@ async function processStripePayment() {
   if (errEl) errEl.textContent = '';
 
   try {
-    // Confirm the payment — Stripe handles all method types automatically
-    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements: stripeElements,
       confirmParams: {
-        return_url: window.location.href, // fallback for redirect-based methods
+        return_url: window.location.origin,
         payment_method_data: {
           billing_details: {
             email: state.user?.email || state.confirmEmail || '',
-            name:  `${state.user?.firstName || ''} ${state.user?.lastName || ''}`.trim(),
+            name: `${state.user?.firstName || ''} ${state.user?.lastName || ''}`.trim(),
           },
         },
       },
-      redirect: 'if_required', // stay on page for card/Afterpay; redirect only if needed (e.g. bank redirect methods)
+      redirect: 'if_required',
     });
 
-    if (confirmError) {
-      if (errEl) errEl.textContent = confirmError.message || 'Payment failed.';
+    if (error) {
+      if (errEl) errEl.textContent = error.message || 'Payment failed. Please try again.';
       btn.disabled = false;
       btnText?.classList.remove('hidden');
       btnSpinner?.classList.add('hidden');
       return;
     }
 
-    // Payment succeeded — move to contact details step
+    // Success
     state.stripePaymentIntentId = paymentIntent?.id || clientSecret.split('_secret_')[0];
     goToStep(5);
 
@@ -135,9 +122,6 @@ async function processStripePayment() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Reset payment element when wizard is reset (e.g. closing/reopening modal)
-// ---------------------------------------------------------------------------
 function resetPaymentElement() {
   if (stripePaymentElement) {
     try { stripePaymentElement.unmount(); } catch (e) {}

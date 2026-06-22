@@ -246,15 +246,8 @@ function resetWizard() {
     if (el) el.style.display = 'none';
   }
 
-  // Reset Stripe card element
-  if (stripeCardElement) {
-    stripeCardElement.clear();
-    stripeCardMounted = false;
-    stripeCardElement = null;
-  }
-  if (prButton) {
-    prButton = null;
-  }
+  // Reset Stripe Payment Element
+  if (typeof resetPaymentElement === 'function') resetPaymentElement();
 
   // Reset state
   Object.assign(state, {
@@ -323,10 +316,6 @@ function resetWizard() {
   });
   const waiver = document.getElementById('liabilityWaiver');
   if (waiver) waiver.checked = false;
-
-  // Reset cardholder name field
-  const cardName = document.getElementById('cardholderName');
-  if (cardName) cardName.value = '';
 
   // Set min date
   const dateInput = document.getElementById('partyDate');
