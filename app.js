@@ -237,6 +237,9 @@ function handleOverlayClick(event) {
 // Reset wizard
 // ---------------------------------------------------------------------------
 function resetWizard() {
+  // Reset Stripe Payment Element so it re-mounts fresh next time
+  if (typeof resetPaymentElement === 'function') resetPaymentElement();
+
   // Hide all steps
   for (let i = 0; i <= 6; i++) {
     const el = document.getElementById('step' + i);

@@ -999,24 +999,9 @@
 
         <div id="orderSummaryPill" class="bg-indigo-light rounded-xl p-4 mb-5 text-sm"></div>
 
-        <div id="payment-request-button" class="mb-4"></div>
-        <div id="paymentRequestDivider" class="flex items-center gap-3 mb-5" style="display:none!important">
-          <div class="flex-1 h-px bg-gray-200"></div>
-          <span class="text-gray-400 text-sm font-medium">or pay by card</span>
-          <div class="flex-1 h-px bg-gray-200"></div>
-        </div>
-
-        <div class="space-y-3 mb-5">
-          <div>
-            <label class="lbl">Card Details</label>
-            <div id="stripe-card-element" class="field py-3.5"></div>
-            <div id="stripe-card-errors" class="text-red-500 text-sm mt-2" role="alert"></div>
-          </div>
-          <div>
-            <label class="lbl">Name on Card</label>
-            <input class="field" type="text" placeholder="As it appears on your card" id="cardholderName" />
-          </div>
-        </div>
+        <!-- Stripe Payment Element — shows all enabled methods: card, Apple Pay, Google Pay, Afterpay, etc. -->
+        <div id="stripe-payment-element" class="mb-4"></div>
+        <div id="stripe-payment-errors" class="text-red-500 text-sm mb-3" role="alert"></div>
 
         <div class="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
           <span class="text-base">💰</span>
