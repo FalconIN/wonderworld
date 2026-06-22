@@ -534,7 +534,7 @@ async function renderRevenueChart() {
 
   const byDate = {};
   (rows || []).forEach(r => {
-    const day = (r.date || '').toString().split('T')[0];
+    const day = (r.date || '').toString().split('T')[0].split(' ')[0];
     if (!day) return;
     byDate[day] = (byDate[day] || 0) + parseFloat(r.amount || 0);
   });
@@ -552,7 +552,8 @@ async function renderRevenueChart() {
         backgroundColor: 'rgba(79,70,229,0.1)',
         fill: true,
         tension: 0.3,
-        pointRadius: 3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
         pointBackgroundColor: '#4F46E5',
       }],
     },
@@ -567,10 +568,14 @@ async function renderRevenueChart() {
         x: {
           type: 'time',
           time: { unit: 'day', tooltipFormat: 'MMM d' },
-          ticks: { color: chartTextColor(), maxTicksLimit: 10 },
+          ticks: { color: chartTextColor() },
           grid: { color: chartGridColor() },
         },
-        y: { ticks: { color: chartTextColor(), callback: (v) => '$' + v }, grid: { color: chartGridColor() } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: chartTextColor(), callback: (v) => '$' + v },
+          grid: { color: chartGridColor() },
+        },
       },
     },
   });
