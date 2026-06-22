@@ -5,6 +5,55 @@ let stripePaymentElement = null;
 let stripeElementsMounted = false;
 let clientSecret = null;
 
+// ---------------------------------------------------------------------------
+// Afterpay return handler — called from app.js after all state is initialized
+// ---------------------------------------------------------------------------
+async function checkAfterPayReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('afterpay_return')) return;
+
+  // Clean up URL
+  window.history.replaceState({}, '', window.location.pathname);
+
+  const saved = sessionStorage.getItem('ww_pending_booking');
+  if (!saved) return;
+
+  let pending;
+  try { pending = JSON.parse(saved); } catch (e) { return; }
+  sessionStorage.removeItem('ww_pending_booking');
+
+  // Restore booking state
+  Object.assign(state, {
+    selectedRoom:    pending.room,
+    partyRoomDbId:   pending.partyRoomDbId,
+    selectedDate:    pending.date,
+    selectedTime:    pending.time,
+    guests:          pending.guests,
+    selectedFood:    pending.food,
+    addons:          pending.addons || {},
+    calculatedTotal: pending.calculatedTotal,
+    bookingRef:      pending.bookingRef,
+    slotHoldId:      pending.slotHoldId,
+    confirmEmail:    pending.confirmEmail,
+    confirmPhone:    pending.confirmPhone,
+  });
+  if (pending.user) state.user = pending.user;
+
+  // Verify payment actually succeeded
+  const { paymentIntent } = await stripe.retrievePaymentIntent(pending.clientSecret);
+
+  if (paymentIntent?.status === 'succeeded') {
+    state.stripePaymentIntentId = paymentIntent.id;
+    openBooking();
+    setTimeout(() => goToStep(5), 150);
+  } else {
+    alert('Your Afterpay payment could not be confirmed. Please try booking again.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mount Stripe Payment Element when step 4 is shown
+// ---------------------------------------------------------------------------
 async function mountStripeElements() {
   if (stripeElementsMounted) return;
 
@@ -12,8 +61,6 @@ async function mountStripeElements() {
   if (!wrapper) return;
 
   const totalAmount = state.calculatedTotal || 0;
-
-  // Show loading state
   wrapper.innerHTML = '<div class="text-gray-400 text-sm text-center py-6">Loading payment options...</div>';
 
   try {
@@ -29,14 +76,12 @@ async function mountStripeElements() {
         guests: state.guests,
       },
     });
-
     clientSecret = result.clientSecret;
   } catch (err) {
     wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-4">Failed to load payment: ${err.message}</div>`;
     return;
   }
 
-  // Create the mount point fresh
   wrapper.innerHTML = '<div id="stripe-payment-element"></div>';
 
   stripeElements = stripe.elements({
@@ -55,9 +100,7 @@ async function mountStripeElements() {
 
   stripePaymentElement = stripeElements.create('payment', {
     layout: { type: 'tabs', defaultCollapsed: false },
-    fields: {
-      billingDetails: { address: 'auto' },
-    },
+    fields: { billingDetails: { address: 'auto' } },
     defaultValues: {
       billingDetails: {
         email: state.user?.email || '',
@@ -71,6 +114,9 @@ async function mountStripeElements() {
   stripeElementsMounted = true;
 }
 
+// ---------------------------------------------------------------------------
+// Process payment
+// ---------------------------------------------------------------------------
 async function processStripePayment() {
   if (!stripeElements || !clientSecret) {
     showFieldError('Payment form not ready — please wait a moment and try again.');
@@ -87,11 +133,29 @@ async function processStripePayment() {
   btnSpinner?.classList.remove('hidden');
   if (errEl) errEl.textContent = '';
 
+  // Save booking state before redirect (Afterpay redirects away from the page)
+  sessionStorage.setItem('ww_pending_booking', JSON.stringify({
+    clientSecret,
+    room:            state.selectedRoom,
+    partyRoomDbId:   state.partyRoomDbId,
+    date:            state.selectedDate,
+    time:            state.selectedTime,
+    guests:          state.guests,
+    food:            state.selectedFood,
+    addons:          state.addons,
+    calculatedTotal: state.calculatedTotal,
+    bookingRef:      state.bookingRef,
+    slotHoldId:      state.slotHoldId,
+    user:            state.user,
+    confirmEmail:    state.confirmEmail,
+    confirmPhone:    state.confirmPhone,
+  }));
+
   try {
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements: stripeElements,
       confirmParams: {
-        return_url: window.location.origin,
+        return_url: window.location.origin + '/?afterpay_return=1',
         payment_method_data: {
           billing_details: {
             email: state.user?.email || state.confirmEmail || '',
@@ -103,6 +167,7 @@ async function processStripePayment() {
     });
 
     if (error) {
+      sessionStorage.removeItem('ww_pending_booking');
       if (errEl) errEl.textContent = error.message || 'Payment failed. Please try again.';
       btn.disabled = false;
       btnText?.classList.remove('hidden');
@@ -110,11 +175,13 @@ async function processStripePayment() {
       return;
     }
 
-    // Success
+    // Non-redirect payment succeeded (card, Apple Pay, Google Pay)
+    sessionStorage.removeItem('ww_pending_booking');
     state.stripePaymentIntentId = paymentIntent?.id || clientSecret.split('_secret_')[0];
     goToStep(5);
 
   } catch (err) {
+    sessionStorage.removeItem('ww_pending_booking');
     if (errEl) errEl.textContent = err.message || 'Payment failed.';
     btn.disabled = false;
     btnText?.classList.remove('hidden');
@@ -122,6 +189,9 @@ async function processStripePayment() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reset
+// ---------------------------------------------------------------------------
 function resetPaymentElement() {
   if (stripePaymentElement) {
     try { stripePaymentElement.unmount(); } catch (e) {}

@@ -71,6 +71,9 @@ async function handleSignedInUser(user) {
 
   updateNavUI(true);
 
+  // If returning from an Afterpay redirect, resume the booking flow
+  if (typeof checkAfterPayReturn === 'function') checkAfterPayReturn();
+
   // Show admin link in footer if admin
   if (state.user.isAdmin) {
     const adminLinks = document.querySelectorAll('[data-admin-only]');
