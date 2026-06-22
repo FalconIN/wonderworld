@@ -539,7 +539,7 @@ async function renderRevenueChart() {
     byDate[day] = (byDate[day] || 0) + parseFloat(r.amount || 0);
   });
 
-  const dataPoints = Object.keys(byDate).sort().map(d => ({ x: d, y: byDate[d] }));
+  const dataPoints = Object.keys(byDate).sort().map(d => ({ x: d + 'T12:00:00', y: byDate[d] }));
 
   if (revenueChartInstance) revenueChartInstance.destroy();
   revenueChartInstance = new Chart(canvas, {
@@ -586,7 +586,7 @@ async function renderBookingsDotChart() {
   } catch (err) { console.error(err); return; }
 
   const points = (rows || []).map(r => ({
-    x: (r.date || '').toString().split('T')[0],
+    x: (r.date || '').toString().split('T')[0] + 'T12:00:00',
     y: parseInt(r.count),
   })).sort((a, b) => a.x.localeCompare(b.x));
 
