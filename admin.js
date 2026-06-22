@@ -14,35 +14,33 @@ let allPayments   = [];
 let allCustomers  = [];
 
 // ---------------------------------------------------------------------------
-// Init: check admin access
+// Init: check admin access via Firebase Auth
 // ---------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (!session) {
-    window.location.href = '/?adminredirect=1';
-    return;
-  }
+document.addEventListener('DOMContentLoaded', () => {
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      window.location.href = '/?adminredirect=1';
+      return;
+    }
 
-  // Verify admin flag
-  const { data: profile } = await supabaseClient
-    .from('users')
-    .select('first_name, last_name, is_admin')
-    .eq('id', session.user.id)
-    .single();
+    try {
+      const profile = await callAPI('users/profile', null, 'GET');
+      if (!profile?.isAdmin) {
+        alert('Access denied. Admin accounts only.');
+        window.location.href = '/';
+        return;
+      }
+      document.getElementById('adminUserInfo').textContent =
+        `${profile.firstName} ${profile.lastName}`;
+    } catch {
+      alert('Could not verify admin access.');
+      window.location.href = '/';
+      return;
+    }
 
-  if (!profile?.is_admin) {
-    alert('Access denied. Admin accounts only.');
-    window.location.href = '/';
-    return;
-  }
-
-  document.getElementById('adminUserInfo').textContent =
-    `${profile.first_name} ${profile.last_name}`;
-
-  initAdminTheme();
-
-  // Load initial tab
-  await loadOverview();
+    initAdminTheme();
+    await loadOverview();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -118,35 +116,16 @@ function refreshCurrentTab() { showTab(currentTab); }
 // Overview
 // ---------------------------------------------------------------------------
 async function loadOverview() {
-  // Totals
-  const [
-    { count: totalBookings },
-    { data: revenueData },
-    { count: totalCustomers },
-    { count: upcomingCount },
-    { count: cancelledCount },
-  ] = await Promise.all([
-    supabaseClient.from('bookings').select('*', { count: 'exact', head: true }),
-    supabaseClient.from('bookings').select('total_amount').neq('status', 'cancelled'),
-    supabaseClient.from('users').select('*', { count: 'exact', head: true }),
-    supabaseClient.from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .gte('party_date', new Date().toISOString().split('T')[0])
-      .lte('party_date', new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0])
-      .eq('status', 'confirmed'),
-    supabaseClient.from('bookings').select('*', { count: 'exact', head: true }).eq('status', 'cancelled'),
-  ]);
-
-  const totalRevenue = (revenueData || []).reduce((s, r) => s + parseFloat(r.total_amount || 0), 0);
-
-  document.getElementById('stat-bookings').textContent  = totalBookings ?? '—';
-  document.getElementById('stat-revenue').textContent   = '$' + totalRevenue.toFixed(2);
-  document.getElementById('stat-customers').textContent = totalCustomers ?? '—';
-  document.getElementById('stat-upcoming').textContent  = upcomingCount ?? '—';
-
-  const cancelledNote = document.getElementById('stat-cancelled-note');
-  if (cancelledNote) {
-    cancelledNote.textContent = cancelledCount > 0 ? `(${cancelledCount} cancelled)` : '';
+  try {
+    const stats = await callAPI('admin/stats', null, 'GET');
+    document.getElementById('stat-bookings').textContent  = stats.totalBookings ?? '—';
+    document.getElementById('stat-revenue').textContent   = '$' + (stats.totalRevenue || 0).toFixed(2);
+    document.getElementById('stat-customers').textContent = stats.totalCustomers ?? '—';
+    document.getElementById('stat-upcoming').textContent  = stats.upcomingCount ?? '—';
+    const cancelledNote = document.getElementById('stat-cancelled-note');
+    if (cancelledNote) cancelledNote.textContent = stats.cancelledCount > 0 ? `(${stats.cancelledCount} cancelled)` : '';
+  } catch (err) {
+    console.error('Stats load failed:', err);
   }
 
   await loadOverviewBookingsList();
@@ -159,27 +138,23 @@ async function loadOverviewBookingsList(fromDate, toDate) {
   const titleEl = document.getElementById('upcomingListTitle');
   list.innerHTML = '<p class="text-gray-400 text-sm py-4">Loading...</p>';
 
-  let query = supabaseClient
-    .from('bookings')
-    .select('booking_ref, party_date, party_time, guest_count, status, contact_email, party_rooms(name, emoji)')
-    .order('party_date', { ascending: true });
-
+  let endpoint = 'admin/bookings-list';
   if (fromDate && toDate) {
-    query = query.gte('party_date', fromDate).lte('party_date', toDate);
+    endpoint += `?from=${fromDate}&to=${toDate}`;
     titleEl.textContent = `Bookings: ${fromDate} → ${toDate}`;
   } else {
-    query = query.gte('party_date', new Date().toISOString().split('T')[0]).limit(10);
     titleEl.textContent = 'Upcoming Bookings (Next 7 Days)';
   }
 
-  const { data: bookings, error } = await query;
-
-  if (error) {
-    list.innerHTML = `<p class="text-red-400 text-sm py-4">Failed to load bookings: ${error.message}</p>`;
+  let bookings = [];
+  try {
+    bookings = await callAPI(endpoint, null, 'GET');
+  } catch (err) {
+    list.innerHTML = `<p class="text-red-400 text-sm py-4">Failed to load bookings: ${err.message}</p>`;
     return;
   }
 
-  if (!bookings || bookings.length === 0) {
+  if (!bookings.length) {
     list.innerHTML = '<p class="text-gray-400 text-sm py-4">No bookings found for this range.</p>';
     return;
   }
@@ -187,15 +162,15 @@ async function loadOverviewBookingsList(fromDate, toDate) {
   list.innerHTML = bookings.map(b => `
     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 ${b.status === 'cancelled' ? 'opacity-60' : ''}">
       <div class="flex items-center gap-3">
-        <span class="text-2xl">${b.party_rooms?.emoji || '🎉'}</span>
+        <span class="text-2xl">${b.roomEmoji || '🎉'}</span>
         <div>
-          <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${b.party_rooms?.name || '—'} · ${b.guest_count} kids</div>
-          <div class="text-xs text-gray-400">${b.party_date} @ ${b.party_time} · ${b.contact_email || ''}</div>
+          <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${b.roomName || '—'} · ${b.guestCount} kids</div>
+          <div class="text-xs text-gray-400">${b.partyDate} @ ${b.partyTime} · ${b.contactEmail || ''}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
         <span class="badge ${statusBadgeClass(b.status)}">${b.status}</span>
-        <span class="text-xs text-gray-400 font-mono">${b.booking_ref}</span>
+        <span class="text-xs text-gray-400 font-mono">${b.bookingRef}</span>
       </div>
     </div>`).join('');
 }
@@ -277,8 +252,7 @@ function handleImportFile(event) {
 
       // Load room slug lookup once
       if (!importRoomLookup) {
-        const { data: rooms } = await supabaseClient.from('party_rooms').select('id, slug, name');
-        importRoomLookup = rooms || [];
+        importRoomLookup = await callAPI('admin/rooms', null, 'GET');
       }
 
       importParsedRows = dataRows.map((r, i) => parseImportRow(r, colMap, i));
@@ -429,90 +403,26 @@ async function confirmImport() {
   btn.disabled = true;
   btn.textContent = 'Importing...';
 
-  let successCount = 0;
-  let failCount = 0;
-  const failMessages = [];
+  const rowsToSend = validRows.map(r => ({
+    ...r,
+    matchedRoomId: r.matchedRoom?.id,
+  }));
 
-  for (const r of validRows) {
-    try {
-      // Upsert user
-      let userId = null;
-      const { data: existingUser } = await supabaseClient
-        .from('users').select('id').eq('email', r.email).single();
-
-      if (existingUser) {
-        userId = existingUser.id;
-      } else {
-        const newId = crypto.randomUUID();
-        const { error: userErr } = await supabaseClient.from('users').insert({
-          id: newId, first_name: r.firstName, last_name: r.lastName,
-          email: r.email, phone: r.phone || null,
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        });
-        if (userErr) throw new Error('User creation failed: ' + userErr.message);
-        userId = newId;
-      }
-
-      // Check slot availability
-      const { data: existingSlot } = await supabaseClient
-        .from('booking_timeslots')
-        .select('id, status')
-        .eq('party_room_id', r.matchedRoom.id)
-        .eq('slot_date', r.date)
-        .eq('slot_time', r.time)
-        .single();
-
-      if (existingSlot && existingSlot.status === 'confirmed') {
-        throw new Error(`Slot already booked: ${r.matchedRoom.name} ${r.date} ${r.time}`);
-      }
-
-      const bookingRef = 'WW-IMP-' + Math.random().toString(36).slice(2, 7).toUpperCase();
-
-      const { error: bookingErr } = await supabaseClient.from('bookings').insert({
-        user_id: userId,
-        party_room_id: r.matchedRoom.id,
-        booking_ref: bookingRef,
-        party_date: r.date,
-        party_time: r.time,
-        guest_count: r.guests,
-        food_choice: r.food || '',
-        allergy_notes: r.notes || '',
-        addons_summary: r.addonsSummary || '',
-        base_amount: r.baseAmount,
-        addons_amount: r.addonsAmount,
-        total_amount: r.price,
-        status: 'confirmed',
-        contact_email: r.email,
-        contact_phone: r.phone || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      if (bookingErr) throw new Error('Booking insert failed: ' + bookingErr.message);
-
-      // Lock the slot
-      if (existingSlot) {
-        await supabaseClient.from('booking_timeslots')
-          .update({ status: 'confirmed', held_by_user_id: userId })
-          .eq('id', existingSlot.id);
-      } else {
-        await supabaseClient.from('booking_timeslots').insert({
-          party_room_id: r.matchedRoom.id, slot_date: r.date, slot_time: r.time,
-          status: 'confirmed', held_by_user_id: userId,
-        });
-      }
-
-      successCount++;
-    } catch (err) {
-      failCount++;
-      failMessages.push(`${r.firstName} ${r.lastName} (${r.date} ${r.time}): ${err.message}`);
-    }
+  let result = { success: 0, failed: 0, messages: [] };
+  try {
+    result = await callAPI('admin/bookings/import', { rows: rowsToSend });
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Import Valid Rows';
+    return;
   }
 
   btn.disabled = false;
   btn.textContent = 'Import Valid Rows';
 
-  let msg = `✅ Imported ${successCount} booking${successCount === 1 ? '' : 's'}.`;
-  if (failCount > 0) msg += `\n\n⚠️ ${failCount} failed:\n${failMessages.join('\n')}`;
+  let msg = `✅ Imported ${result.success} booking${result.success === 1 ? '' : 's'}.`;
+  if (result.failed > 0) msg += `\n\n⚠️ ${result.failed} failed:\n${result.messages.join('\n')}`;
   alert(msg);
 
   closeImportModal();
@@ -524,36 +434,20 @@ async function exportBookingsToExcel() {
   const to = document.getElementById('overviewRangeTo').value;
   const useRange = from && to;
 
-  let fullQuery = supabaseClient
-    .from('bookings')
-    .select(`
-      booking_ref, party_date, party_time, guest_count, food_choice,
-      addons_summary, total_amount, status, contact_email, created_at,
-      party_rooms ( name )
-    `)
-    .order('party_date', { ascending: true });
-  if (useRange) fullQuery = fullQuery.gte('party_date', from).lte('party_date', to);
+  let endpoint = 'admin/bookings/export';
+  if (useRange) endpoint += `?from=${from}&to=${to}`;
 
-  const { data: rows, error: rowsError } = await fullQuery;
-
-  if (rowsError) {
-    alert('Failed to export: ' + rowsError.message);
+  let rows = [];
+  try {
+    rows = await callAPI(endpoint, null, 'GET');
+  } catch (err) {
+    alert('Failed to export: ' + err.message);
     return;
   }
-  if (!rows || rows.length === 0) {
+
+  if (!rows.length) {
     alert('No bookings found to export' + (useRange ? ' for this date range.' : '.'));
     return;
-  }
-
-  // Look up first/last name per booking via contact_email against the users table
-  const emails = [...new Set(rows.map(r => (r.contact_email || '').toLowerCase()).filter(Boolean))];
-  let usersByEmail = {};
-  if (emails.length > 0) {
-    const { data: usersData } = await supabaseClient
-      .from('users')
-      .select('email, first_name, last_name')
-      .in('email', emails);
-    (usersData || []).forEach(u => { usersByEmail[(u.email || '').toLowerCase()] = u; });
   }
 
   const ROOM_COLOR_LABELS = {
@@ -564,22 +458,21 @@ async function exportBookingsToExcel() {
   };
 
   const exportRows = rows.map(b => {
-    const u = usersByEmail[(b.contact_email || '').toLowerCase()] || {};
-    const bookedOn = b.created_at ? new Date(b.created_at).toLocaleDateString('en-NZ') : '';
-    const roomName = b.party_rooms?.name || '';
+    const bookedOn = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-NZ') : '';
+    const roomName = b.roomName || '';
     return {
       'Date Booked':  bookedOn,
-      'First Name':   u.first_name || '',
-      'Last Name':    u.last_name || '',
-      'Email':        b.contact_email || '',
-      'Ref Number':   b.booking_ref || '',
+      'First Name':   b.firstName || '',
+      'Last Name':    b.lastName  || '',
+      'Email':        b.contactEmail || '',
+      'Ref Number':   b.bookingRef || '',
       'Party Room':   ROOM_COLOR_LABELS[roomName] || roomName,
-      'Kid Amount':   b.guest_count ?? '',
-      'Food Chosen':  b.food_choice || '',
-      'Add-ons':      b.addons_summary || '',
-      'Price Paid':   parseFloat(b.total_amount || 0),
-      'Party Date':   b.party_date || '',
-      'Party Time':   b.party_time || '',
+      'Kid Amount':   b.guestCount ?? '',
+      'Food Chosen':  b.foodChoice || '',
+      'Add-ons':      b.addonsSummary || '',
+      'Price Paid':   parseFloat(b.totalAmount || 0),
+      'Party Date':   b.partyDate || '',
+      'Party Time':   b.partyTime || '',
       'Status':       b.status || '',
     };
   });
@@ -634,28 +527,16 @@ async function renderRevenueChart() {
   const canvas = document.getElementById('revenueChartCanvas');
   if (!canvas) return;
 
-  let query = supabaseClient
-    .from('bookings')
-    .select('party_date, total_amount, created_at')
-    .neq('status', 'cancelled')
-    .order('created_at', { ascending: true });
+  let rows = [];
+  try {
+    rows = await callAPI(`admin/revenue?range=${rangeVal}`, null, 'GET');
+  } catch (err) { console.error(err); return; }
 
-  if (rangeVal !== 'all') {
-    const days = parseInt(rangeVal);
-    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-    query = query.gte('created_at', cutoff);
-  }
-
-  const { data: rows, error } = await query;
-  if (error) { console.error(error); return; }
-
-  // Group revenue by the date the booking was MADE (created_at), since that's
-  // what "revenue per day" means for a business tracking cashflow
   const byDate = {};
   (rows || []).forEach(r => {
-    const day = (r.created_at || '').split('T')[0];
+    const day = (r.date || '').toString().split('T')[0];
     if (!day) return;
-    byDate[day] = (byDate[day] || 0) + parseFloat(r.total_amount || 0);
+    byDate[day] = (byDate[day] || 0) + parseFloat(r.amount || 0);
   });
 
   const labels = Object.keys(byDate).sort();
@@ -696,39 +577,30 @@ async function renderBookingsDotChart() {
   const canvas = document.getElementById('bookingsDotChartCanvas');
   if (!canvas) return;
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  let rows = [];
+  try {
+    rows = await callAPI('admin/bookings-by-month', null, 'GET');
+  } catch (err) { console.error(err); return; }
 
-  const { data: rows, error } = await supabaseClient
-    .from('bookings')
-    .select('party_date, status')
-    .neq('status', 'cancelled')
-    .gte('party_date', monthStart)
-    .lte('party_date', monthEnd);
-
-  if (error) { console.error(error); return; }
-
-  const byDate = {};
-  (rows || []).forEach(r => {
-    byDate[r.party_date] = (byDate[r.party_date] || 0) + 1;
-  });
-
-  const points = Object.entries(byDate).map(([date, count]) => ({
-    x: date,
-    y: count,
+  const points = (rows || []).map(r => ({
+    x: (r.date || '').toString().split('T')[0],
+    y: parseInt(r.count),
   })).sort((a, b) => a.x.localeCompare(b.x));
 
   if (bookingsDotChartInstance) bookingsDotChartInstance.destroy();
   bookingsDotChartInstance = new Chart(canvas, {
-    type: 'scatter',
+    type: 'line',
     data: {
       datasets: [{
         label: 'Rooms booked',
         data: points,
-        backgroundColor: '#0E9F6E',
-        pointRadius: 6,
-        pointHoverRadius: 8,
+        borderColor: '#0E9F6E',
+        backgroundColor: 'rgba(14,159,110,0.12)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        pointBackgroundColor: '#0E9F6E',
       }],
     },
     options: {
@@ -764,27 +636,13 @@ async function renderRoomPopularityChart() {
   const canvas = document.getElementById('roomPopularityChartCanvas');
   if (!canvas) return;
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  let rows = [];
+  try {
+    rows = await callAPI('admin/room-popularity', null, 'GET');
+  } catch (err) { console.error(err); return; }
 
-  const { data: rows, error } = await supabaseClient
-    .from('bookings')
-    .select('party_date, status, party_rooms ( name )')
-    .neq('status', 'cancelled')
-    .gte('party_date', monthStart)
-    .lte('party_date', monthEnd);
-
-  if (error) { console.error(error); return; }
-
-  const byRoom = {};
-  (rows || []).forEach(r => {
-    const name = r.party_rooms?.name || 'Unknown';
-    byRoom[name] = (byRoom[name] || 0) + 1;
-  });
-
-  const labels = Object.keys(byRoom);
-  const values = labels.map(l => byRoom[l]);
+  const labels = (rows || []).map(r => r.name);
+  const values = (rows || []).map(r => parseInt(r.count));
   const colors = ['#4F46E5', '#F59E0B', '#A855F7', '#0E9F6E', '#EF4444'];
 
   if (roomPopularityChartInstance) roomPopularityChartInstance.destroy();
@@ -824,22 +682,12 @@ async function loadBookings() {
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
-  let query = supabaseClient
-    .from('bookings')
-    .select(`
-      id, booking_ref, party_date, party_time, guest_count,
-      food_choice, total_amount, status, allergy_notes,
-      party_room_id, user_id, contact_email, addons_summary, base_amount, addons_amount, created_at,
-      party_rooms ( name, emoji )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(200);
+  let endpoint = 'admin/bookings?limit=200';
+  if (statusFilter) endpoint += `&status=${statusFilter}`;
 
-  if (statusFilter) query = query.eq('status', statusFilter);
-
-  const { data, error } = await query;
-  if (error) { console.error(error); return; }
-  allBookings = data || [];
+  try {
+    allBookings = await callAPI(endpoint, null, 'GET');
+  } catch (err) { console.error(err); return; }
   renderBookingsTable(allBookings);
 }
 
@@ -854,22 +702,22 @@ function renderBookingsTable(bookings) {
 
   tbody.innerHTML = bookings.map(b => `
     <tr>
-      <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.booking_ref}</span></td>
+      <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
-        <div class="text-xs text-gray-400">${b.contact_email || '—'}</div>
+        <div class="text-xs text-gray-400">${b.contactEmail || '—'}</div>
       </td>
-      <td>${b.party_rooms?.emoji || ''} ${b.party_rooms?.name || '—'}</td>
+      <td>${b.roomEmoji || ''} ${b.roomName || '—'}</td>
       <td>
-        <div class="text-sm font-semibold">${b.party_date}</div>
-        <div class="text-xs text-gray-400">${b.party_time}</div>
+        <div class="text-sm font-semibold">${b.partyDate}</div>
+        <div class="text-xs text-gray-400">${b.partyTime}</div>
       </td>
-      <td>${b.guest_count}</td>
-      <td class="font-semibold">$${parseFloat(b.total_amount || 0).toFixed(2)}</td>
+      <td>${b.guestCount}</td>
+      <td class="font-semibold">$${parseFloat(b.totalAmount || 0).toFixed(2)}</td>
       <td><span class="badge ${statusBadgeClass(b.status)}">${b.status}</span></td>
       <td>
         <div class="flex gap-2">
           <button onclick="viewBooking('${b.id}')" class="text-xs text-indigo-500 hover:underline font-semibold">View</button>
-          ${b.status !== 'cancelled' ? `<button onclick="cancelBooking('${b.id}', '${b.booking_ref}')" class="text-xs text-red-500 hover:underline font-semibold">Cancel</button>` : ''}
+          ${b.status !== 'cancelled' ? `<button onclick="cancelBooking('${b.id}', '${b.bookingRef}')" class="text-xs text-red-500 hover:underline font-semibold">Cancel</button>` : ''}
         </div>
       </td>
     </tr>`).join('');
@@ -879,9 +727,8 @@ async function viewBooking(bookingId) {
   const booking = allBookings.find(b => b.id === bookingId);
   if (!booking) return;
 
-  const guestCount = booking.guest_count || 0;
-  const baseAmount = booking.base_amount !== null && booking.base_amount !== undefined
-    ? parseFloat(booking.base_amount) : null;
+  const guestCount = booking.guestCount || 0;
+  const baseAmount = booking.baseAmount != null ? parseFloat(booking.baseAmount) : null;
   const ratePerChild = (baseAmount !== null && guestCount > 0) ? baseAmount / guestCount : null;
 
   document.getElementById('bookingDetailContent').innerHTML = `
@@ -889,7 +736,7 @@ async function viewBooking(bookingId) {
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Booking Ref</div>
-          <div class="font-mono font-bold text-indigo-600">${booking.booking_ref}</div>
+          <div class="font-mono font-bold text-indigo-600">${booking.bookingRef}</div>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Status</div>
@@ -897,11 +744,11 @@ async function viewBooking(bookingId) {
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Room</div>
-          <div class="font-semibold">${booking.party_rooms?.emoji || ''} ${booking.party_rooms?.name || '—'}</div>
+          <div class="font-semibold">${booking.roomEmoji || ''} ${booking.roomName || '—'}</div>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Date & Time</div>
-          <div class="font-semibold">${booking.party_date} @ ${booking.party_time}</div>
+          <div class="font-semibold">${booking.partyDate} @ ${booking.partyTime}</div>
         </div>
       </div>
 
@@ -909,27 +756,27 @@ async function viewBooking(bookingId) {
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
         <div class="space-y-1.5 text-sm text-indigo-800">
           <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${guestCount} children</span></div>
-          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${booking.food_choice || '—'}</span></div>
+          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${booking.foodChoice || '—'}</span></div>
           ${ratePerChild ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guestCount} = $${baseAmount.toFixed(2)}</span></div>` : ''}
-          ${booking.addons_summary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${booking.addons_summary}</span></div>` : ''}
+          ${booking.addonsSummary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${booking.addonsSummary}</span></div>` : ''}
           <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
-            <span>Total:</span><span class="text-indigo-600">$${parseFloat(booking.total_amount || 0).toFixed(2)} NZD</span>
+            <span>Total:</span><span class="text-indigo-600">$${parseFloat(booking.totalAmount || 0).toFixed(2)} NZD</span>
           </div>
         </div>
       </div>
 
       <div class="bg-gray-50 rounded-xl p-4">
         <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
-        <div class="text-sm text-gray-500">${booking.contact_email || '—'}</div>
+        <div class="text-sm text-gray-500">${booking.contactEmail || '—'}</div>
       </div>
-      ${booking.allergy_notes ? `
+      ${booking.allergyNotes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
-        <div class="text-sm text-gray-600">${booking.allergy_notes}</div>
+        <div class="text-sm text-gray-600">${booking.allergyNotes}</div>
       </div>` : ''}
-      <div class="text-xs text-gray-400">Booked: ${new Date(booking.created_at).toLocaleString('en-NZ')}</div>
+      <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ')}</div>
       ${booking.status !== 'cancelled' ? `
-      <button onclick="cancelBooking('${booking.id}', '${booking.booking_ref}')" class="btn-primary w-full py-3 mt-2" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
+      <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="btn-primary w-full py-3 mt-2" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
         Cancel This Booking
       </button>` : ''}
     </div>`;
@@ -942,59 +789,36 @@ function closeBookingModal() {
 }
 
 async function cancelBooking(bookingId, bookingRef) {
-  // Look up the payment for this booking first so we know whether a refund is needed
-  const { data: payment } = await supabaseClient
-    .from('payments')
-    .select('id, stripe_payment_intent_id, amount, status, payment_method')
-    .eq('booking_id', bookingId)
-    .eq('status', 'succeeded')
-    .maybeSingle();
+  let payment = null;
+  try {
+    payment = await callAPI(`admin/payments/for-booking/${bookingId}`, null, 'GET');
+  } catch { /* no payment found, proceed */ }
 
-  const isManualPayment = payment?.payment_method === 'manual';
-  const needsStripeRefund = payment && payment.stripe_payment_intent_id && !isManualPayment;
+  const isManualPayment = payment?.paymentMethod === 'manual';
+  const needsStripeRefund = payment && payment.stripePaymentIntentId && !isManualPayment;
 
   let confirmMsg = `Are you sure you want to cancel booking ${bookingRef}? This cannot be undone.`;
   if (needsStripeRefund) {
     confirmMsg += `\n\nThis will automatically refund $${parseFloat(payment.amount).toFixed(2)} NZD via Stripe.`;
   } else if (isManualPayment) {
-    confirmMsg += `\n\nThis booking was paid manually — no automatic Stripe refund will be triggered. Refund the customer directly if needed.`;
+    confirmMsg += `\n\nThis booking was paid manually — no automatic Stripe refund. Refund the customer directly if needed.`;
   }
   if (!confirm(confirmMsg)) return;
 
-  const { error } = await supabaseClient
-    .from('bookings')
-    .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-    .eq('id', bookingId);
-
-  if (error) {
-    alert('Cancel failed: ' + error.message);
+  try {
+    await callAPI(`admin/bookings/${bookingId}/cancel`, {}, 'PATCH');
+  } catch (err) {
+    alert('Cancel failed: ' + err.message);
     return;
   }
 
-  // Release the timeslot by finding the booking's room/date/time
-  const booking = allBookings.find(b => b.id === bookingId);
-  if (booking) {
-    await supabaseClient
-      .from('booking_timeslots')
-      .update({ status: 'released' })
-      .eq('party_room_id', booking.party_room_id)
-      .eq('slot_date', booking.party_date)
-      .eq('slot_time', booking.party_time);
-  }
-
-  // Auto-refund via Stripe if there's a real payment intent attached
   let refundMsg = '';
   if (needsStripeRefund) {
     try {
-      await callEdgeFunction('refund-payment', {
-        paymentIntentId: payment.stripe_payment_intent_id,
-        paymentId: payment.id,
+      await callAPI(`admin/payments/${payment.id}/refund`, {
+        stripePaymentIntentId: payment.stripePaymentIntentId,
         amount: Math.round(parseFloat(payment.amount) * 100),
       });
-      await supabaseClient
-        .from('payments')
-        .update({ status: 'refunded', refunded_at: new Date().toISOString() })
-        .eq('id', payment.id);
       refundMsg = `\n💸 Refund of $${parseFloat(payment.amount).toFixed(2)} processed automatically.`;
     } catch (err) {
       refundMsg = `\n⚠️ Booking was cancelled but the automatic refund failed: ${err.message}\nPlease process it manually from the Payments tab.`;
@@ -1007,46 +831,19 @@ async function cancelBooking(bookingId, bookingRef) {
 }
 
 async function clearCancelledBookings() {
-  const { count } = await supabaseClient
-    .from('bookings')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'cancelled');
+  const stats = await callAPI('admin/stats', null, 'GET').catch(() => null);
+  const count = stats?.cancelledCount || 0;
 
-  if (!count || count === 0) {
-    alert('No cancelled bookings to clear.');
-    return;
-  }
-
+  if (!count) { alert('No cancelled bookings to clear.'); return; }
   if (!confirm(`Permanently delete all ${count} cancelled booking${count === 1 ? '' : 's'}? This cannot be undone.`)) return;
 
-  const { data: cancelledBookings, error: fetchErr } = await supabaseClient
-    .from('bookings')
-    .select('id')
-    .eq('status', 'cancelled');
-
-  if (fetchErr) {
-    alert('Failed to fetch cancelled bookings: ' + fetchErr.message);
-    return;
+  try {
+    const { deleted } = await callAPI('admin/bookings/cancelled', null, 'DELETE');
+    alert(`✅ Cleared ${deleted} cancelled booking${deleted === 1 ? '' : 's'}.`);
+    refreshCurrentTab();
+  } catch (err) {
+    alert('Failed: ' + err.message);
   }
-
-  const ids = (cancelledBookings || []).map(b => b.id);
-  if (ids.length === 0) return;
-
-  // Delete dependent payment records first (no FK cascade assumed)
-  await supabaseClient.from('payments').delete().in('booking_id', ids);
-
-  const { error: deleteErr } = await supabaseClient
-    .from('bookings')
-    .delete()
-    .in('id', ids);
-
-  if (deleteErr) {
-    alert('Failed to delete cancelled bookings: ' + deleteErr.message);
-    return;
-  }
-
-  alert(`✅ Cleared ${ids.length} cancelled booking${ids.length === 1 ? '' : 's'}.`);
-  refreshCurrentTab();
 }
 
 // ---------------------------------------------------------------------------
@@ -1056,19 +853,9 @@ async function loadPayments() {
   const tbody = document.getElementById('payments-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
-  const { data, error } = await supabaseClient
-    .from('payments')
-    .select(`
-      id, stripe_payment_intent_id, amount, currency, status,
-      card_brand, card_last4, cardholder_name,
-      created_at, error_message,
-      bookings ( booking_ref, contact_email )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(200);
-
-  if (error) { console.error(error); return; }
-  allPayments = data || [];
+  try {
+    allPayments = await callAPI('admin/payments?limit=200', null, 'GET');
+  } catch (err) { console.error(err); return; }
   renderPaymentsTable(allPayments);
 }
 
@@ -1082,24 +869,24 @@ function renderPaymentsTable(payments) {
   }
 
   tbody.innerHTML = payments.map(p => {
-    const cardInfo = (p.card_brand && p.card_last4)
-      ? `${p.card_brand.toUpperCase()} •••• ${p.card_last4}`
+    const cardInfo = (p.cardBrand && p.cardLast4)
+      ? `${p.cardBrand.toUpperCase()} •••• ${p.cardLast4}`
       : '—';
     return `
     <tr>
       <td>
-        <div class="font-semibold text-sm">${p.cardholder_name || '—'}</div>
+        <div class="font-semibold text-sm">${p.cardholderName || '—'}</div>
         <div class="text-xs text-gray-400">${cardInfo}</div>
       </td>
       <td>
-        <div class="text-xs text-gray-400">${p.bookings?.contact_email || '—'}</div>
+        <div class="text-xs text-gray-400">${p.contactEmail || '—'}</div>
       </td>
-      <td><span class="font-mono text-xs text-indigo-600">${p.bookings?.booking_ref || '—'}</span></td>
+      <td><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
       <td class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
       <td><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
-      <td class="text-xs text-gray-500">${new Date(p.created_at).toLocaleString('en-NZ')}</td>
+      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ')}</td>
       <td>
-        ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripe_payment_intent_id}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
+        ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -1109,18 +896,10 @@ async function refundPayment(paymentId, stripePaymentIntentId, amount) {
   if (!confirm(`Refund $${parseFloat(amount).toFixed(2)} NZD? This will be processed via Stripe immediately.`)) return;
 
   try {
-    await callEdgeFunction('refund-payment', {
-      paymentIntentId: stripePaymentIntentId,
-      paymentId,
+    await callAPI(`admin/payments/${paymentId}/refund`, {
+      stripePaymentIntentId,
       amount: Math.round(amount * 100),
     });
-
-    // Update local record
-    await supabaseClient
-      .from('payments')
-      .update({ status: 'refunded', refunded_at: new Date().toISOString() })
-      .eq('id', paymentId);
-
     alert('✅ Refund processed successfully.');
     await loadPayments();
   } catch (err) {
@@ -1135,34 +914,9 @@ async function loadCustomers() {
   const tbody = document.getElementById('customers-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
-  const { data: users, error: usersError } = await supabaseClient
-    .from('users')
-    .select('id, first_name, last_name, email, phone, created_at')
-    .order('created_at', { ascending: false })
-    .limit(200);
-
-  if (usersError) { console.error(usersError); return; }
-
-  const { data: bookings, error: bookingsError } = await supabaseClient
-    .from('bookings')
-    .select('contact_email, total_amount, status');
-
-  if (bookingsError) { console.error(bookingsError); return; }
-
-  // Group bookings by contact_email for quick lookup
-  const bookingsByEmail = {};
-  (bookings || []).forEach(b => {
-    const key = (b.contact_email || '').toLowerCase();
-    if (!key) return;
-    if (!bookingsByEmail[key]) bookingsByEmail[key] = [];
-    bookingsByEmail[key].push(b);
-  });
-
-  allCustomers = (users || []).map(u => ({
-    ...u,
-    bookings: bookingsByEmail[(u.email || '').toLowerCase()] || [],
-  }));
-
+  try {
+    allCustomers = await callAPI('admin/customers?limit=200', null, 'GET');
+  } catch (err) { console.error(err); return; }
   renderCustomersTable(allCustomers);
 }
 
@@ -1171,21 +925,47 @@ function renderCustomersTable(customers) {
   if (!tbody) return;
 
   if (!customers || customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = customers.map(c => {
     const nonCancelled = (c.bookings || []).filter(b => b.status !== 'cancelled');
-    const totalSpent = nonCancelled.reduce((s, b) => s + parseFloat(b.total_amount || 0), 0);
-    const name = `${c.first_name || ''} ${c.last_name || ''}`.trim() || '—';
+    const totalSpent = nonCancelled.reduce((s, b) => s + parseFloat(b.totalAmount || 0), 0);
+    const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || '—';
+    const isAdmin = c.isAdmin;
+    const isSelf = c.id === (auth.currentUser && auth.currentUser.uid);
+    const safeEmail = (c.email || '').replace(/'/g, "\\'");
+    let adminCell;
+    if (isSelf) {
+      adminCell = '<span class="text-xs px-3 py-1 rounded-lg font-semibold bg-indigo-100 text-indigo-700">✅ You</span>';
+    } else if (isAdmin) {
+      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', true)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-indigo-100 text-indigo-700 hover:bg-red-100 hover:text-red-600">✅ Admin</button>';
+    } else {
+      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
+    }
     return `<tr>
       <td class="font-semibold text-sm">${name}</td>
       <td class="text-sm">${c.email || '—'}</td>
       <td class="text-sm">${c.phone || '—'}</td>
       <td class="font-semibold">$${totalSpent.toFixed(2)}</td>
+      <td>${adminCell}</td>
     </tr>`;
   }).join('');
+}
+
+async function toggleAdmin(userId, email, currentlyAdmin) {
+  const action = currentlyAdmin ? 'remove admin from' : 'make admin';
+  const confirmed = confirm(`⚠️ Are you sure you want to ${action} ${email}?\n\nThis will ${currentlyAdmin ? 'revoke their access to the admin dashboard.' : 'give them FULL access to the admin dashboard.'}`);
+  if (!confirmed) return;
+
+  try {
+    await callAPI('admin/users/' + userId + '/set-admin', { isAdmin: !currentlyAdmin });
+    allCustomers = allCustomers.map(c => c.id === userId ? { ...c, isAdmin: !currentlyAdmin } : c);
+    renderCustomersTable(allCustomers);
+  } catch (err) {
+    alert('Failed to update admin status: ' + err.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1227,15 +1007,8 @@ function statusBadgeClass(status) {
 }
 
 async function adminSignOut() {
-  await supabaseClient.auth.signOut();
+  await auth.signOut();
   window.location.href = '/';
-}
-
-// Shared with admin context
-async function callEdgeFunction(name, body = {}) {
-  const { data, error } = await supabaseClient.functions.invoke(name, { body });
-  if (error) throw new Error(error.message);
-  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -1372,13 +1145,12 @@ async function abSelectRoom(roomId) {
   abRenderRoomCards();
 
   const slug = ROOM_SLUGS[roomId];
-  const { data: roomRow } = await supabaseClient
-    .from('party_rooms')
-    .select('id')
-    .eq('slug', slug)
-    .single();
-
-  abState.selectedRoomDbId = roomRow?.id || null;
+  try {
+    const roomRow = await callAPI(`rooms/by-slug/${slug}`, null, 'GET');
+    abState.selectedRoomDbId = roomRow?.id || null;
+  } catch {
+    abState.selectedRoomDbId = null;
+  }
 
   // Re-fetch slots if a date is already chosen
   const dateVal = document.getElementById('ab_date').value;
@@ -1403,16 +1175,11 @@ async function abUpdateTimeSlots() {
 
   grid.innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Checking availability...</div>';
 
-  const { data: bookedSlots } = await supabaseClient
-    .from('booking_timeslots')
-    .select('slot_time, status, hold_expires_at')
-    .eq('party_room_id', abState.selectedRoomDbId)
-    .eq('slot_date', dateVal)
-    .in('status', ['confirmed', 'held']);
-
-  const unavailable = (bookedSlots || [])
-    .filter(s => s.status === 'confirmed' || (s.status === 'held' && new Date(s.hold_expires_at) > new Date()))
-    .map(s => s.slot_time);
+  let unavailable = [];
+  try {
+    const result = await callAPI(`slots?room_id=${abState.selectedRoomDbId}&date=${dateVal}`, null, 'GET');
+    unavailable = result.unavailableSlots || [];
+  } catch { /* show all as available on error */ }
 
   let html = '';
   AB_ALL_SLOTS.forEach(slot => {
@@ -1574,101 +1341,15 @@ async function submitAddBooking() {
   errEl.classList.add('hidden');
 
   try {
-    const roomData = { id: abState.selectedRoomDbId, name: room.name };
-    if (!roomData.id) throw new Error('Room not found. Make sure the schema is set up correctly.');
+    if (!abState.selectedRoomDbId) throw new Error('Room not found. Make sure the schema is set up correctly.');
 
-    // Check if slot is already taken (race condition guard)
-    const { data: existingSlot } = await supabaseClient
-      .from('booking_timeslots')
-      .select('id, status')
-      .eq('party_room_id', roomData.id)
-      .eq('slot_date', date)
-      .eq('slot_time', time)
-      .single();
-
-    if (existingSlot && existingSlot.status === 'confirmed') {
-      throw new Error(`That time slot is already booked for ${roomData.name} on ${date}.`);
-    }
-
-    // Upsert user
-    let userId = null;
-    const { data: existingUser } = await supabaseClient
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
-
-    if (existingUser) {
-      userId = existingUser.id;
-      await supabaseClient.from('users').update({
-        first_name: firstName, last_name: lastName, phone, updated_at: new Date().toISOString()
-      }).eq('id', userId);
-    } else {
-      const newId = crypto.randomUUID();
-      const { error: userErr } = await supabaseClient.from('users').insert({
-        id: newId, first_name: firstName, last_name: lastName, email, phone,
-        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      });
-      if (userErr) throw new Error('Could not create user: ' + userErr.message);
-      userId = newId;
-    }
-
-    const bookingRef = 'WW-' + Date.now().toString(36).toUpperCase();
-
-    const { data: booking, error: bookingErr } = await supabaseClient
-      .from('bookings')
-      .insert({
-        user_id: userId,
-        party_room_id: roomData.id,
-        booking_ref: bookingRef,
-        party_date: date,
-        party_time: time,
-        guest_count: guests,
-        food_choice: foodChoice,
-        allergy_notes: notes,
-        addons_summary: addonsSummary,
-        base_amount: baseAmount,
-        addons_amount: addonsAmount,
-        total_amount: totalAmount,
-        status: status,
-        contact_email: email,
-        contact_phone: phone || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (bookingErr) throw new Error('Booking insert failed: ' + bookingErr.message);
-
-    // Lock the time slot
-    if (existingSlot) {
-      await supabaseClient.from('booking_timeslots').update({
-        status: 'confirmed', held_by_user_id: userId,
-      }).eq('id', existingSlot.id);
-    } else {
-      await supabaseClient.from('booking_timeslots').insert({
-        party_room_id: roomData.id,
-        slot_date: date,
-        slot_time: time,
-        status: 'confirmed',
-        held_by_user_id: userId,
-      });
-    }
-
-    // Insert payment record
-    if (totalAmount > 0) {
-      await supabaseClient.from('payments').insert({
-        user_id: userId,
-        booking_id: booking.id,
-        amount: totalAmount,
-        currency: 'nzd',
-        status: payStatus === 'paid' ? 'succeeded' : 'pending',
-        payment_method: 'manual',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    }
+    const { bookingRef } = await callAPI('admin/bookings/manual', {
+      firstName, lastName, email, phone,
+      roomId: abState.selectedRoomDbId, roomName: room.name,
+      date, time, guests, foodChoice, notes,
+      addonsSummary, addonsAmount, baseAmount, totalAmount,
+      payStatus, status,
+    });
 
     closeAddBookingModal();
     alert(`✅ Booking created!\nRef: ${bookingRef}\nTotal: $${totalAmount.toFixed(2)}\nThe time slot is now greyed out on the live site.`);
