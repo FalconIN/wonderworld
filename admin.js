@@ -539,17 +539,15 @@ async function renderRevenueChart() {
     byDate[day] = (byDate[day] || 0) + parseFloat(r.amount || 0);
   });
 
-  const labels = Object.keys(byDate).sort();
-  const values = labels.map(d => byDate[d]);
+  const dataPoints = Object.keys(byDate).sort().map(d => ({ x: d, y: byDate[d] }));
 
   if (revenueChartInstance) revenueChartInstance.destroy();
   revenueChartInstance = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: labels.map(d => new Date(d + 'T00:00:00').toLocaleDateString('en-NZ', { month: 'short', day: 'numeric' })),
       datasets: [{
         label: 'Revenue (NZD)',
-        data: values,
+        data: dataPoints,
         borderColor: '#4F46E5',
         backgroundColor: 'rgba(79,70,229,0.1)',
         fill: true,
@@ -566,7 +564,12 @@ async function renderRevenueChart() {
         tooltip: { callbacks: { label: (ctx) => `$${ctx.parsed.y.toFixed(2)} NZD` } },
       },
       scales: {
-        x: { ticks: { color: chartTextColor() }, grid: { color: chartGridColor() } },
+        x: {
+          type: 'time',
+          time: { unit: 'day', tooltipFormat: 'MMM d' },
+          ticks: { color: chartTextColor(), maxTicksLimit: 10 },
+          grid: { color: chartGridColor() },
+        },
         y: { ticks: { color: chartTextColor(), callback: (v) => '$' + v }, grid: { color: chartGridColor() } },
       },
     },

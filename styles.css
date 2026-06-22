@@ -190,3 +190,10 @@ html.dark .badge-gray { background: #374151; color: #D1D5DB; }
 html.dark nav { background: transparent; backdrop-filter: none; border-bottom: none; }
 html.dark #adminSidebar { background: #111827; border-right-color: transparent; }
 html.dark #adminSidebar a:hover { background: rgba(255,255,255,0.05); }
+html.dark .modal-box .bg-gray-50 { background: #1F2937; }
+html.dark .modal-box .bg-white { background: #1F2937; }
+html.dark .modal-box .bg-gray-100 { background: #374151; color: #E5E7EB; }
+html.dark .modal-box .text-gray-800 { color: #F3F4F6; }
+html.dark .modal-box .text-gray-700 { color: #E5E7EB; }
+html.dark .modal-box .border-gray-200 { border-color: #374151; }
+html.dark .modal-box .border-gray-100 { border-color: #1F2937; }

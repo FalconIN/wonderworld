@@ -82,7 +82,7 @@
 
   <!-- ── Main content ──────────────────────────────────────── -->
   <div class="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 transition-colors">
-    <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:bg-gray-9501 px-8 py-5 flex items-center justify-between transition-colors">
+    <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-8 py-5 flex items-center justify-between transition-colors">
       <div>
         <h1 id="pageTitle" class="font-display font-bold text-2xl text-gray-900 dark:text-white">Overview</h1>
         <p id="pageSubtitle" class="text-gray-400 text-sm">Wonder World Westgate booking system</p>
@@ -308,8 +308,8 @@
 
     <div class="space-y-4">
       <!-- Customer info -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm">👤 Customer Details</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👤 Customer Details</div>
         <div class="grid grid-cols-2 gap-3">
           <div><label class="lbl">First Name</label><input class="field" id="ab_firstName" placeholder="Sarah" /></div>
           <div><label class="lbl">Last Name</label><input class="field" id="ab_lastName" placeholder="Thompson" /></div>
@@ -319,8 +319,8 @@
       </div>
 
       <!-- Room -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm">🎉 Party Room</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🎉 Party Room</div>
         <div>
           <label class="lbl">Number of Kids</label>
           <input class="field" id="ab_guests" type="number" min="1" max="24" value="10" onchange="abOnGuestsChange()" />
@@ -329,8 +329,8 @@
       </div>
 
       <!-- Date & Time -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm">📅 Date & Time</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📅 Date & Time</div>
         <div><label class="lbl">Party Date</label><input class="field" id="ab_date" type="date" onchange="abUpdateTimeSlots()" /></div>
         <div>
           <label class="lbl">Available Time Slots</label>
@@ -341,11 +341,11 @@
       </div>
 
       <!-- Food split -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm">🍽️ Food Choice</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
         <div class="text-xs text-gray-400">Must add up to <span id="ab_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
         <div class="grid grid-cols-2 gap-3">
-          <div class="bg-white dark:bg-gray-9502 border-2 border-gray-200 dark:bg-gray-9501 rounded-xl p-3 text-center transition-colors">
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍗</div>
             <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
             <div class="flex items-center justify-center gap-2">
@@ -354,7 +354,7 @@
               <button onclick="abChangeFoodSplit('nuggets', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
             </div>
           </div>
-          <div class="bg-white dark:bg-gray-9502 border-2 border-gray-200 dark:bg-gray-9501 rounded-xl p-3 text-center transition-colors">
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍔</div>
             <div class="font-semibold text-xs mb-2">Mini Burger</div>
             <div class="flex items-center justify-center gap-2">
@@ -369,8 +369,8 @@
       </div>
 
       <!-- Add-ons -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-2 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm mb-1">➕ Add-Ons (optional)</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons (optional)</div>
         <div id="ab_addonsList" class="space-y-2"></div>
       </div>
 
@@ -383,8 +383,8 @@
       </div>
 
       <!-- Payment status -->
-      <div class="bg-gray-50 dark:bg-gray-9502 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:bg-gray-9503 text-sm">💰 Payment Status</div>
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💰 Payment Status</div>
         <select class="field" id="ab_payStatus">
           <option value="paid">✅ Paid</option>
           <option value="unpaid">⏳ Not Paid</option>
