@@ -44,7 +44,10 @@ async function checkAfterPayReturn() {
 
   if (paymentIntent?.status === 'succeeded') {
     state.stripePaymentIntentId = paymentIntent.id;
-    openBooking();
+    // Open modal directly WITHOUT calling openBooking() (which calls resetWizard and wipes state)
+    const overlay = document.getElementById('bookingOverlay');
+    if (overlay) overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
     setTimeout(() => goToStep(5), 150);
   } else {
     alert('Your Afterpay payment could not be confirmed. Please try booking again.');
