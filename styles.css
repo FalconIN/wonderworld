@@ -212,3 +212,4 @@ html.dark .modal-box .text-gray-800 { color: var(--dk-text1); }
 html.dark .modal-box .text-gray-700 { color: var(--dk-text2); }
 html.dark .modal-box .border-gray-200 { border-color: var(--dk-bg3); }
 html.dark .modal-box .border-gray-100 { border-color: var(--dk-bg2); }
+html.dark .ab-card { background: var(--dk-bg2); border-color: var(--dk-bg3); color: var(--dk-text1); }

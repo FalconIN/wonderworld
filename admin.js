@@ -1127,7 +1127,7 @@ function abRenderRoomCards() {
 function abBuildRoomCard(room, dimmed) {
   const selected = abState.selectedRoomId === room.id;
   const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
-  const selClass = selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white';
+  const selClass = selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white ab-card';
   return `
     <div class="border-2 ${selClass} ${dimClass} rounded-xl p-3 cursor-pointer transition-all" onclick="abSelectRoom('${room.id}')">
       <div class="flex items-center justify-between">
@@ -1192,7 +1192,7 @@ async function abUpdateTimeSlots() {
       ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
       : selected
         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 cursor-pointer'
-        : 'border-gray-200 bg-white hover:border-indigo-300 cursor-pointer';
+        : 'border-gray-200 bg-white ab-card hover:border-indigo-300 cursor-pointer';
     html += `
       <div class="border-2 ${cls} rounded-xl p-2.5 text-center transition-all" ${isUnavailable ? '' : `onclick="abSelectTime('${slot}', this)"`}>
         <div class="font-semibold text-sm">${slot}</div>
@@ -1207,7 +1207,7 @@ function abSelectTime(slot, el) {
   abState.selectedTime = slot;
   document.querySelectorAll('#ab_timeSlotGrid > div').forEach(c => {
     c.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-    c.classList.add('border-gray-200', 'bg-white');
+    c.classList.add('border-gray-200', 'bg-white', 'ab-card');
   });
   el.classList.remove('border-gray-200', 'bg-white');
   el.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
@@ -1237,7 +1237,7 @@ function abRenderAddonsList() {
   let html = '';
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
     html += `
-      <div class="flex items-center justify-between bg-white rounded-lg p-2.5 border border-gray-100">
+      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
         <div class="flex-1 min-w-0">
           <div class="text-xs font-semibold text-gray-700">${a.label}</div>
           <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
