@@ -22,6 +22,7 @@ router.post('/create-intent', requireAuth, async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount,
       currency,
+      automatic_payment_methods: { enabled: true },
       description: `Wonder World Westgate — ${bookingRef}`,
       receipt_email: customerEmail || undefined,
       metadata: {
