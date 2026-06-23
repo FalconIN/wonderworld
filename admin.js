@@ -725,6 +725,7 @@ function renderBookingsTable(bookings) {
       <td>
         <div class="flex gap-2">
           <button onclick="viewBooking('${b.id}')" class="text-xs text-indigo-500 hover:underline font-semibold">View</button>
+          ${b.status !== 'cancelled' ? `<button onclick="openEditBookingModal('${b.id}')" class="text-xs text-teal hover:underline font-semibold">Edit</button>` : ''}
           ${b.status !== 'cancelled' ? `<button onclick="cancelBooking('${b.id}', '${b.bookingRef}')" class="text-xs text-red-500 hover:underline font-semibold">Cancel</button>` : ''}
         </div>
       </td>
@@ -1363,6 +1364,218 @@ async function submitAddBooking() {
     alert(`✅ Booking created!\nRef: ${bookingRef}\nTotal: $${totalAmount.toFixed(2)}\nThe time slot is now greyed out on the live site.`);
     refreshCurrentTab();
 
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btnText.classList.remove('hidden');
+    spinner.classList.add('hidden');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Edit Booking Modal
+// ---------------------------------------------------------------------------
+let editBookingState = {
+  bookingId: null,
+  booking: null,
+  guests: 10,
+  addons: {},
+};
+
+function parseFoodChoice(foodChoice) {
+  let nuggets = 0, burgers = 0;
+  if (!foodChoice) return { nuggets, burgers };
+  const nugMatch = foodChoice.match(/(\d+)\s*Nuggets?/i);
+  const burMatch = foodChoice.match(/(\d+)\s*Burgers?/i);
+  if (nugMatch) nuggets = parseInt(nugMatch[1]);
+  if (burMatch) burgers = parseInt(burMatch[1]);
+  return { nuggets, burgers };
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseAddonsSummary(summary) {
+  const addons = {};
+  if (!summary) return addons;
+  Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    const match = summary.match(new RegExp(escapeRegex(a.label) + '\\s*×(\\d+)', 'i'));
+    if (match) addons[id] = parseInt(match[1]);
+  });
+  return addons;
+}
+
+function openEditBookingModal(bookingId) {
+  const booking = allBookings.find(b => b.id === bookingId);
+  if (!booking) return;
+
+  editBookingState.bookingId = bookingId;
+  editBookingState.booking = booking;
+  editBookingState.guests = booking.guestCount || 10;
+  editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
+
+  const { nuggets, burgers } = parseFoodChoice(booking.foodChoice);
+
+  document.getElementById('eb_bookingRef').textContent = booking.bookingRef;
+  document.getElementById('eb_guests').value = editBookingState.guests;
+  document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
+  document.getElementById('eb_nuggetCount').textContent = nuggets;
+  document.getElementById('eb_burgerCount').textContent = burgers;
+  document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers} / ${editBookingState.guests} selected`;
+  document.getElementById('eb_notes').value = booking.allergyNotes || '';
+  document.getElementById('editBookingError').classList.add('hidden');
+
+  ebRenderAddonsList();
+  ebUpdateOrderSummary();
+  document.getElementById('editBookingModal').style.display = 'flex';
+}
+
+function closeEditBookingModal() {
+  document.getElementById('editBookingModal').style.display = 'none';
+}
+
+function ebOnGuestsChange() {
+  editBookingState.guests = Math.max(1, Math.min(24, parseInt(document.getElementById('eb_guests').value) || 1));
+  document.getElementById('eb_guests').value = editBookingState.guests;
+  document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
+  document.getElementById('eb_nuggetCount').textContent = '0';
+  document.getElementById('eb_burgerCount').textContent = '0';
+  document.getElementById('eb_foodSplitTotal').textContent = `0 / ${editBookingState.guests} selected`;
+  ebUpdateOrderSummary();
+}
+
+function ebChangeFoodSplit(type, delta) {
+  const total = editBookingState.guests;
+  const nuggets = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
+  const burgers = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
+  const current = type === 'nuggets' ? nuggets : burgers;
+  const other = type === 'nuggets' ? burgers : nuggets;
+  const next = Math.max(0, Math.min(current + delta, total - other));
+
+  if (type === 'nuggets') {
+    document.getElementById('eb_nuggetCount').textContent = next;
+  } else {
+    document.getElementById('eb_burgerCount').textContent = next;
+  }
+
+  const newTotal = type === 'nuggets' ? next + burgers : nuggets + next;
+  document.getElementById('eb_foodSplitTotal').textContent = `${newTotal} / ${total} selected`;
+  ebUpdateOrderSummary();
+}
+
+function ebRenderAddonsList() {
+  const container = document.getElementById('eb_addonsList');
+  if (!container) return;
+  let html = '';
+  Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    const qty = editBookingState.addons[id] || 0;
+    html += `
+      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button onclick="ebChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+          <span class="w-5 text-center text-xs font-bold" id="eb_addon_${id}">${qty}</span>
+          <button onclick="ebChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+        </div>
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function ebChangeAddon(id, delta) {
+  const current = editBookingState.addons[id] || 0;
+  const next = Math.max(0, current + delta);
+  editBookingState.addons[id] = next;
+  document.getElementById('eb_addon_' + id).textContent = next;
+  ebUpdateOrderSummary();
+}
+
+function ebGetAddonTotal() {
+  return Object.entries(editBookingState.addons).reduce((sum, [id, qty]) => sum + (AB_ADDON_PRICES[id]?.price || 0) * qty, 0);
+}
+
+function ebUpdateOrderSummary() {
+  const booking = editBookingState.booking;
+  if (!booking) return;
+
+  const guests = editBookingState.guests;
+  const ratePerChild = (booking.baseAmount && booking.guestCount)
+    ? parseFloat(booking.baseAmount) / booking.guestCount
+    : 39;
+  const baseAmount = ratePerChild * guests;
+  const addonTotal = ebGetAddonTotal();
+  const total = baseAmount + addonTotal;
+
+  const addonLines = Object.entries(editBookingState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .join('');
+
+  document.getElementById('eb_orderSummary').innerHTML = `
+    <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${booking.roomEmoji || ''} ${booking.roomName || '—'}</span></div>
+    <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guests} = $${baseAmount.toFixed(2)}</span></div>
+    ${addonLines}
+    <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
+      <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
+    </div>`;
+}
+
+async function submitEditBooking() {
+  const btn = document.getElementById('editBookingBtn');
+  const btnText = document.getElementById('editBookingBtnText');
+  const spinner = document.getElementById('editBookingBtnSpinner');
+  const errEl = document.getElementById('editBookingError');
+
+  const guests = editBookingState.guests;
+  const nuggets = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
+  const burgers = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
+  const notes = document.getElementById('eb_notes').value.trim();
+
+  if (nuggets + burgers !== guests) {
+    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const booking = editBookingState.booking;
+  const ratePerChild = (booking.baseAmount && booking.guestCount)
+    ? parseFloat(booking.baseAmount) / booking.guestCount
+    : 39;
+  const baseAmount = ratePerChild * guests;
+  const addonsAmount = ebGetAddonTotal();
+  const totalAmount = baseAmount + addonsAmount;
+
+  const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
+  const addonLines = Object.entries(editBookingState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+  const addonsSummary = addonLines.join(', ');
+
+  btn.disabled = true;
+  btnText.classList.add('hidden');
+  spinner.classList.remove('hidden');
+  errEl.classList.add('hidden');
+
+  try {
+    await callAPI(`admin/bookings/${editBookingState.bookingId}`, {
+      guestCount: guests,
+      foodChoice,
+      allergyNotes: notes,
+      addonsSummary,
+      addonsAmount,
+      baseAmount,
+      totalAmount,
+    }, 'PATCH');
+
+    closeEditBookingModal();
+    alert(`✅ Booking updated successfully.`);
+    await loadBookings();
   } catch (err) {
     errEl.textContent = err.message;
     errEl.classList.remove('hidden');

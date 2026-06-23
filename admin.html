@@ -413,6 +413,84 @@
   </div>
 </div>
 
+<!-- ── Edit Booking Modal ─────────────────────────────────── -->
+<div id="editBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEditBookingModal()">
+  <div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5">
+      <div>
+        <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">✏️ Edit Booking</h2>
+        <div class="text-xs text-gray-400 font-mono mt-0.5" id="eb_bookingRef"></div>
+      </div>
+      <button onclick="closeEditBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Guests -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👥 Number of Kids</div>
+        <input class="field" id="eb_guests" type="number" min="1" max="24" onchange="ebOnGuestsChange()" />
+      </div>
+
+      <!-- Food split -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
+        <div class="text-xs text-gray-400">Must add up to <span id="eb_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍗</div>
+            <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ebChangeFoodSplit('nuggets', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_nuggetCount">0</span>
+              <button onclick="ebChangeFoodSplit('nuggets', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍔</div>
+            <div class="font-semibold text-xs mb-2">Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ebChangeFoodSplit('burgers', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_burgerCount">0</span>
+              <button onclick="ebChangeFoodSplit('burgers', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+        </div>
+        <div id="eb_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
+      </div>
+
+      <!-- Add-ons -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons</div>
+        <div id="eb_addonsList" class="space-y-2"></div>
+      </div>
+
+      <!-- Notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Allergy / Notes</div>
+        <textarea class="field" id="eb_notes" rows="2" placeholder="Any allergies or special requests..."></textarea>
+      </div>
+
+      <!-- Order summary -->
+      <div class="bg-indigo-light rounded-2xl p-4">
+        <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Updated Order Summary</div>
+        <div id="eb_orderSummary" class="space-y-1.5 text-sm text-indigo-800"></div>
+      </div>
+
+      <div id="editBookingError" class="text-red-500 text-sm hidden"></div>
+
+      <div class="flex gap-3">
+        <button onclick="closeEditBookingModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="submitEditBooking()" class="btn-primary flex-1 py-3" id="editBookingBtn">
+          <span id="editBookingBtnText">Save Changes</span>
+          <span id="editBookingBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .admin-nav-btn { color: #6B7280; transition: all .2s; }
   .admin-nav-btn:hover { background: rgba(79,70,229,.08); color: #1F2937; }
