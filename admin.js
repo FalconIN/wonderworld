@@ -738,8 +738,8 @@ function renderBookingsTable(bookings) {
   tbody.innerHTML = bookings.map(b => `
     <tr>
       <td>
-        <div class="text-sm font-semibold">${formatDate(b.partyDate)}</div>
-        <div class="text-xs text-gray-400">${b.partyTime}${AB_SLOT_END_TIMES[b.partyTime] ? ' – ' + AB_SLOT_END_TIMES[b.partyTime] : ''}</div>
+        <div class="text-sm font-semibold">${formatDate(b.partyDate)} · ${b.partyTime}</div>
+        <div class="text-xs text-gray-400">Booked ${formatDate(b.createdAt)}</div>
       </td>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
