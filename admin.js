@@ -715,7 +715,7 @@ async function renderRoomPopularityChart() {
 async function loadBookings() {
   const statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
   const tbody = document.getElementById('bookings-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   let endpoint = 'admin/bookings?limit=200';
   if (statusFilter) endpoint += `&status=${statusFilter}`;
@@ -731,12 +731,13 @@ function renderBookingsTable(bookings) {
   if (!tbody) return;
 
   if (!bookings || bookings.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">No bookings found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">No bookings found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = bookings.map(b => `
     <tr>
+      <td class="text-xs text-gray-500">${new Date(b.createdAt).toLocaleDateString('en-NZ')}</td>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
         <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
