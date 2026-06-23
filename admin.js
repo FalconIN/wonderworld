@@ -737,7 +737,7 @@ function renderBookingsTable(bookings) {
 
   tbody.innerHTML = bookings.map(b => `
     <tr>
-      <td class="text-xs text-gray-500">${new Date(b.createdAt).toLocaleDateString('en-NZ')}</td>
+      <td class="text-xs text-gray-500">${formatDate(b.createdAt)}</td>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
         <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
@@ -1045,6 +1045,13 @@ function handleSearch(query) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatDate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.slice(0, 10).split('-');
+  return `${parseInt(d)} ${MONTHS[parseInt(m) - 1]} ${y}`;
+}
+
 function statusBadgeClass(status) {
   return status === 'confirmed' ? 'badge-green'
        : status === 'cancelled' ? 'badge-red'
