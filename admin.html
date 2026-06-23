@@ -348,20 +348,12 @@
           <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍗</div>
             <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
-            <div class="flex items-center justify-center gap-2">
-              <button onclick="abChangeFoodSplit('nuggets', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
-              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="ab_nuggetCount">0</span>
-              <button onclick="abChangeFoodSplit('nuggets', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
-            </div>
+            <input type="number" min="0" id="ab_nuggetCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
           </div>
           <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍔</div>
             <div class="font-semibold text-xs mb-2">Mini Burger</div>
-            <div class="flex items-center justify-center gap-2">
-              <button onclick="abChangeFoodSplit('burgers', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
-              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="ab_burgerCount">0</span>
-              <button onclick="abChangeFoodSplit('burgers', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
-            </div>
+            <input type="number" min="0" id="ab_burgerCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
           </div>
         </div>
         <div id="ab_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
@@ -513,6 +505,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=11"></script>
+<script src="admin.js?v=12"></script>
 </body>
 </html>

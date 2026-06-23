@@ -1120,8 +1120,8 @@ function openAddBookingModal() {
   document.getElementById('ab_date').value = '';
   document.getElementById('ab_guests').value = 10;
   document.getElementById('ab_notes').value = '';
-  document.getElementById('ab_nuggetCount').textContent = '0';
-  document.getElementById('ab_burgerCount').textContent = '0';
+  document.getElementById('ab_nuggetCount').value = '0';
+  document.getElementById('ab_burgerCount').value = '0';
   document.getElementById('ab_foodSplitTotal').textContent = '0 / 10 selected';
   document.getElementById('ab_foodTarget').textContent = '10';
   document.getElementById('ab_amountPaid').value = '';
@@ -1148,8 +1148,8 @@ function abOnGuestsChange() {
   document.getElementById('ab_guests').value = abState.guests;
   document.getElementById('ab_foodTarget').textContent = abState.guests;
   abRenderRoomCards();
-  document.getElementById('ab_nuggetCount').textContent = '0';
-  document.getElementById('ab_burgerCount').textContent = '0';
+  document.getElementById('ab_nuggetCount').value = '0';
+  document.getElementById('ab_burgerCount').value = '0';
   document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
   abUpdateOrderSummary();
 }
@@ -1282,22 +1282,12 @@ function abSelectTime(slot, el) {
   el.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
 }
 
-function abChangeFoodSplit(type, delta) {
+function abOnFoodInput() {
   const total = abState.guests;
-  const nuggets = parseInt(document.getElementById('ab_nuggetCount').textContent) || 0;
-  const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
-  const current = type === 'nuggets' ? nuggets : burgers;
-  const other = type === 'nuggets' ? burgers : nuggets;
-  const next = Math.max(0, Math.min(current + delta, total - other));
-
-  if (type === 'nuggets') {
-    document.getElementById('ab_nuggetCount').textContent = next;
-  } else {
-    document.getElementById('ab_burgerCount').textContent = next;
-  }
-
-  const newTotal = type === 'nuggets' ? next + burgers : nuggets + next;
-  document.getElementById('ab_foodSplitTotal').textContent = `${newTotal} / ${total} selected`;
+  const nuggets = Math.max(0, parseInt(document.getElementById('ab_nuggetCount').value) || 0);
+  const burgers = Math.max(0, parseInt(document.getElementById('ab_burgerCount').value) || 0);
+  document.getElementById('ab_foodSplitTotal').textContent = `${nuggets + burgers} / ${total} selected`;
+  abUpdateOrderSummary();
 }
 
 function abRenderAddonsList() {
@@ -1394,8 +1384,8 @@ async function submitAddBooking() {
   const notes  = document.getElementById('ab_notes').value.trim();
   const status = document.getElementById('ab_status').value;
 
-  const nuggets = parseInt(document.getElementById('ab_nuggetCount').textContent) || 0;
-  const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
+  const nuggets = parseInt(document.getElementById('ab_nuggetCount').value) || 0;
+  const burgers = parseInt(document.getElementById('ab_burgerCount').value) || 0;
 
   // Validate
   if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
