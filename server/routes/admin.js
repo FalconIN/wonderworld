@@ -76,6 +76,7 @@ router.get('/bookings', async (req, res) => {
                     b.status, b.allergy_notes as "allergyNotes",
                     b.party_room_id as "partyRoomId", b.user_id as "userId",
                     b.contact_email as "contactEmail",
+                    b.contact_phone as "contactPhone",
                     b.addons_summary as "addonsSummary",
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
                     b.created_at as "createdAt",
@@ -171,22 +172,40 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/bookings/:id — edit food, add-ons, guest count, notes
+// PATCH /api/admin/bookings/:id — edit customer details, food, add-ons, guest count, notes
 router.patch('/bookings/:id', async (req, res) => {
-  const { guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount } = req.body;
+  const { firstName, lastName, email, phone, guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount } = req.body;
+  const client = await pool.connect();
   try {
-    const { rowCount } = await pool.query(
+    await client.query('BEGIN');
+
+    const { rows: [booking] } = await client.query(
       `UPDATE bookings
        SET guest_count = $1, food_choice = $2, allergy_notes = $3,
            addons_summary = $4, addons_amount = $5, base_amount = $6,
-           total_amount = $7, updated_at = now()
-       WHERE id = $8`,
-      [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0, baseAmount, totalAmount, req.params.id]
+           total_amount = $7, contact_email = $8, contact_phone = $9,
+           updated_at = now()
+       WHERE id = $10
+       RETURNING user_id`,
+      [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0,
+       baseAmount, totalAmount, email || '', phone || null, req.params.id]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Booking not found' });
+    if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found' }); }
+
+    if (booking.user_id) {
+      await client.query(
+        `UPDATE users SET first_name = $1, last_name = $2, email = $3, phone = $4, updated_at = now() WHERE id = $5`,
+        [firstName || '', lastName || '', email || '', phone || null, booking.user_id]
+      );
+    }
+
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (err) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

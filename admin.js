@@ -1497,6 +1497,10 @@ function openEditBookingModal(bookingId) {
   const { nuggets, burgers } = parseFoodChoice(booking.foodChoice);
 
   document.getElementById('eb_bookingRef').textContent = booking.bookingRef;
+  document.getElementById('eb_firstName').value = booking.firstName || '';
+  document.getElementById('eb_lastName').value = booking.lastName || '';
+  document.getElementById('eb_email').value = booking.contactEmail || '';
+  document.getElementById('eb_phone').value = booking.contactPhone || '';
   document.getElementById('eb_guests').value = editBookingState.guests;
   document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
   document.getElementById('eb_nuggetCount').textContent = nuggets;
@@ -1610,10 +1614,14 @@ async function submitEditBooking() {
   const spinner = document.getElementById('editBookingBtnSpinner');
   const errEl = document.getElementById('editBookingError');
 
-  const guests = editBookingState.guests;
-  const nuggets = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
-  const burgers = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
-  const notes = document.getElementById('eb_notes').value.trim();
+  const guests    = editBookingState.guests;
+  const nuggets   = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
+  const burgers   = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
+  const notes     = document.getElementById('eb_notes').value.trim();
+  const firstName = document.getElementById('eb_firstName').value.trim();
+  const lastName  = document.getElementById('eb_lastName').value.trim();
+  const email     = document.getElementById('eb_email').value.trim().toLowerCase();
+  const phone     = document.getElementById('eb_phone').value.trim();
 
   if (nuggets + burgers !== guests) {
     errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
@@ -1642,6 +1650,7 @@ async function submitEditBooking() {
 
   try {
     await callAPI(`admin/bookings/${editBookingState.bookingId}`, {
+      firstName, lastName, email, phone,
       guestCount: guests,
       foodChoice,
       allergyNotes: notes,

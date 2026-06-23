@@ -426,6 +426,17 @@
     </div>
 
     <div class="space-y-4">
+      <!-- Customer details -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👤 Customer Details</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">First Name</label><input class="field" id="eb_firstName" placeholder="Sarah" /></div>
+          <div><label class="lbl">Last Name</label><input class="field" id="eb_lastName" placeholder="Thompson" /></div>
+        </div>
+        <div><label class="lbl">Email</label><input class="field" id="eb_email" type="email" placeholder="sarah@example.co.nz" /></div>
+        <div><label class="lbl">Phone</label><input class="field" id="eb_phone" placeholder="021 234 5678" /></div>
+      </div>
+
       <!-- Guests -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👥 Number of Kids</div>
@@ -502,6 +513,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=6"></script>
+<script src="admin.js?v=7"></script>
 </body>
 </html>
