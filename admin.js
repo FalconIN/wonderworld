@@ -541,7 +541,18 @@ async function renderRevenueChart() {
 
   const dataPoints = Object.keys(byDate).sort().map(d => ({ x: d + 'T12:00:00', y: byDate[d] }));
 
-  if (revenueChartInstance) revenueChartInstance.destroy();
+  if (revenueChartInstance) { revenueChartInstance.destroy(); revenueChartInstance = null; }
+  if (!dataPoints.length) {
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = chartTextColor();
+    ctx2d.font = '14px Inter, sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText('No revenue data for this period', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
   revenueChartInstance = new Chart(canvas, {
     type: 'line',
     data: {
@@ -552,7 +563,7 @@ async function renderRevenueChart() {
         backgroundColor: 'rgba(79,70,229,0.1)',
         fill: true,
         tension: 0.3,
-        pointRadius: 4,
+        pointRadius: dataPoints.length === 1 ? 6 : 4,
         pointHoverRadius: 7,
         pointBackgroundColor: '#4F46E5',
       }],
@@ -562,7 +573,7 @@ async function renderRevenueChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `$${ctx.parsed.y.toFixed(2)} NZD` } },
+        tooltip: { callbacks: { label: (ctx) => `$${(ctx.parsed.y || 0).toFixed(2)} NZD` } },
       },
       scales: {
         x: {
@@ -592,10 +603,21 @@ async function renderBookingsDotChart() {
 
   const points = (rows || []).map(r => ({
     x: (r.date || '').toString().split('T')[0] + 'T12:00:00',
-    y: parseInt(r.count),
+    y: parseInt(r.count) || 0,
   })).sort((a, b) => a.x.localeCompare(b.x));
 
-  if (bookingsDotChartInstance) bookingsDotChartInstance.destroy();
+  if (bookingsDotChartInstance) { bookingsDotChartInstance.destroy(); bookingsDotChartInstance = null; }
+  if (!points.length) {
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = chartTextColor();
+    ctx2d.font = '14px Inter, sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText('No bookings this month', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
   bookingsDotChartInstance = new Chart(canvas, {
     type: 'line',
     data: {
@@ -606,7 +628,7 @@ async function renderBookingsDotChart() {
         backgroundColor: 'rgba(14,159,110,0.12)',
         fill: true,
         tension: 0.3,
-        pointRadius: 4,
+        pointRadius: points.length === 1 ? 6 : 4,
         pointHoverRadius: 7,
         pointBackgroundColor: '#0E9F6E',
       }],
@@ -618,8 +640,8 @@ async function renderBookingsDotChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: (items) => new Date(items[0].raw.x + 'T00:00:00').toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }),
-            label: (ctx) => `${ctx.raw.y} room${ctx.raw.y === 1 ? '' : 's'} booked`,
+            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }),
+            label: (ctx) => { const n = ctx.raw.y || 0; return `${n} room${n === 1 ? '' : 's'} booked`; },
           },
         },
       },
@@ -653,11 +675,16 @@ async function renderRoomPopularityChart() {
   const values = (rows || []).map(r => parseInt(r.count));
   const colors = ['#4F46E5', '#F59E0B', '#A855F7', '#0E9F6E', '#EF4444'];
 
-  if (roomPopularityChartInstance) roomPopularityChartInstance.destroy();
+  if (roomPopularityChartInstance) { roomPopularityChartInstance.destroy(); roomPopularityChartInstance = null; }
 
   if (labels.length === 0) {
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx2d = canvas.getContext('2d');
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    ctx2d.fillStyle = chartTextColor();
+    ctx2d.font = '14px Inter, sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText('No bookings this month', canvas.width / 2, canvas.height / 2);
     return;
   }
 
@@ -1107,11 +1134,13 @@ function closeAddBookingModal() {
 }
 
 function abOnGuestsChange() {
-  abState.guests = Math.max(1, Math.min(24, parseInt(document.getElementById('ab_guests').value) || 1));
+  const selectedRoom = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  const minG = selectedRoom ? selectedRoom.minGuests : 1;
+  const maxG = selectedRoom ? selectedRoom.maxGuests : 24;
+  abState.guests = Math.max(minG, Math.min(maxG, parseInt(document.getElementById('ab_guests').value) || minG));
   document.getElementById('ab_guests').value = abState.guests;
   document.getElementById('ab_foodTarget').textContent = abState.guests;
   abRenderRoomCards();
-  // Reset food split since target changed
   document.getElementById('ab_nuggetCount').textContent = '0';
   document.getElementById('ab_burgerCount').textContent = '0';
   document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
@@ -1161,6 +1190,23 @@ function abBuildRoomCard(room, dimmed) {
 
 async function abSelectRoom(roomId) {
   abState.selectedRoomId = roomId;
+
+  // Clamp guest count to this room's limits
+  const room = AB_ROOMS.find(r => r.id === roomId);
+  if (room) {
+    const guestEl = document.getElementById('ab_guests');
+    guestEl.min = room.minGuests;
+    guestEl.max = room.maxGuests;
+    if (abState.guests < room.minGuests || abState.guests > room.maxGuests) {
+      abState.guests = Math.min(Math.max(abState.guests, room.minGuests), room.maxGuests);
+      guestEl.value = abState.guests;
+      document.getElementById('ab_foodTarget').textContent = abState.guests;
+      document.getElementById('ab_nuggetCount').textContent = '0';
+      document.getElementById('ab_burgerCount').textContent = '0';
+      document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
+    }
+  }
+
   abRenderRoomCards();
 
   const slug = ROOM_SLUGS[roomId];
@@ -1405,6 +1451,8 @@ let editBookingState = {
   booking: null,
   guests: 10,
   addons: {},
+  roomMin: 1,
+  roomMax: 24,
 };
 
 function parseFoodChoice(foodChoice) {
@@ -1439,6 +1487,12 @@ function openEditBookingModal(bookingId) {
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
+  const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
+  editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
+  editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
+  const ebGuestsEl = document.getElementById('eb_guests');
+  ebGuestsEl.min = editBookingState.roomMin;
+  ebGuestsEl.max = editBookingState.roomMax;
 
   const { nuggets, burgers } = parseFoodChoice(booking.foodChoice);
 
@@ -1461,7 +1515,8 @@ function closeEditBookingModal() {
 }
 
 function ebOnGuestsChange() {
-  editBookingState.guests = Math.max(1, Math.min(24, parseInt(document.getElementById('eb_guests').value) || 1));
+  const { roomMin, roomMax } = editBookingState;
+  editBookingState.guests = Math.max(roomMin, Math.min(roomMax, parseInt(document.getElementById('eb_guests').value) || roomMin));
   document.getElementById('eb_guests').value = editBookingState.guests;
   document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
   document.getElementById('eb_nuggetCount').textContent = '0';
