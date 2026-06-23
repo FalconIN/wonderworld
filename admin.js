@@ -1194,7 +1194,7 @@ function abBuildRoomCard(room, dimmed) {
         <div class="flex items-center gap-2">
           <span class="text-xl">${room.emoji}</span>
           <div>
-            <div class="font-semibold text-sm">${room.name}</div>
+            <div class="font-semibold text-sm">${roomDisplayName(room.name)}</div>
             <div class="text-xs text-gray-400">${room.minGuests}–${room.maxGuests} kids</div>
           </div>
         </div>
@@ -1512,10 +1512,6 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_burgerCount').textContent = burgers;
   document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers} / ${editBookingState.guests} selected`;
   document.getElementById('eb_notes').value = booking.allergyNotes || '';
-  const currentRate = (booking.baseAmount && booking.guestCount)
-    ? (parseFloat(booking.baseAmount) / booking.guestCount).toFixed(2)
-    : '39.00';
-  document.getElementById('eb_ratePerChild').value = currentRate;
   document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
   document.getElementById('eb_amountPaid').value = parseFloat(booking.amountPaid || 0).toFixed(2);
   document.getElementById('editBookingError').classList.add('hidden');
@@ -1598,7 +1594,8 @@ function ebUpdateOrderSummary() {
   if (!booking) return;
 
   const guests = editBookingState.guests;
-  const ratePerChild = Math.max(0, parseFloat(document.getElementById('eb_ratePerChild').value) || 0);
+  const ratePerChild = (booking.baseAmount && booking.guestCount)
+    ? parseFloat(booking.baseAmount) / booking.guestCount : 39;
   const baseAmount = ratePerChild * guests;
   const addonTotal = ebGetAddonTotal();
   const total = baseAmount + addonTotal;
@@ -1638,7 +1635,8 @@ async function submitEditBooking() {
     return;
   }
 
-  const ratePerChild = Math.max(0, parseFloat(document.getElementById('eb_ratePerChild').value) || 0);
+  const ratePerChild = (editBookingState.booking.baseAmount && editBookingState.booking.guestCount)
+    ? parseFloat(editBookingState.booking.baseAmount) / editBookingState.booking.guestCount : 39;
   const baseAmount = ratePerChild * guests;
   const addonsAmount = ebGetAddonTotal();
   const totalAmount = baseAmount + addonsAmount;

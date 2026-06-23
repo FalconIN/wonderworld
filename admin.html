@@ -38,18 +38,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
-<script>
-  window.__ENV__ = {
-    FIREBASE_API_KEY:             "AIzaSyAZRfR1P2NlOKWUl2PXOp8qa-l9x3w3Bbw",
-    FIREBASE_AUTH_DOMAIN:         "wonderworld-ce5f2.firebaseapp.com",
-    FIREBASE_PROJECT_ID:          "wonderworld-ce5f2",
-    FIREBASE_STORAGE_BUCKET:      "wonderworld-ce5f2.firebasestorage.app",
-    FIREBASE_MESSAGING_SENDER_ID: "829014493900",
-    FIREBASE_APP_ID:              "1:829014493900:web:985bc31a243265efd55069",
-    STRIPE_PK:                    "pk_test_51TiSuNGsKWwyhZzs5USwO5LkiTJIgX3cDQAslU2nz4yl96cYVdnSrF3ms7tslqSRHwSqRnZOf8rbPvPHs1yKIWRT00otZBgTFv",
-    ENVIRONMENT:                  "production"
-  };
-</script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-950 font-body transition-colors">
 
@@ -435,12 +423,6 @@
         <input class="field" id="eb_guests" type="number" min="1" max="24" onchange="ebOnGuestsChange()" />
       </div>
 
-      <!-- Pricing -->
-      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
-        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💲 Pricing</div>
-        <div><label class="lbl">Price per Child ($)</label><input class="field" id="eb_ratePerChild" type="number" min="0" step="0.01" oninput="ebUpdateOrderSummary()" /></div>
-      </div>
-
       <!-- Food split -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
@@ -529,6 +511,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=14"></script>
+<script src="admin.js?v=15"></script>
 </body>
 </html>

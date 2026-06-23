@@ -27,6 +27,21 @@ app.use('/api/notifications', notificationsRouter);
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Public client config — serves only the values that are safe for the browser.
+// Nothing secret lives here; Firebase client keys and Stripe PK are public by design.
+app.get('/api/config', (req, res) => {
+  res.json({
+    FIREBASE_API_KEY:             process.env.FIREBASE_API_KEY             || '',
+    FIREBASE_AUTH_DOMAIN:         process.env.FIREBASE_AUTH_DOMAIN         || '',
+    FIREBASE_PROJECT_ID:          process.env.FIREBASE_PROJECT_ID          || '',
+    FIREBASE_STORAGE_BUCKET:      process.env.FIREBASE_STORAGE_BUCKET      || '',
+    FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+    FIREBASE_APP_ID:              process.env.FIREBASE_APP_ID              || '',
+    STRIPE_PK:                    process.env.STRIPE_PUBLIC_KEY            || '',
+    ENVIRONMENT:                  process.env.ENVIRONMENT                  || 'production',
+  });
+});
+
 // Serve static frontend files (Nginx handles this in production, but useful for local dev)
 if (process.env.NODE_ENV !== 'production') {
   app.use(express.static(path.join(__dirname, '..')));
