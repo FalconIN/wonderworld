@@ -155,9 +155,9 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
     );
     if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
 
-    // Release the timeslot
+    // Delete the timeslot so the slot becomes bookable again
     await client.query(
-      `UPDATE booking_timeslots SET status = 'released'
+      `DELETE FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
       [booking.partyRoomId, booking.partyDate, booking.partyTime]
     );
