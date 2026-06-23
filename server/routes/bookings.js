@@ -112,7 +112,7 @@ router.delete('/slots/hold/:holdId', requireAuth, async (req, res) => {
 router.post('/bookings', requireAuth, async (req, res) => {
   const uid = req.user.uid;
   const {
-    bookingRef, roomId, partyDate, partyTime, guestCount, foodChoice,
+    bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
     allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
     contactEmail, contactPhone, stripePaymentIntentId, slotHoldId, cardholderName,
   } = req.body;
@@ -127,8 +127,8 @@ router.post('/bookings', requireAuth, async (req, res) => {
 
     // Compute expected amount server-side from the room price in the database
     const { rows: [room] } = await pool.query(
-      'SELECT base_price_per_child FROM party_rooms WHERE id = $1 AND is_active = true',
-      [roomId]
+      'SELECT id, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
 
@@ -156,7 +156,7 @@ router.post('/bookings', requireAuth, async (req, res) => {
           total_amount, status, contact_email, contact_phone, stripe_payment_intent_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15)
        RETURNING id`,
-      [bookingRef, uid, roomId, partyDate, partyTime, guestCount,
+      [bookingRef, uid, room.id, partyDate, partyTime, guestCount,
        foodChoice, allergyNotes, addonsSummary, baseAmount, addonsAmount,
        verifiedTotalAmount, contactEmail, contactPhone, stripePaymentIntentId]
     );

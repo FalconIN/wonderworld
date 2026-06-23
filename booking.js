@@ -293,6 +293,7 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
   const { bookingId } = await callAPI('bookings', {
     bookingRef,
     roomId:                  state.partyRoomDbId,
+    roomSlug:                state.selectedRoom?.id,
     partyDate:               state.selectedDate,
     partyTime:               state.selectedTime,
     guestCount:              state.guests,

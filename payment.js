@@ -69,6 +69,7 @@ async function mountStripeElements() {
   try {
     const result = await callEdgeFunction('create-payment-intent', {
       roomId:        state.partyRoomDbId,
+      roomSlug:      state.selectedRoom?.id,
       guestCount:    state.guests,
       addonsAmount:  getAddonTotal(),
       currency:      'nzd',

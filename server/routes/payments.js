@@ -6,13 +6,13 @@ const { requireAuth } = require('../middleware/auth');
 
 // POST /api/payments/create-intent
 router.post('/create-intent', requireAuth, async (req, res) => {
-  const { roomId, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
+  const { roomId, roomSlug, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
 
   try {
     // Compute price server-side — never trust a client-supplied amount
     const { rows: [room] } = await pool.query(
-      'SELECT base_price_per_child FROM party_rooms WHERE id = $1 AND is_active = true',
-      [roomId]
+      'SELECT base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
 
