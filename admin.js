@@ -715,7 +715,7 @@ async function renderRoomPopularityChart() {
 async function loadBookings() {
   const statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
   const tbody = document.getElementById('bookings-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   let endpoint = 'admin/bookings?limit=200';
   if (statusFilter) endpoint += `&status=${statusFilter}`;
@@ -731,23 +731,22 @@ function renderBookingsTable(bookings) {
   if (!tbody) return;
 
   if (!bookings || bookings.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">No bookings found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">No bookings found.</td></tr>';
     return;
   }
 
   tbody.innerHTML = bookings.map(b => `
     <tr>
-      <td class="text-xs text-gray-500">${formatDate(b.createdAt)}</td>
+      <td>
+        <div class="text-sm font-semibold">${formatDate(b.partyDate)}</div>
+        <div class="text-xs text-gray-400">${b.partyTime}${AB_SLOT_END_TIMES[b.partyTime] ? ' – ' + AB_SLOT_END_TIMES[b.partyTime] : ''}</div>
+      </td>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
         <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
         <div class="text-xs text-gray-400">${b.contactEmail || ''}</div>
       </td>
       <td>${b.roomEmoji || ''} ${b.roomName || '—'}</td>
-      <td>
-        <div class="text-sm font-semibold">${b.partyDate}</div>
-        <div class="text-xs text-gray-400">${b.partyTime}</div>
-      </td>
       <td>${b.guestCount}</td>
       <td class="font-semibold">$${parseFloat(b.totalAmount || 0).toFixed(2)}</td>
       <td><span class="badge ${statusBadgeClass(b.status)}">${b.status}</span></td>
