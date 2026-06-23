@@ -80,10 +80,15 @@ router.get('/bookings', async (req, res) => {
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
                     b.created_at as "createdAt",
                     r.name as "roomName", r.emoji as "roomEmoji",
-                    u.first_name as "firstName", u.last_name as "lastName"
+                    u.first_name as "firstName", u.last_name as "lastName",
+                    COALESCE(pay.amount_paid, 0) as "amountPaid"
              FROM bookings b
              JOIN party_rooms r ON r.id = b.party_room_id
-             LEFT JOIN users u ON u.id = b.user_id`;
+             LEFT JOIN users u ON u.id = b.user_id
+             LEFT JOIN (
+               SELECT booking_id, SUM(amount) FILTER (WHERE status = 'succeeded') as amount_paid
+               FROM payments GROUP BY booking_id
+             ) pay ON pay.booking_id = b.id`;
     const params = [];
     if (status) { q += ` WHERE b.status = $1`; params.push(status); }
     q += ` ORDER BY b.created_at DESC LIMIT ${parseInt(limit)}`;
@@ -408,7 +413,7 @@ router.post('/bookings/manual', async (req, res) => {
     firstName, lastName, email, phone,
     roomId, roomName, date, time, guests,
     foodChoice, notes, addonsSummary, addonsAmount, baseAmount, totalAmount,
-    payStatus, status = 'confirmed',
+    amountPaid, status = 'confirmed',
   } = req.body;
 
   const client = await pool.connect();
@@ -471,11 +476,12 @@ router.post('/bookings/manual', async (req, res) => {
       );
     }
 
-    if (totalAmount > 0) {
+    const paid = parseFloat(amountPaid) || 0;
+    if (paid > 0) {
       await client.query(
         `INSERT INTO payments (booking_id, user_id, amount, currency, status, payment_method)
-         VALUES ($1,$2,$3,'nzd',$4,'manual')`,
-        [booking.id, userId, totalAmount, payStatus === 'paid' ? 'succeeded' : 'pending']
+         VALUES ($1,$2,$3,'nzd','succeeded','manual')`,
+        [booking.id, userId, paid]
       );
     }
 

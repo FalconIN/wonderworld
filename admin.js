@@ -740,6 +740,10 @@ async function viewBooking(bookingId) {
   const guestCount = booking.guestCount || 0;
   const baseAmount = booking.baseAmount != null ? parseFloat(booking.baseAmount) : null;
   const ratePerChild = (baseAmount !== null && guestCount > 0) ? baseAmount / guestCount : null;
+  const totalAmount = parseFloat(booking.totalAmount || 0);
+  const amountPaid = parseFloat(booking.amountPaid || 0);
+  const balanceDue = totalAmount - amountPaid;
+  const customerName = [booking.firstName, booking.lastName].filter(Boolean).join(' ');
 
   document.getElementById('bookingDetailContent').innerHTML = `
     <div class="space-y-3">
@@ -762,6 +766,12 @@ async function viewBooking(bookingId) {
         </div>
       </div>
 
+      <div class="bg-gray-50 rounded-xl p-4">
+        <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
+        <div class="font-semibold text-sm">${customerName || '—'}</div>
+        ${booking.contactEmail ? `<div class="text-xs text-gray-400 mt-0.5">${booking.contactEmail}</div>` : ''}
+      </div>
+
       <div class="bg-indigo-light rounded-xl p-4">
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
         <div class="space-y-1.5 text-sm text-indigo-800">
@@ -770,15 +780,13 @@ async function viewBooking(bookingId) {
           ${ratePerChild ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guestCount} = $${baseAmount.toFixed(2)}</span></div>` : ''}
           ${booking.addonsSummary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${booking.addonsSummary}</span></div>` : ''}
           <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
-            <span>Total:</span><span class="text-indigo-600">$${parseFloat(booking.totalAmount || 0).toFixed(2)} NZD</span>
+            <span>Total:</span><span class="text-indigo-600">$${totalAmount.toFixed(2)} NZD</span>
           </div>
+          <div class="flex justify-between text-sm"><span>Paid:</span><span class="font-semibold text-green-700">$${amountPaid.toFixed(2)}</span></div>
+          ${balanceDue > 0.005 ? `<div class="flex justify-between text-sm font-bold"><span>Balance due:</span><span class="text-amber-600">$${balanceDue.toFixed(2)}</span></div>` : ''}
         </div>
       </div>
 
-      <div class="bg-gray-50 rounded-xl p-4">
-        <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
-        <div class="text-sm text-gray-500">${booking.contactEmail || '—'}</div>
-      </div>
       ${booking.allergyNotes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
@@ -1082,7 +1090,8 @@ function openAddBookingModal() {
   document.getElementById('ab_burgerCount').textContent = '0';
   document.getElementById('ab_foodSplitTotal').textContent = '0 / 10 selected';
   document.getElementById('ab_foodTarget').textContent = '10';
-  document.getElementById('ab_payStatus').value = 'paid';
+  document.getElementById('ab_amountPaid').value = '';
+  document.getElementById('ab_balanceDue').classList.add('hidden');
   document.getElementById('ab_status').value = 'confirmed';
   document.getElementById('ab_timeSlotGrid').innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room and date first</div>';
   document.getElementById('ab_orderSummary').innerHTML = '<div class="text-indigo-400">Select a room and guests to see pricing</div>';
@@ -1294,6 +1303,20 @@ function abUpdateOrderSummary() {
     <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
       <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
     </div>`;
+  abUpdateBalanceDue();
+}
+
+function abUpdateBalanceDue() {
+  const total = abGetCalculatedTotal();
+  const paid = parseFloat(document.getElementById('ab_amountPaid').value);
+  const el = document.getElementById('ab_balanceDue');
+  if (!isNaN(paid) && paid < total - 0.005) {
+    const balance = total - paid;
+    el.textContent = `⚠️ Balance due on the day: $${balance.toFixed(2)} NZD`;
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
 }
 
 function abGetCalculatedTotal() {
@@ -1315,9 +1338,8 @@ async function submitAddBooking() {
   const date      = abState.selectedDate;
   const time      = abState.selectedTime;
   const guests    = abState.guests;
-  const notes     = document.getElementById('ab_notes').value.trim();
-  const payStatus = document.getElementById('ab_payStatus').value;
-  const status    = document.getElementById('ab_status').value;
+  const notes  = document.getElementById('ab_notes').value.trim();
+  const status = document.getElementById('ab_status').value;
 
   const nuggets = parseInt(document.getElementById('ab_nuggetCount').textContent) || 0;
   const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
@@ -1341,6 +1363,8 @@ async function submitAddBooking() {
   const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
   const baseAmount = room.pricePerChild * guests;
   const totalAmount = baseAmount + addonsAmount;
+  const amountPaidRaw = parseFloat(document.getElementById('ab_amountPaid').value);
+  const amountPaid = isNaN(amountPaidRaw) ? totalAmount : Math.min(Math.max(amountPaidRaw, 0), totalAmount);
 
   btn.disabled = true;
   btnText.classList.add('hidden');
@@ -1355,11 +1379,12 @@ async function submitAddBooking() {
       roomId: abState.selectedRoomDbId, roomName: room.name,
       date, time, guests, foodChoice, notes,
       addonsSummary, addonsAmount, baseAmount, totalAmount,
-      payStatus, status,
+      amountPaid, status,
     });
 
     closeAddBookingModal();
-    alert(`✅ Booking created!\nRef: ${bookingRef}\nTotal: $${totalAmount.toFixed(2)}\nThe time slot is now greyed out on the live site.`);
+    const balanceMsg = amountPaid < totalAmount - 0.005 ? `\n💵 Paid: $${amountPaid.toFixed(2)} — Balance due: $${(totalAmount - amountPaid).toFixed(2)}` : '';
+    alert(`✅ Booking created!\nRef: ${bookingRef}\nTotal: $${totalAmount.toFixed(2)}${balanceMsg}\nThe time slot is now greyed out on the live site.`);
     refreshCurrentTab();
 
   } catch (err) {
