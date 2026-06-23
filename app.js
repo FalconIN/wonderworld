@@ -134,13 +134,8 @@ async function validateStep(n) {
       showFieldError('Please select both a date and a time slot.');
       return false;
     }
-    // Double-check slot is still available (race condition guard)
-    const stillAvailable = await verifySlotAvailability();
-    if (!stillAvailable) {
-      showFieldError('Sorry — that slot was just taken! Please select another time.');
-      state.selectedTime = null;
-      document.getElementById('step2Next').disabled = true;
-      await fetchAndRenderSlots(state.selectedDate);
+    if (!state.slotHoldId) {
+      showFieldError('Still reserving your slot — please wait a moment and try again.');
       return false;
     }
   }
@@ -164,24 +159,16 @@ async function validateStep(n) {
 // Verify slot is still available before proceeding to payment
 async function verifySlotAvailability() {
   if (!state.partyRoomDbId || !state.selectedDate || !state.selectedTime) return true;
-
-  const { data } = await supabaseClient
-    .from('booking_timeslots')
-    .select('id, status, hold_expires_at')
-    .eq('party_room_id', state.partyRoomDbId)
-    .eq('slot_date', state.selectedDate)
-    .eq('slot_time', state.selectedTime)
-    .single();
-
-  if (!data) return true; // no record = available
-  if (data.status === 'confirmed') return false;
-  if (data.status === 'held') {
-    // Our own hold is fine
-    if (data.id === state.slotHoldId) return true;
-    // Someone else's hold — check expiry
-    return new Date(data.hold_expires_at) <= new Date();
+  try {
+    const holdParam = state.slotHoldId ? `&excludeHoldId=${state.slotHoldId}` : '';
+    const { unavailableSlots } = await callAPI(
+      `slots?room_id=${state.partyRoomDbId}&date=${state.selectedDate}${holdParam}`,
+      null, 'GET'
+    );
+    return !(unavailableSlots || []).includes(state.selectedTime);
+  } catch {
+    return true;
   }
-  return true;
 }
 
 // ---------------------------------------------------------------------------

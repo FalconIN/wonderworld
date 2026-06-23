@@ -59,7 +59,7 @@ const SLOT_END_TIMES = {
   '3:30 PM':  { one: '5:00 PM',  two: '5:30 PM'  },
 };
 
-// Tracks our real-time slot subscription
+// Tracks our slot polling interval (replaces Supabase realtime)
 let slotSubscription = null;
 
 // ---------------------------------------------------------------------------
@@ -176,50 +176,18 @@ async function fetchAndRenderSlots(dateVal) {
     return;
   }
 
-  // Get the party_room row id from Supabase
-  const { data: roomRow, error: roomErr } = await supabaseClient
-    .from('party_rooms')
-    .select('id')
-    .eq('slug', state.selectedRoom.id)
-    .single();
+  try {
+    const { roomId, unavailableSlots } = await callAPI(
+      `slots?room_slug=${encodeURIComponent(state.selectedRoom.id)}&date=${dateVal}`,
+      null, 'GET'
+    );
 
-  if (roomErr || !roomRow) {
+    if (roomId) state.partyRoomDbId = roomId;
+    renderSlotsHtml(ALL_SLOTS, unavailableSlots || []);
+  } catch (err) {
+    console.error('Failed to fetch slots:', err);
     renderSlotsHtml(ALL_SLOTS, []);
-    return;
   }
-
-  state.partyRoomDbId = roomRow.id;
-
-  // Opportunistically clean up any expired holds for this room/date —
-  // prevents stale rows from permanently blocking slots via the unique constraint
-  await supabaseClient
-    .from('booking_timeslots')
-    .delete()
-    .eq('party_room_id', roomRow.id)
-    .eq('slot_date', dateVal)
-    .eq('status', 'held')
-    .lt('hold_expires_at', new Date().toISOString());
-
-  // Fetch booked / held slots for this room on this date
-  const { data: bookedSlots } = await supabaseClient
-    .from('booking_timeslots')
-    .select('slot_time, status, hold_expires_at')
-    .eq('party_room_id', roomRow.id)
-    .eq('slot_date', dateVal)
-    .in('status', ['confirmed', 'held']);
-
-  const unavailableSlots = (bookedSlots || [])
-    .filter(s => {
-      if (s.status === 'confirmed') return true;
-      if (s.status === 'held') {
-        // Check if hold has expired
-        return new Date(s.hold_expires_at) > new Date();
-      }
-      return false;
-    })
-    .map(s => s.slot_time);
-
-  renderSlotsHtml(ALL_SLOTS, unavailableSlots);
 }
 
 function renderSlotsHtml(slots, unavailableSlots) {
@@ -243,22 +211,10 @@ function renderSlotsHtml(slots, unavailableSlots) {
   grid.innerHTML = html;
 }
 
-// Realtime: subscribe to slot changes for this room/date
+// Poll for slot changes every 10 seconds (replaces Supabase realtime)
 function subscribeToSlotChanges(dateVal) {
-  if (slotSubscription) {
-    supabaseClient.removeChannel(slotSubscription);
-  }
-  slotSubscription = supabaseClient
-    .channel('slot_changes')
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'booking_timeslots',
-      filter: `slot_date=eq.${dateVal}`,
-    }, () => {
-      fetchAndRenderSlots(dateVal);
-    })
-    .subscribe();
+  if (slotSubscription) clearInterval(slotSubscription);
+  slotSubscription = setInterval(() => fetchAndRenderSlots(dateVal), 10000);
 }
 
 async function selectTime(slot, el) {
@@ -282,53 +238,29 @@ async function selectTime(slot, el) {
 async function createSlotHold(slot) {
   if (!state.partyRoomDbId || !state.selectedDate) return;
 
-  // Clean up any stale expired hold sitting on this exact slot first —
-  // these can otherwise permanently block the slot via the unique constraint
-  // even though they're logically expired.
-  await supabaseClient
-    .from('booking_timeslots')
-    .delete()
-    .eq('party_room_id', state.partyRoomDbId)
-    .eq('slot_date', state.selectedDate)
-    .eq('slot_time', slot)
-    .eq('status', 'held')
-    .lt('hold_expires_at', new Date().toISOString());
-
-  const holdExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-  const { data, error } = await supabaseClient
-    .from('booking_timeslots')
-    .insert({
-      party_room_id:   state.partyRoomDbId,
-      slot_date:       state.selectedDate,
-      slot_time:       slot,
-      status:          'held',
-      hold_expires_at: holdExpiresAt,
-      held_by_user_id: state.user.id || null,
-    })
-    .select('id')
-    .single();
-
-  if (error) {
-    // Might be a unique violation — slot already taken
-    showFieldError('That time slot was just taken! Please choose another.');
+  try {
+    const { holdId } = await callAPI('slots/hold', {
+      roomId: state.partyRoomDbId,
+      date:   state.selectedDate,
+      slot,
+    });
+    state.slotHoldId = holdId;
+    startTimer();
+  } catch (err) {
+    showFieldError(err.message.includes('just taken')
+      ? 'That time slot was just taken! Please choose another.'
+      : 'Could not hold this slot — please try again.');
     state.selectedTime = null;
     document.getElementById('step2Next').disabled = true;
     await fetchAndRenderSlots(state.selectedDate);
-    return;
   }
-
-  state.slotHoldId = data.id;
-  startTimer();
 }
 
 async function releaseSlotHold(holdId) {
   if (!holdId) return;
-  await supabaseClient
-    .from('booking_timeslots')
-    .delete()
-    .eq('id', holdId)
-    .eq('status', 'held');
+  try {
+    await callAPI(`slots/hold/${holdId}`, null, 'DELETE');
+  } catch { /* best-effort */ }
   state.slotHoldId = null;
 }
 
@@ -342,72 +274,43 @@ function selectFood(type, el) {
 }
 
 // ---------------------------------------------------------------------------
-// Save confirmed booking to Supabase
+// Save confirmed booking
 // ---------------------------------------------------------------------------
 async function saveBookingToSupabase(paymentIntentId, amountPaid) {
   const allergyNotes = document.getElementById('allergyNotes')?.value.trim() || '';
+  const cardholderName = document.getElementById('cardholderName')?.value.trim() || null;
 
-  // Build itemized addon summary text (matches what the customer saw)
   const addonLines = getAddonSummaryLines();
   const addonsSummary = addonLines.length > 0
     ? addonLines.map(a => `${a.label} ×${a.qty} ($${a.subtotal.toFixed(2)})`).join(', ')
     : '';
   const addonsAmount = getAddonTotal();
-  const baseAmount = amountPaid - addonsAmount;
+  const baseAmount   = amountPaid - addonsAmount;
 
-  // Generate booking ref
   const bookingRef = 'WW-' + Math.random().toString(36).slice(2, 8).toUpperCase();
   state.bookingRef = bookingRef;
 
-  const { data: booking, error } = await supabaseClient
-    .from('bookings')
-    .insert({
-      booking_ref:      bookingRef,
-      user_id:          state.user.id,
-      party_room_id:    state.partyRoomDbId,
-      party_date:       state.selectedDate,
-      party_time:       state.selectedTime,
-      guest_count:      state.guests,
-      food_choice:      state.selectedFood,
-      allergy_notes:    allergyNotes,
-      addons_summary:   addonsSummary,
-      base_amount:      baseAmount,
-      addons_amount:    addonsAmount,
-      total_amount:     amountPaid,
-      status:           'confirmed',
-      contact_email:    state.confirmEmail,
-      contact_phone:    '+64' + state.confirmPhone.replace(/\s/g, ''),
-      stripe_payment_intent_id: paymentIntentId,
-    })
-    .select('id')
-    .single();
+  const { bookingId } = await callAPI('bookings', {
+    bookingRef,
+    roomId:                  state.partyRoomDbId,
+    partyDate:               state.selectedDate,
+    partyTime:               state.selectedTime,
+    guestCount:              state.guests,
+    foodChoice:              state.selectedFood,
+    allergyNotes,
+    addonsSummary,
+    baseAmount,
+    addonsAmount,
+    totalAmount:             amountPaid,
+    contactEmail:            state.confirmEmail,
+    contactPhone:            '+64' + state.confirmPhone.replace(/\s/g, ''),
+    stripePaymentIntentId:   paymentIntentId,
+    slotHoldId:              state.slotHoldId,
+    cardholderName,
+  });
 
-  if (error) throw new Error('Failed to save booking: ' + error.message);
-
-  // Upgrade slot hold to confirmed
-  if (state.slotHoldId) {
-    await supabaseClient
-      .from('booking_timeslots')
-      .update({ status: 'confirmed', booking_id: booking.id })
-      .eq('id', state.slotHoldId);
-    state.slotHoldId = null;
-  }
-
-  // Save payment record
-  const cardholderName = document.getElementById('cardholderName')?.value.trim() || null;
-  await supabaseClient
-    .from('payments')
-    .insert({
-      booking_id:              booking.id,
-      user_id:                 state.user.id,
-      stripe_payment_intent_id: paymentIntentId,
-      amount:                  amountPaid,
-      currency:                'nzd',
-      status:                  'succeeded',
-      cardholder_name:         cardholderName,
-    });
-
-  return booking.id;
+  state.slotHoldId = null;
+  return bookingId;
 }
 
 // ---------------------------------------------------------------------------
@@ -439,19 +342,23 @@ async function finaliseBooking() {
     const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
 
     // Trigger Edge Functions: email + SMS
+    const addonLines = getAddonSummaryLines();
+    const addonsSummaryText = addonLines.map(a => `${a.label} ×${a.qty} ($${a.subtotal.toFixed(2)})`).join(', ');
+
     await callEdgeFunction('send-booking-confirmation', {
-      bookingRef:   state.bookingRef,
+      bookingRef:     state.bookingRef,
       bookingId,
       email,
-      phone:        phone.replace(/\s/g, ''),
-      firstName:    state.user.firstName,
-      lastName:     state.user.lastName,
-      roomName:     state.selectedRoom.name,
-      partyDate:    state.selectedDate,
-      partyTime:    state.selectedTime,
-      guestCount:   state.guests,
-      foodChoice:   state.selectedFood,
-      totalAmount:  state.calculatedTotal,
+      phone:          phone.replace(/\s/g, ''),
+      firstName:      state.user.firstName,
+      lastName:       state.user.lastName,
+      roomName:       state.selectedRoom.name,
+      partyDate:      state.selectedDate,
+      partyTime:      state.selectedTime,
+      guestCount:     state.guests,
+      foodChoice:     state.selectedFood,
+      addonsSummary:  addonsSummaryText,
+      totalAmount:    state.calculatedTotal,
     });
 
     stopTimer();
@@ -625,6 +532,7 @@ async function handleTimerExpiry() {
 
 function stopTimer() {
   clearInterval(timerInterval);
+  if (slotSubscription) { clearInterval(slotSubscription); slotSubscription = null; }
   const tc = document.getElementById('timerContainer');
   if (tc) tc.style.display = 'none';
 }

@@ -435,6 +435,12 @@
         <input class="field" id="eb_guests" type="number" min="1" max="24" onchange="ebOnGuestsChange()" />
       </div>
 
+      <!-- Pricing -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💲 Pricing</div>
+        <div><label class="lbl">Price per Child ($)</label><input class="field" id="eb_ratePerChild" type="number" min="0" step="0.01" oninput="ebUpdateOrderSummary()" /></div>
+      </div>
+
       <!-- Food split -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
@@ -474,6 +480,24 @@
         <textarea class="field" id="eb_notes" rows="2" placeholder="Any allergies or special requests..."></textarea>
       </div>
 
+      <!-- Payment -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💳 Payment</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="lbl">Status</label>
+            <select class="field" id="eb_status">
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          <div>
+            <label class="lbl">Amount Paid ($)</label>
+            <input class="field" id="eb_amountPaid" type="number" min="0" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+      </div>
+
       <!-- Order summary -->
       <div class="bg-indigo-light rounded-2xl p-4">
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Updated Order Summary</div>
@@ -505,6 +529,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=12"></script>
+<script src="admin.js?v=14"></script>
 </body>
 </html>

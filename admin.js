@@ -164,7 +164,7 @@ async function loadOverviewBookingsList(fromDate, toDate) {
       <div class="flex items-center gap-3">
         <span class="text-2xl">${b.roomEmoji || '🎉'}</span>
         <div>
-          <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${b.roomName || '—'} · ${b.guestCount} kids</div>
+          <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${roomDisplayName(b.roomName)} · ${b.guestCount} kids</div>
           <div class="text-xs text-gray-400">${b.partyDate} @ ${b.partyTime} · ${b.contactEmail || ''}</div>
         </div>
       </div>
@@ -746,7 +746,7 @@ function renderBookingsTable(bookings) {
         <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
         <div class="text-xs text-gray-400">${b.contactEmail || ''}</div>
       </td>
-      <td>${b.roomEmoji || ''} ${b.roomName || '—'}</td>
+      <td>${b.roomEmoji || ''} ${roomDisplayName(b.roomName)}</td>
       <td>${b.guestCount}</td>
       <td class="font-semibold">$${parseFloat(b.totalAmount || 0).toFixed(2)}</td>
       <td><span class="badge ${statusBadgeClass(b.status)}">${b.status}</span></td>
@@ -785,7 +785,7 @@ async function viewBooking(bookingId) {
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Room</div>
-          <div class="font-semibold">${booking.roomEmoji || ''} ${booking.roomName || '—'}</div>
+          <div class="font-semibold">${booking.roomEmoji || ''} ${roomDisplayName(booking.roomName)}</div>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Date & Time</div>
@@ -1050,6 +1050,14 @@ function formatDate(iso) {
   const [y, m, d] = iso.slice(0, 10).split('-');
   return `${parseInt(d)} ${MONTHS[parseInt(m) - 1]} ${y}`;
 }
+
+const ROOM_DISPLAY_NAMES = {
+  'The Big Room':       'Big Room',
+  'Sunshine Room':      'Yellow Room',
+  'Dream Room':         'Purple Room',
+  'Wonder Forest Room': 'Green Room',
+};
+function roomDisplayName(name) { return ROOM_DISPLAY_NAMES[name] || name || '—'; }
 
 function statusBadgeClass(status) {
   return status === 'confirmed' ? 'badge-green'
@@ -1504,6 +1512,12 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_burgerCount').textContent = burgers;
   document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers} / ${editBookingState.guests} selected`;
   document.getElementById('eb_notes').value = booking.allergyNotes || '';
+  const currentRate = (booking.baseAmount && booking.guestCount)
+    ? (parseFloat(booking.baseAmount) / booking.guestCount).toFixed(2)
+    : '39.00';
+  document.getElementById('eb_ratePerChild').value = currentRate;
+  document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
+  document.getElementById('eb_amountPaid').value = parseFloat(booking.amountPaid || 0).toFixed(2);
   document.getElementById('editBookingError').classList.add('hidden');
 
   ebRenderAddonsList();
@@ -1584,9 +1598,7 @@ function ebUpdateOrderSummary() {
   if (!booking) return;
 
   const guests = editBookingState.guests;
-  const ratePerChild = (booking.baseAmount && booking.guestCount)
-    ? parseFloat(booking.baseAmount) / booking.guestCount
-    : 39;
+  const ratePerChild = Math.max(0, parseFloat(document.getElementById('eb_ratePerChild').value) || 0);
   const baseAmount = ratePerChild * guests;
   const addonTotal = ebGetAddonTotal();
   const total = baseAmount + addonTotal;
@@ -1597,7 +1609,7 @@ function ebUpdateOrderSummary() {
     .join('');
 
   document.getElementById('eb_orderSummary').innerHTML = `
-    <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${booking.roomEmoji || ''} ${booking.roomName || '—'}</span></div>
+    <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${booking.roomEmoji || ''} ${roomDisplayName(booking.roomName)}</span></div>
     <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guests} = $${baseAmount.toFixed(2)}</span></div>
     ${addonLines}
     <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
@@ -1626,10 +1638,7 @@ async function submitEditBooking() {
     return;
   }
 
-  const booking = editBookingState.booking;
-  const ratePerChild = (booking.baseAmount && booking.guestCount)
-    ? parseFloat(booking.baseAmount) / booking.guestCount
-    : 39;
+  const ratePerChild = Math.max(0, parseFloat(document.getElementById('eb_ratePerChild').value) || 0);
   const baseAmount = ratePerChild * guests;
   const addonsAmount = ebGetAddonTotal();
   const totalAmount = baseAmount + addonsAmount;
@@ -1645,6 +1654,9 @@ async function submitEditBooking() {
   spinner.classList.remove('hidden');
   errEl.classList.add('hidden');
 
+  const bookingStatus = document.getElementById('eb_status').value;
+  const amountPaid = parseFloat(document.getElementById('eb_amountPaid').value) || 0;
+
   try {
     await callAPI(`admin/bookings/${editBookingState.bookingId}`, {
       firstName, lastName, email, phone,
@@ -1655,6 +1667,8 @@ async function submitEditBooking() {
       addonsAmount,
       baseAmount,
       totalAmount,
+      bookingStatus,
+      amountPaid,
     }, 'PATCH');
 
     closeEditBookingModal();

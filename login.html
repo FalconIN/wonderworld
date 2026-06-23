@@ -9,7 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="styles.css" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -22,6 +23,19 @@
         },
       },
     },
+  };
+</script>
+
+<script>
+  window.__ENV__ = {
+    FIREBASE_API_KEY:             "AIzaSyAZRfR1P2NlOKWUl2PXOp8qa-l9x3w3Bbw",
+    FIREBASE_AUTH_DOMAIN:         "wonderworld-ce5f2.firebaseapp.com",
+    FIREBASE_PROJECT_ID:          "wonderworld-ce5f2",
+    FIREBASE_STORAGE_BUCKET:      "wonderworld-ce5f2.firebasestorage.app",
+    FIREBASE_MESSAGING_SENDER_ID: "829014493900",
+    FIREBASE_APP_ID:              "1:829014493900:web:985bc31a243265efd55069",
+    STRIPE_PK:                    "pk_test_51TiSuNGsKWwyhZzs5USwO5LkiTJIgX3cDQAslU2nz4yl96cYVdnSrF3ms7tslqSRHwSqRnZOf8rbPvPHs1yKIWRT00otZBgTFv",
+    ENVIRONMENT:                  "production"
   };
 </script>
 </head>
@@ -100,20 +114,13 @@
   </div>
 </div>
 
-<script src="supabase.js"></script>
+<script src="firebase.js"></script>
 <script>
 let currentMode = 'signup';
 
 // Redirect if already logged in
-supabaseClient.auth.getSession().then(({ data: { session } }) => {
-  if (session) window.location.href = '/';
-});
-
-// Handle OAuth redirect
-supabaseClient.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_IN' && session) {
-    window.location.href = '/';
-  }
+auth.onAuthStateChanged(user => {
+  if (user) window.location.href = '/';
 });
 
 function switchTab(mode) {
@@ -154,51 +161,54 @@ async function submitAuth() {
       const pass  = document.getElementById('signupPassword').value;
       if (!first || !last || !email || !pass) throw new Error('Please fill in all fields.');
       if (pass.length < 8) throw new Error('Password must be at least 8 characters.');
-      const { data, error } = await supabaseClient.auth.signUp({
-        email, password: pass,
-        options: { data: { first_name: first, last_name: last }, emailRedirectTo: window.location.origin + '/' }
-      });
-      if (error) throw new Error(error.message);
-      if (data.user && !data.session) {
-        showMsg('✅ Check your inbox! Click the verification link then log in.');
-        switchTab('login');
-      } else {
-        window.location.href = '/';
-      }
+      const cred = await auth.createUserWithEmailAndPassword(email, pass);
+      await callAPI('users/profile', { firstName: first, lastName: last, email });
+      cred.user.sendEmailVerification().catch(() => {});
+      showMsg('✅ Account created! Check your inbox to verify, then log in.');
+      switchTab('login');
     } else {
       const email = document.getElementById('loginEmail').value.trim().toLowerCase();
       const pass  = document.getElementById('loginPassword').value;
       if (!email || !pass) throw new Error('Please enter your email and password.');
-      const { error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
-      if (error) throw new Error(error.message === 'Invalid login credentials' ? 'Incorrect email or password.' : error.message);
+      await auth.signInWithEmailAndPassword(email, pass);
       window.location.href = '/';
     }
   } catch (err) {
-    showMsg(err.message, true);
+    const msgs = {
+      'auth/invalid-credential':   'Incorrect email or password.',
+      'auth/wrong-password':       'Incorrect email or password.',
+      'auth/user-not-found':       'No account found with this email.',
+      'auth/email-already-in-use': 'An account with this email already exists.',
+      'auth/weak-password':        'Password must be at least 8 characters.',
+      'auth/too-many-requests':    'Too many attempts — please wait a moment.',
+    };
+    showMsg(msgs[err.code] || err.message, true);
   } finally {
     setLoading(false);
   }
 }
 
 async function signInWithGoogle() {
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.origin + '/' }
-  });
-  if (error) showMsg('Google sign-in failed: ' + error.message, true);
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+    window.location.href = '/';
+  } catch (err) {
+    if (err.code !== 'auth/popup-closed-by-user') showMsg('Google sign-in failed.', true);
+  }
 }
 
 async function sendReset() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   if (!email) { showMsg('Enter your email first.', true); return; }
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/?reset=1'
-  });
-  if (error) showMsg('Error: ' + error.message, true);
-  else showMsg('✅ Password reset email sent!');
+  try {
+    await auth.sendPasswordResetEmail(email);
+    showMsg('✅ Password reset email sent!');
+  } catch (err) {
+    showMsg('Error: ' + err.message, true);
+  }
 }
 
-// Allow Enter key to submit
 document.addEventListener('keydown', e => { if (e.key === 'Enter') submitAuth(); });
 </script>
 </body>

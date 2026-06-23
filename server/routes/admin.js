@@ -172,31 +172,70 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/bookings/:id — edit customer details, food, add-ons, guest count, notes
+// PATCH /api/admin/bookings/:id — edit customer details, food, add-ons, guest count, notes, payment
 router.patch('/bookings/:id', async (req, res) => {
-  const { firstName, lastName, email, phone, guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount } = req.body;
+  const { firstName, lastName, email, phone, guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount, bookingStatus, amountPaid } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const allowedStatuses = ['confirmed', 'pending', 'cancelled'];
+    const newStatus = allowedStatuses.includes(bookingStatus) ? bookingStatus : null;
+
+    const baseParams = [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0,
+       baseAmount, totalAmount, email || '', phone || null];
+    const statusClause = newStatus ? `status = $${baseParams.length + 1},` : '';
+    if (newStatus) baseParams.push(newStatus);
+    baseParams.push(req.params.id);
+    const idIdx = baseParams.length;
 
     const { rows: [booking] } = await client.query(
       `UPDATE bookings
        SET guest_count = $1, food_choice = $2, allergy_notes = $3,
            addons_summary = $4, addons_amount = $5, base_amount = $6,
            total_amount = $7, contact_email = $8, contact_phone = $9,
-           updated_at = now()
-       WHERE id = $10
+           ${statusClause} updated_at = now()
+       WHERE id = $${idIdx}
        RETURNING user_id`,
-      [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0,
-       baseAmount, totalAmount, email || '', phone || null, req.params.id]
+      baseParams
     );
     if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found' }); }
 
     if (booking.user_id) {
-      await client.query(
-        `UPDATE users SET first_name = $1, last_name = $2, email = $3, phone = $4, updated_at = now() WHERE id = $5`,
-        [firstName || '', lastName || '', email || '', phone || null, booking.user_id]
+      // Check if this user is shared across other bookings
+      const { rows: others } = await client.query(
+        `SELECT id FROM bookings WHERE user_id = $1 AND id != $2 LIMIT 1`,
+        [booking.user_id, req.params.id]
       );
+
+      if (others.length > 0) {
+        // Shared user — create a new independent user record for this booking only
+        const newUserId = require('crypto').randomUUID();
+        await client.query(
+          `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
+          [newUserId, firstName || '', lastName || '', email || '', phone || null]
+        );
+        await client.query(`UPDATE bookings SET user_id = $1 WHERE id = $2`, [newUserId, req.params.id]);
+      } else {
+        // Sole booking on this user — safe to update in place
+        await client.query(
+          `UPDATE users SET first_name = $1, last_name = $2, email = $3, phone = $4, updated_at = now() WHERE id = $5`,
+          [firstName || '', lastName || '', email || '', phone || null, booking.user_id]
+        );
+      }
+    }
+
+    // Update amount paid — replace any manual payment records for this booking
+    if (amountPaid !== undefined) {
+      const paid = Math.max(0, parseFloat(amountPaid) || 0);
+      await client.query(`DELETE FROM payments WHERE booking_id = $1 AND payment_method = 'manual'`, [req.params.id]);
+      if (paid > 0) {
+        await client.query(
+          `INSERT INTO payments (booking_id, user_id, amount, currency, status, payment_method)
+           VALUES ($1, $2, $3, 'nzd', 'succeeded', 'manual')`,
+          [req.params.id, booking.user_id, paid]
+        );
+      }
     }
 
     await client.query('COMMIT');

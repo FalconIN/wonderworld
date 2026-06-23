@@ -1,6 +1,6 @@
 /**
  * auth.js
- * Handles all authentication flows:
+ * Handles all authentication flows via Firebase Auth:
  *   - Email/password sign-up (with email verification)
  *   - Email/password log-in
  *   - Google OAuth (Sign in with Google)
@@ -12,72 +12,50 @@
 // ---------------------------------------------------------------------------
 // On page load — restore session & update nav
 // ---------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
-  // Listen for auth state changes (login, logout, token refresh)
-  supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      await handleSignedInUser(session.user);
-    }
-    if (event === 'SIGNED_OUT') {
-      handleSignedOut();
-    }
-    // Handle OAuth redirect for Google sign-in
-    if (event === 'SIGNED_IN' && session?.provider_token) {
-      // User came back from Google OAuth
-      await handleSignedInUser(session.user);
-      // If booking modal was open before OAuth, re-open and advance
+document.addEventListener('DOMContentLoaded', () => {
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      await handleSignedInUser(user);
+
+      // If booking modal was open before Google OAuth redirect, re-open it
       if (sessionStorage.getItem('ww_booking_intent')) {
         sessionStorage.removeItem('ww_booking_intent');
         openBooking();
-        state.isAuthenticated = true;
-        state.user = {
-          id: session.user.id,
-          email: session.user.email,
-          firstName: session.user.user_metadata?.full_name?.split(' ')[0] || '',
-          lastName: session.user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-        };
         setTimeout(() => goToStep(1), 300);
       }
+    } else {
+      handleSignedOut();
     }
   });
-
-  // Check for existing session on page load
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    await handleSignedInUser(session.user);
-  }
 });
 
 // ---------------------------------------------------------------------------
 // Handle a signed-in user: update app state + nav bar
 // ---------------------------------------------------------------------------
 async function handleSignedInUser(user) {
-  // Fetch extended profile from our users table
-  const { data: profile } = await supabaseClient
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  let profile = null;
+  try {
+    profile = await callAPI('users/profile', null, 'GET');
+  } catch (e) {
+    // Profile may not exist yet for brand new users — that's fine
+  }
 
   state.isAuthenticated = true;
   state.user = {
-    id: user.id,
-    email: user.email,
-    firstName: profile?.first_name || user.user_metadata?.full_name?.split(' ')[0] || '',
-    lastName: profile?.last_name || user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '',
-    phone: profile?.phone || '',
-    isAdmin: profile?.is_admin || false,
+    id:        user.uid,
+    email:     user.email,
+    firstName: profile?.firstName || user.displayName?.split(' ')[0] || '',
+    lastName:  profile?.lastName  || user.displayName?.split(' ').slice(1).join(' ') || '',
+    phone:     profile?.phone     || '',
+    isAdmin:   profile?.isAdmin   || false,
   };
 
   updateNavUI(true);
 
-  // If returning from an Afterpay redirect, resume the booking flow
   if (typeof checkAfterPayReturn === 'function') checkAfterPayReturn();
 
-  // Show admin link in footer if admin
   if (state.user.isAdmin) {
-    const adminLinks = document.querySelectorAll('[data-admin-only]');
-    adminLinks.forEach(el => el.style.removeProperty('display'));
+    document.querySelectorAll('[data-admin-only]').forEach(el => el.style.removeProperty('display'));
   }
 }
 
@@ -163,7 +141,7 @@ async function submitAuth() {
       await handleLogin();
     }
   } catch (err) {
-    showFieldError(err.message || 'Authentication failed. Please try again.');
+    showFieldError(translateFirebaseError(err.code) || err.message || 'Authentication failed.');
   } finally {
     setAuthLoading(false);
   }
@@ -178,36 +156,22 @@ async function handleSignup() {
   const email     = document.getElementById('authEmail').value.trim().toLowerCase();
   const password  = document.getElementById('authPassword').value;
 
-  // Client-side validation
   if (!firstName || !lastName) throw new Error('Please enter your first and last name.');
   if (!email || !isValidEmail(email)) throw new Error('Please enter a valid email address.');
   if (password.length < 8) throw new Error('Password must be at least 8 characters.');
 
-  const { data, error } = await supabaseClient.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { first_name: firstName, last_name: lastName },
-      emailRedirectTo: `${window.location.origin}/`,
-    },
-  });
+  const cred = await auth.createUserWithEmailAndPassword(email, password);
 
-  if (error) throw new Error(translateSupabaseError(error.message));
+  // Save profile to DB
+  await callAPI('users/profile', { firstName, lastName, email });
 
-  if (data.user && !data.session) {
-    // Email confirmation required
-    showFieldError('✅ Check your inbox! Click the verification link to confirm your account, then log in.');
-    switchAuth('login');
-    return;
-  }
+  state.user = { id: cred.user.uid, email, firstName, lastName };
+  state.isAuthenticated = true;
 
-  // Auto-confirmed (e.g. dev mode) — upsert profile row
-  if (data.user) {
-    await upsertUserProfile(data.user.id, firstName, lastName, email);
-    state.user = { id: data.user.id, email, firstName, lastName };
-    state.isAuthenticated = true;
-    goToStep(1);
-  }
+  // Send email verification (non-blocking)
+  cred.user.sendEmailVerification().catch(() => {});
+
+  goToStep(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,33 +183,36 @@ async function handleLogin() {
 
   if (!email || !password) throw new Error('Please enter your email and password.');
 
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-  if (error) throw new Error(translateSupabaseError(error.message));
-
-  // onAuthStateChange fires and calls handleSignedInUser() automatically
+  await auth.signInWithEmailAndPassword(email, password);
+  // onAuthStateChanged fires and calls handleSignedInUser() automatically
   goToStep(1);
 }
 
 // ---------------------------------------------------------------------------
-// Google OAuth sign-in
+// Google OAuth sign-in (popup, no redirect needed)
 // ---------------------------------------------------------------------------
 async function signInWithGoogle() {
-  // Save intent so we can re-open the booking modal after OAuth redirect
   sessionStorage.setItem('ww_booking_intent', '1');
 
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${window.location.origin}/`,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'consent',
-      },
-    },
-  });
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.addScope('email');
+  provider.addScope('profile');
 
-  if (error) showFieldError('Google sign-in failed: ' + error.message);
+  try {
+    const result = await auth.signInWithPopup(provider);
+    const user   = result.user;
+    const names  = (user.displayName || '').split(' ');
+
+    // Upsert profile so DB has the Google display name
+    await callAPI('users/profile', {
+      firstName: names[0] || '',
+      lastName:  names.slice(1).join(' ') || '',
+      email:     user.email,
+    });
+  } catch (err) {
+    sessionStorage.removeItem('ww_booking_intent');
+    showFieldError(translateFirebaseError(err.code) || 'Google sign-in failed.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -255,14 +222,11 @@ async function sendPasswordReset() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   if (!email) { showFieldError('Enter your email address first.'); return; }
 
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/?reset=1`,
-  });
-
-  if (error) {
-    showFieldError('Password reset failed: ' + error.message);
-  } else {
+  try {
+    await auth.sendPasswordResetEmail(email);
     showFieldError('✅ Password reset email sent — check your inbox!');
+  } catch (err) {
+    showFieldError(translateFirebaseError(err.code) || 'Password reset failed.');
   }
 }
 
@@ -270,48 +234,35 @@ async function sendPasswordReset() {
 // Sign out
 // ---------------------------------------------------------------------------
 async function signOut() {
-  await supabaseClient.auth.signOut();
+  await auth.signOut();
   window.location.reload();
 }
 
 // ---------------------------------------------------------------------------
-// Upsert user profile in our custom users table
+// Upsert user profile (called from booking.js finaliseBooking)
 // ---------------------------------------------------------------------------
 async function upsertUserProfile(userId, firstName, lastName, email, phone = null) {
-  const { error } = await supabaseClient
-    .from('users')
-    .upsert({
-      id: userId,
-      first_name: firstName,
-      last_name: lastName,
-      email,
-      phone,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
-
-  if (error) console.error('Profile upsert error:', error);
+  try {
+    await callAPI('users/profile', { firstName, lastName, email, phone });
+  } catch (err) {
+    console.error('Profile upsert error:', err);
+  }
 }
 
 // ---------------------------------------------------------------------------
-// View user's past bookings (opens a simple modal)
+// View user's past bookings
 // ---------------------------------------------------------------------------
 async function viewMyBookings() {
   if (!state.isAuthenticated) { openBooking(); return; }
 
-  const { data: bookings, error } = await supabaseClient
-    .from('bookings')
-    .select(`
-      id, booking_ref, party_date, party_time, guest_count,
-      food_choice, total_amount, status, created_at,
-      party_rooms ( name, emoji )
-    `)
-    .eq('user_id', state.user.id)
-    .order('created_at', { ascending: false })
-    .limit(20);
+  let bookings = [];
+  try {
+    bookings = await callAPI('users/bookings', null, 'GET');
+  } catch {
+    showFieldError('Could not load bookings.');
+    return;
+  }
 
-  if (error) { showFieldError('Could not load bookings.'); return; }
-
-  // Build modal HTML
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'myBookingsOverlay';
@@ -325,16 +276,16 @@ async function viewMyBookings() {
         bookings.map(b => `
           <div class="border-2 border-gray-100 rounded-2xl p-4 mb-3">
             <div class="flex items-center justify-between mb-2">
-              <div class="font-display font-bold text-base">${b.party_rooms?.emoji || '🎉'} ${b.party_rooms?.name || 'Party Room'}</div>
+              <div class="font-display font-bold text-base">${b.roomEmoji || '🎉'} ${b.roomName || 'Party Room'}</div>
               <span class="badge ${b.status === 'confirmed' ? 'badge-green' : b.status === 'cancelled' ? 'badge-red' : 'badge-yellow'}">${b.status}</span>
             </div>
             <div class="grid grid-cols-2 gap-1 text-sm text-gray-600">
-              <div>📅 ${b.party_date} @ ${b.party_time}</div>
-              <div>👦 ${b.guest_count} kids</div>
-              <div>🍕 ${b.food_choice || '—'}</div>
-              <div>💰 $${parseFloat(b.total_amount).toFixed(2)} NZD</div>
+              <div>📅 ${b.partyDate} @ ${b.partyTime}</div>
+              <div>👦 ${b.guestCount} kids</div>
+              <div>🍕 ${b.foodChoice || '—'}</div>
+              <div>💰 $${parseFloat(b.totalAmount).toFixed(2)} NZD</div>
             </div>
-            <div class="mt-2 text-xs text-gray-400">Ref: ${b.booking_ref}</div>
+            <div class="mt-2 text-xs text-gray-400">Ref: ${b.bookingRef}</div>
           </div>`).join('')}
       <button onclick="openBooking(); document.getElementById('myBookingsOverlay').remove();" class="btn-primary w-full mt-4">Book Another Party 🎂</button>
     </div>`;
@@ -359,12 +310,17 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function translateSupabaseError(msg) {
-  if (!msg) return 'An unknown error occurred.';
-  if (msg.includes('Invalid login credentials'))   return 'Incorrect email or password.';
-  if (msg.includes('Email not confirmed'))          return 'Please verify your email before logging in.';
-  if (msg.includes('User already registered'))      return 'An account with this email already exists — log in instead.';
-  if (msg.includes('Password should be at least'))  return 'Password must be at least 8 characters.';
-  if (msg.includes('rate limit'))                   return 'Too many attempts. Please wait a minute and try again.';
-  return msg;
+function translateFirebaseError(code) {
+  const map = {
+    'auth/invalid-credential':         'Incorrect email or password.',
+    'auth/wrong-password':             'Incorrect email or password.',
+    'auth/user-not-found':             'No account found with this email.',
+    'auth/email-already-in-use':       'An account with this email already exists — log in instead.',
+    'auth/weak-password':              'Password must be at least 8 characters.',
+    'auth/too-many-requests':          'Too many attempts. Please wait a minute and try again.',
+    'auth/network-request-failed':     'Network error — check your connection.',
+    'auth/popup-closed-by-user':       'Sign-in cancelled.',
+    'auth/cancelled-popup-request':    '',
+  };
+  return map[code] || null;
 }
