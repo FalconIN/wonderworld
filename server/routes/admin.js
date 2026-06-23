@@ -79,8 +79,11 @@ router.get('/bookings', async (req, res) => {
                     b.addons_summary as "addonsSummary",
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
                     b.created_at as "createdAt",
-                    r.name as "roomName", r.emoji as "roomEmoji"
-             FROM bookings b JOIN party_rooms r ON r.id = b.party_room_id`;
+                    r.name as "roomName", r.emoji as "roomEmoji",
+                    u.first_name as "firstName", u.last_name as "lastName"
+             FROM bookings b
+             JOIN party_rooms r ON r.id = b.party_room_id
+             LEFT JOIN users u ON u.id = b.user_id`;
     const params = [];
     if (status) { q += ` WHERE b.status = $1`; params.push(status); }
     q += ` ORDER BY b.created_at DESC LIMIT ${parseInt(limit)}`;
@@ -419,20 +422,29 @@ router.post('/bookings/manual', async (req, res) => {
     );
     if (slot[0]?.status === 'confirmed') throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
 
-    // Upsert user
+    // Upsert user (email optional — if blank, always create a new record)
     let userId;
-    const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [email]);
-    if (existing[0]) {
-      userId = existing[0].id;
-      await client.query(
-        `UPDATE users SET first_name=$1, last_name=$2, phone=COALESCE($3,phone), updated_at=now() WHERE id=$4`,
-        [firstName, lastName, phone || null, userId]
-      );
+    if (email) {
+      const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [email]);
+      if (existing[0]) {
+        userId = existing[0].id;
+        await client.query(
+          `UPDATE users SET first_name=$1, last_name=$2, phone=COALESCE($3,phone), updated_at=now() WHERE id=$4`,
+          [firstName || '', lastName || '', phone || null, userId]
+        );
+      } else {
+        const newId = require('crypto').randomUUID();
+        await client.query(
+          `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
+          [newId, firstName || '', lastName || '', email, phone || null]
+        );
+        userId = newId;
+      }
     } else {
       const newId = require('crypto').randomUUID();
       await client.query(
         `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
-        [newId, firstName, lastName, email, phone || null]
+        [newId, firstName || '', lastName || '', '', phone || null]
       );
       userId = newId;
     }
@@ -446,7 +458,7 @@ router.post('/bookings/manual', async (req, res) => {
        RETURNING id`,
       [userId, roomId, bookingRef, date, time, guests, foodChoice, notes || '',
        addonsSummary || '', baseAmount, addonsAmount || 0, totalAmount,
-       status, email, phone || null]
+       status, email || '', phone || null]
     );
 
     if (slot[0]) {

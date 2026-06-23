@@ -712,7 +712,8 @@ function renderBookingsTable(bookings) {
     <tr>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
-        <div class="text-xs text-gray-400">${b.contactEmail || '—'}</div>
+        <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
+        <div class="text-xs text-gray-400">${b.contactEmail || ''}</div>
       </td>
       <td>${b.roomEmoji || ''} ${b.roomName || '—'}</td>
       <td>
@@ -1322,9 +1323,6 @@ async function submitAddBooking() {
   const burgers = parseInt(document.getElementById('ab_burgerCount').textContent) || 0;
 
   // Validate
-  if (!firstName) { errEl.textContent = 'First name is required.'; errEl.classList.remove('hidden'); return; }
-  if (!lastName)  { errEl.textContent = 'Last name is required.';  errEl.classList.remove('hidden'); return; }
-  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { errEl.textContent = 'Valid email is required.'; errEl.classList.remove('hidden'); return; }
   if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
   if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
   if (!time)   { errEl.textContent = 'Please select a time slot.'; errEl.classList.remove('hidden'); return; }
