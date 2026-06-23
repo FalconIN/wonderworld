@@ -6,9 +6,20 @@ const { requireAuth } = require('../middleware/auth');
 
 // POST /api/payments/create-intent
 router.post('/create-intent', requireAuth, async (req, res) => {
-  const { amount, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
+  const { roomId, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
 
   try {
+    // Compute price server-side — never trust a client-supplied amount
+    const { rows: [room] } = await pool.query(
+      'SELECT base_price_per_child FROM party_rooms WHERE id = $1 AND is_active = true',
+      [roomId]
+    );
+    if (!room) return res.status(400).json({ error: 'Invalid room.' });
+
+    const baseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
+    const amount = Math.round((baseAmount + parseFloat(addonsAmount || 0)) * 100);
+    if (!amount || amount < 100) return res.status(400).json({ error: 'Invalid booking amount.' });
+
     const intent = await stripe.paymentIntents.create({
       amount,
       currency,

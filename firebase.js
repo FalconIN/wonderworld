@@ -1,38 +1,24 @@
 /**
  * firebase.js
- * Fetches client config from /api/config at load time (synchronous XHR so
- * inline scripts that immediately use `auth` or `stripe` keep working), then
- * initialises Firebase Auth and Stripe.
+ * Initialises Firebase Auth and Stripe from window.__ENV__, which is injected
+ * server-side by Express into every HTML page before it's sent to the browser.
+ * No secrets are ever hardcoded in static files.
  */
 
-(function () {
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', '/api/config', false); // synchronous — blocks until response arrives
-  xhr.send();
+const firebaseConfig = {
+  apiKey:            window.__ENV__?.FIREBASE_API_KEY            || '',
+  authDomain:        window.__ENV__?.FIREBASE_AUTH_DOMAIN        || '',
+  projectId:         window.__ENV__?.FIREBASE_PROJECT_ID         || '',
+  storageBucket:     window.__ENV__?.FIREBASE_STORAGE_BUCKET     || '',
+  messagingSenderId: window.__ENV__?.FIREBASE_MESSAGING_SENDER_ID || '',
+  appId:             window.__ENV__?.FIREBASE_APP_ID             || '',
+};
 
-  if (xhr.status !== 200) {
-    console.error('[firebase.js] Could not load /api/config — status ' + xhr.status);
-    return;
-  }
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-  const cfg = JSON.parse(xhr.responseText);
-
-  firebase.initializeApp({
-    apiKey:            cfg.FIREBASE_API_KEY,
-    authDomain:        cfg.FIREBASE_AUTH_DOMAIN,
-    projectId:         cfg.FIREBASE_PROJECT_ID,
-    storageBucket:     cfg.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: cfg.FIREBASE_MESSAGING_SENDER_ID,
-    appId:             cfg.FIREBASE_APP_ID,
-  });
-
-  // Expose Stripe PK via a temporary global so the Stripe() call below can use it
-  window.__stripePk = cfg.STRIPE_PK || '';
-})();
-
-const auth   = firebase.auth();
-const stripe = Stripe(window.__stripePk || '');
-delete window.__stripePk; // clean up — not needed after init
+const STRIPE_PK = window.__ENV__?.STRIPE_PK || window.__ENV__?.STRIPE_PUBLIC_KEY || '';
+const stripe = (typeof Stripe !== 'undefined' && STRIPE_PK) ? Stripe(STRIPE_PK) : null;
 
 // ---------------------------------------------------------------------------
 // API helper — attaches the Firebase ID token to every request

@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
+const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('../middleware/auth');
 
 // GET /api/rooms — public room list
@@ -116,6 +117,34 @@ router.post('/bookings', requireAuth, async (req, res) => {
     contactEmail, contactPhone, stripePaymentIntentId, slotHoldId, cardholderName,
   } = req.body;
 
+  // Verify the Stripe PaymentIntent was actually charged for the correct amount
+  let verifiedTotalAmount;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
+    if (pi.status !== 'succeeded') {
+      return res.status(400).json({ error: 'Payment has not succeeded.' });
+    }
+
+    // Compute expected amount server-side from the room price in the database
+    const { rows: [room] } = await pool.query(
+      'SELECT base_price_per_child FROM party_rooms WHERE id = $1 AND is_active = true',
+      [roomId]
+    );
+    if (!room) return res.status(400).json({ error: 'Invalid room.' });
+
+    const serverBaseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
+    const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
+
+    if (pi.amount !== expectedCents) {
+      return res.status(400).json({ error: 'Payment amount does not match booking total.' });
+    }
+
+    verifiedTotalAmount = pi.amount / 100;
+  } catch (err) {
+    if (err.statusCode) return res.status(400).json({ error: 'Could not verify payment: ' + err.message });
+    throw err;
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -129,7 +158,7 @@ router.post('/bookings', requireAuth, async (req, res) => {
        RETURNING id`,
       [bookingRef, uid, roomId, partyDate, partyTime, guestCount,
        foodChoice, allergyNotes, addonsSummary, baseAmount, addonsAmount,
-       totalAmount, contactEmail, contactPhone, stripePaymentIntentId]
+       verifiedTotalAmount, contactEmail, contactPhone, stripePaymentIntentId]
     );
 
     // Upgrade slot hold to confirmed
@@ -140,11 +169,11 @@ router.post('/bookings', requireAuth, async (req, res) => {
       );
     }
 
-    // Save payment record
+    // Save payment record with the Stripe-verified amount
     await client.query(
       `INSERT INTO payments (booking_id, user_id, stripe_payment_intent_id, amount, currency, status, cardholder_name)
        VALUES ($1,$2,$3,$4,'nzd','succeeded',$5)`,
-      [booking.id, uid, stripePaymentIntentId, totalAmount, cardholderName || null]
+      [booking.id, uid, stripePaymentIntentId, verifiedTotalAmount, cardholderName || null]
     );
 
     await client.query('COMMIT');

@@ -743,8 +743,8 @@ function renderBookingsTable(bookings) {
       </td>
       <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
       <td>
-        <div class="text-sm font-semibold">${[b.firstName, b.lastName].filter(Boolean).join(' ') || '—'}</div>
-        <div class="text-xs text-gray-400">${b.contactEmail || ''}</div>
+        <div class="text-sm font-semibold">${escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—'}</div>
+        <div class="text-xs text-gray-400">${escapeHtml(b.contactEmail || '')}</div>
       </td>
       <td>${b.roomEmoji || ''} ${roomDisplayName(b.roomName)}</td>
       <td>${b.guestCount}</td>
@@ -770,7 +770,7 @@ async function viewBooking(bookingId) {
   const totalAmount = parseFloat(booking.totalAmount || 0);
   const amountPaid = parseFloat(booking.amountPaid || 0);
   const balanceDue = totalAmount - amountPaid;
-  const customerName = [booking.firstName, booking.lastName].filter(Boolean).join(' ');
+  const customerName = escapeHtml([booking.firstName, booking.lastName].filter(Boolean).join(' '));
 
   document.getElementById('bookingDetailContent').innerHTML = `
     <div class="space-y-3">
@@ -796,16 +796,16 @@ async function viewBooking(bookingId) {
       <div class="bg-gray-50 rounded-xl p-4">
         <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Customer</div>
         <div class="font-semibold text-sm">${customerName || '—'}</div>
-        ${booking.contactEmail ? `<div class="text-xs text-gray-400 mt-0.5">${booking.contactEmail}</div>` : ''}
+        ${booking.contactEmail ? `<div class="text-xs text-gray-400 mt-0.5">${escapeHtml(booking.contactEmail)}</div>` : ''}
       </div>
 
       <div class="bg-indigo-light rounded-xl p-4">
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
         <div class="space-y-1.5 text-sm text-indigo-800">
           <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${guestCount} children</span></div>
-          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${booking.foodChoice || '—'}</span></div>
+          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${escapeHtml(booking.foodChoice) || '—'}</span></div>
           ${ratePerChild ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guestCount} = $${baseAmount.toFixed(2)}</span></div>` : ''}
-          ${booking.addonsSummary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${booking.addonsSummary}</span></div>` : ''}
+          ${booking.addonsSummary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${escapeHtml(booking.addonsSummary)}</span></div>` : ''}
           <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
             <span>Total:</span><span class="text-indigo-600">$${totalAmount.toFixed(2)} NZD</span>
           </div>
@@ -817,7 +817,7 @@ async function viewBooking(bookingId) {
       ${booking.allergyNotes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
-        <div class="text-sm text-gray-600">${booking.allergyNotes}</div>
+        <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ')}</div>
       ${booking.status !== 'cancelled' ? `
@@ -1064,6 +1064,16 @@ function statusBadgeClass(status) {
        : status === 'cancelled' ? 'badge-red'
        : status === 'pending'   ? 'badge-yellow'
        : 'badge-gray';
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 async function adminSignOut() {

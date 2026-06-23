@@ -282,7 +282,7 @@ async function viewMyBookings() {
             <div class="grid grid-cols-2 gap-1 text-sm text-gray-600">
               <div>📅 ${b.partyDate} @ ${b.partyTime}</div>
               <div>👦 ${b.guestCount} kids</div>
-              <div>🍕 ${b.foodChoice || '—'}</div>
+              <div>🍕 ${escapeHtml(b.foodChoice) || '—'}</div>
               <div>💰 $${parseFloat(b.totalAmount).toFixed(2)} NZD</div>
             </div>
             <div class="mt-2 text-xs text-gray-400">Ref: ${b.bookingRef}</div>
@@ -308,6 +308,16 @@ function setAuthLoading(loading) {
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function translateFirebaseError(code) {
