@@ -7,7 +7,6 @@ const { requireAuth } = require('../middleware/auth');
 // POST /api/payments/create-intent
 router.post('/create-intent', requireAuth, async (req, res) => {
   const { roomId, roomSlug, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
-
   try {
     // Compute price server-side — never trust a client-supplied amount
     const { rows: [room] } = await pool.query(
