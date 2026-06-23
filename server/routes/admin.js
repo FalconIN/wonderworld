@@ -569,4 +569,147 @@ router.post('/users/:id/set-admin', async (req, res) => {
   }
 });
 
+// GET /api/admin/today — today's run sheet
+router.get('/today', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.party_time as "partyTime",
+              b.guest_count as "guestCount", b.food_choice as "foodChoice",
+              b.allergy_notes as "allergyNotes", b.addons_summary as "addonsSummary",
+              b.contact_email as "contactEmail", b.contact_phone as "contactPhone",
+              b.total_amount as "totalAmount",
+              COALESCE(pay.amount_paid, 0) as "amountPaid",
+              r.name as "roomName", r.emoji as "roomEmoji", r.color as "roomColor",
+              u.first_name as "firstName", u.last_name as "lastName"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       LEFT JOIN (
+         SELECT booking_id, SUM(amount) FILTER (WHERE status = 'succeeded') as amount_paid
+         FROM payments GROUP BY booking_id
+       ) pay ON pay.booking_id = b.id
+       WHERE b.party_date = CURRENT_DATE AND b.status = 'confirmed'
+       ORDER BY b.party_time ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/allergy-alerts — upcoming bookings next 14 days with allergy_notes
+router.get('/allergy-alerts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
+              b.party_time as "partyTime", b.allergy_notes as "allergyNotes",
+              b.guest_count as "guestCount",
+              r.name as "roomName", r.emoji as "roomEmoji",
+              u.first_name as "firstName", u.last_name as "lastName"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.party_date >= CURRENT_DATE
+         AND b.party_date <= CURRENT_DATE + INTERVAL '14 days'
+         AND b.status = 'confirmed'
+         AND b.allergy_notes IS NOT NULL AND trim(b.allergy_notes) != ''
+       ORDER BY b.party_date ASC, b.party_time ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/balances-due
+router.get('/balances-due', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
+              b.party_time as "partyTime", b.total_amount as "totalAmount",
+              COALESCE(pay.amount_paid, 0) as "amountPaid",
+              (b.total_amount - COALESCE(pay.amount_paid, 0)) as "balanceDue",
+              r.name as "roomName", r.emoji as "roomEmoji",
+              u.first_name as "firstName", u.last_name as "lastName",
+              b.contact_email as "contactEmail", b.contact_phone as "contactPhone"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       LEFT JOIN (
+         SELECT booking_id, SUM(amount) FILTER (WHERE status = 'succeeded') as amount_paid
+         FROM payments GROUP BY booking_id
+       ) pay ON pay.booking_id = b.id
+       WHERE b.status = 'confirmed'
+         AND (b.total_amount - COALESCE(pay.amount_paid, 0)) > 0.005
+       ORDER BY b.party_date ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/weekend-capacity — next 6 weekends (42 days) booked slots per day
+router.get('/weekend-capacity', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.party_date as "date", COUNT(*) as "booked"
+       FROM bookings b
+       WHERE b.status = 'confirmed'
+         AND EXTRACT(DOW FROM b.party_date) IN (0, 6)
+         AND b.party_date >= CURRENT_DATE
+         AND b.party_date < CURRENT_DATE + INTERVAL '42 days'
+       GROUP BY b.party_date
+       ORDER BY b.party_date ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/food-prep — next 7 days bookings for food totals
+router.get('/food-prep', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.party_date as "date", b.party_time as "partyTime",
+              b.food_choice as "foodChoice", b.guest_count as "guestCount",
+              b.addons_summary as "addonsSummary",
+              r.name as "roomName", r.emoji as "roomEmoji"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       WHERE b.status = 'confirmed'
+         AND b.party_date >= CURRENT_DATE
+         AND b.party_date <= CURRENT_DATE + INTERVAL '7 days'
+       ORDER BY b.party_date ASC, b.party_time ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/month-revenue — this month vs last month + pending count
+router.get('/month-revenue', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         COALESCE(SUM(total_amount) FILTER (
+           WHERE party_date >= DATE_TRUNC('month', CURRENT_DATE)
+             AND status != 'cancelled'
+         ), 0) as "thisMonth",
+         COALESCE(SUM(total_amount) FILTER (
+           WHERE party_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+             AND party_date < DATE_TRUNC('month', CURRENT_DATE)
+             AND status != 'cancelled'
+         ), 0) as "lastMonth",
+         COUNT(*) FILTER (WHERE status = 'pending') as "pendingCount"
+       FROM bookings`
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

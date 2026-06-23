@@ -56,6 +56,7 @@
       <button onclick="showTab('bookings')" id="nav-bookings" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📋 Bookings</button>
       <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">💳 Payments</button>
       <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">👥 Customers</button>
+      <button onclick="showTab('today')" id="nav-today" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">🗓️ Today</button>
     </nav>
     <div class="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
       <div id="adminUserInfo" class="text-gray-500 dark:text-gray-400 text-xs mb-3"></div>
@@ -84,7 +85,7 @@
 
     <!-- ── OVERVIEW TAB ──────────────────────────────────── -->
     <div id="tab-overview" class="p-8">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5 mb-8">
         <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
           <div class="text-2xl mb-2">📋</div>
           <div class="font-display font-bold text-3xl text-gray-900 dark:text-white" id="stat-bookings">—</div>
@@ -108,6 +109,16 @@
           <div class="text-2xl mb-2">📅</div>
           <div class="font-display font-bold text-3xl text-teal" id="stat-upcoming">—</div>
           <div class="text-gray-400 text-sm">Upcoming Parties</div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
+          <div class="text-2xl mb-2">📆</div>
+          <div class="font-display font-bold text-2xl text-indigo-600" id="stat-month-revenue">—</div>
+          <div class="text-gray-400 text-sm">This Month <span id="stat-month-vs" class="text-xs font-semibold ml-1"></span></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors cursor-pointer hover:shadow-lg" onclick="showTab('today')">
+          <div class="text-2xl mb-2">💵</div>
+          <div class="font-display font-bold text-3xl text-amber-500" id="stat-balances-due">—</div>
+          <div class="text-gray-400 text-sm">Balances Due</div>
         </div>
       </div>
 
@@ -138,6 +149,20 @@
           <div style="height:260px"><canvas id="roomPopularityChartCanvas"></canvas></div>
         </div>
       </div>
+      <!-- Food prep + weekend capacity -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🍽️ Food Prep — Next 7 Days</h2>
+          <p class="text-gray-400 text-sm mb-4">Total food needed across all upcoming parties</p>
+          <div id="overview-food-prep">Loading...</div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">📅 Weekend Capacity</h2>
+          <p class="text-gray-400 text-sm mb-4">Slot fill rate for the next 6 weekends (16 slots per day)</p>
+          <div id="overview-weekend-capacity">Loading...</div>
+        </div>
+      </div>
+
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -270,6 +295,33 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ── TODAY TAB ──────────────────────────────────── -->
+    <div id="tab-today" class="p-8" style="display:none">
+      <!-- Run Sheet -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">🗓️ Today's Run Sheet</h2>
+            <p class="text-gray-400 text-sm" id="today-date-label"></p>
+          </div>
+          <button onclick="loadToday()" class="btn-secondary py-2 px-4 text-sm">↻ Refresh</button>
+        </div>
+        <div id="today-runsheet">Loading...</div>
+      </div>
+      <!-- Allergy Alerts -->
+      <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 mb-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-amber-800 dark:text-amber-300 mb-1">⚠️ Dietary Alerts — Next 14 Days</h2>
+        <p class="text-amber-600 dark:text-amber-400 text-sm mb-4">Bookings with allergy or dietary notes</p>
+        <div id="today-allergy-alerts">Loading...</div>
+      </div>
+      <!-- Balances Due -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">💵 Balances Due</h2>
+        <p class="text-gray-400 text-sm mb-4">Confirmed bookings with outstanding payment</p>
+        <div id="today-balances-due">Loading...</div>
       </div>
     </div>
   </div>
@@ -511,6 +563,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=15"></script>
+<script src="admin.js?v=16"></script>
 </body>
 </html>

@@ -81,13 +81,13 @@ function showTab(tab) {
   if (navBtn) navBtn.classList.add('active');
 
   // Show/hide tab panels
-  ['overview','bookings','payments','customers'].forEach(t => {
+  ['overview','bookings','payments','customers','today'].forEach(t => {
     const el = document.getElementById('tab-' + t);
     if (el) el.style.display = t === tab ? 'block' : 'none';
   });
 
   // Page title
-  const titles = { overview: 'Overview', bookings: 'Bookings', payments: 'Payments', customers: 'Customers' };
+  const titles = { overview: 'Overview', bookings: 'Bookings', payments: 'Payments', customers: 'Customers', today: "Today's Schedule" };
   document.getElementById('pageTitle').textContent = titles[tab] || tab;
 
   // Reset search box for the new tab with a relevant placeholder
@@ -99,6 +99,7 @@ function showTab(tab) {
       bookings: 'Search ref, email, room...',
       payments: 'Search ref, email, cardholder...',
       customers: 'Search name, email, phone...',
+      today: 'Search...',
     };
     searchEl.placeholder = placeholders[tab] || 'Search...';
   }
@@ -108,6 +109,7 @@ function showTab(tab) {
   if (tab === 'bookings')   loadBookings();
   if (tab === 'payments')   loadPayments();
   if (tab === 'customers')  loadCustomers();
+  if (tab === 'today')      loadToday();
 }
 
 function refreshCurrentTab() { showTab(currentTab); }
@@ -131,6 +133,10 @@ async function loadOverview() {
   await loadOverviewBookingsList();
   await renderBookingsDotChart();
   await renderRoomPopularityChart();
+  loadMonthRevenue();
+  loadBalancesDueCount();
+  loadFoodPrep();
+  loadWeekendCapacity();
 }
 
 async function loadOverviewBookingsList(fromDate, toDate) {
@@ -707,6 +713,262 @@ async function renderRoomPopularityChart() {
       },
     },
   });
+}
+
+// ---------------------------------------------------------------------------
+// New overview sections: month revenue, balances count, food prep, weekend capacity
+// ---------------------------------------------------------------------------
+async function loadMonthRevenue() {
+  try {
+    const data = await callAPI('admin/month-revenue', null, 'GET');
+    document.getElementById('stat-month-revenue').textContent = '$' + parseFloat(data.thisMonth || 0).toFixed(2);
+    const last = parseFloat(data.lastMonth || 0);
+    const current = parseFloat(data.thisMonth || 0);
+    const vsEl = document.getElementById('stat-month-vs');
+    if (last > 0) {
+      const pct = ((current - last) / last * 100).toFixed(0);
+      vsEl.textContent = (pct >= 0 ? '▲' : '▼') + Math.abs(pct) + '% vs last month';
+      vsEl.className = 'text-xs font-semibold ml-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-400');
+    } else {
+      vsEl.textContent = '';
+    }
+    // Pending count note on upcoming stat card
+    if (data.pendingCount > 0) {
+      const el = document.getElementById('stat-cancelled-note');
+      if (el) el.textContent = (el.textContent ? el.textContent + ' · ' : '') + data.pendingCount + ' pending';
+    }
+  } catch (err) { console.error('month revenue load failed', err); }
+}
+
+async function loadBalancesDueCount() {
+  try {
+    const rows = await callAPI('admin/balances-due', null, 'GET');
+    document.getElementById('stat-balances-due').textContent = rows.length;
+  } catch (err) { console.error('balances count failed', err); }
+}
+
+async function loadFoodPrep() {
+  const el = document.getElementById('overview-food-prep');
+  if (!el) return;
+  try {
+    const rows = await callAPI('admin/food-prep', null, 'GET');
+    if (!rows.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No parties in the next 7 days.</p>'; return; }
+
+    // Tally totals
+    let nuggets = 0, burgers = 0;
+    const addonTotals = {};
+    rows.forEach(b => {
+      const fc = (b.foodChoice || '').toLowerCase();
+      const nugMatch = fc.match(/(\d+)\s*nugget/);
+      const burMatch = fc.match(/(\d+)\s*burger/);
+      if (nugMatch) nuggets += parseInt(nugMatch[1]);
+      if (burMatch) burgers += parseInt(burMatch[1]);
+      // Parse addons_summary: "Ham & Cheese Pizza ×1 ($25.00), ..."
+      if (b.addonsSummary) {
+        const parts = b.addonsSummary.split(',');
+        parts.forEach(part => {
+          const m = part.trim().match(/^(.+?)\s*×(\d+)/);
+          if (m) {
+            const name = m[1].trim();
+            const qty = parseInt(m[2]);
+            addonTotals[name] = (addonTotals[name] || 0) + qty;
+          }
+        });
+      }
+    });
+
+    let html = '<div class="space-y-2">';
+    if (nuggets > 0) html += `<div class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">🍗 Chicken Nuggets</span><span class="font-bold text-yellow-700 dark:text-yellow-400">${nuggets} servings</span></div>`;
+    if (burgers > 0) html += `<div class="flex items-center justify-between bg-orange-50 dark:bg-orange-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">🍔 Mini Burgers</span><span class="font-bold text-orange-700 dark:text-orange-400">${burgers} servings</span></div>`;
+    Object.entries(addonTotals).forEach(([name, qty]) => {
+      html += `<div class="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">➕ ${escapeHtml(name)}</span><span class="font-bold text-indigo-700 dark:text-indigo-400">×${qty}</span></div>`;
+    });
+    if (!nuggets && !burgers && !Object.keys(addonTotals).length) {
+      html += '<p class="text-gray-400 text-sm">No food choices recorded for upcoming parties.</p>';
+    }
+    html += `<div class="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">Across ${rows.length} party${rows.length === 1 ? '' : 'ies'} in the next 7 days</div>`;
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (err) { el.innerHTML = '<p class="text-red-400 text-sm">Failed to load.</p>'; }
+}
+
+async function loadWeekendCapacity() {
+  const el = document.getElementById('overview-weekend-capacity');
+  if (!el) return;
+  try {
+    const rows = await callAPI('admin/weekend-capacity', null, 'GET');
+    const byDate = {};
+    rows.forEach(r => { byDate[r.date.slice(0, 10)] = parseInt(r.booked); });
+
+    // Build next 6 weekends
+    const TOTAL_SLOTS = 16; // 4 rooms × 4 time slots
+    const days = [];
+    const today = new Date();
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) {
+        const iso = d.toISOString().slice(0, 10);
+        days.push({ iso, label: d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
+      }
+    }
+
+    if (!days.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No upcoming weekends found.</p>'; return; }
+
+    let html = '<div class="space-y-2.5">';
+    days.forEach(d => {
+      const pct = Math.round((d.booked / TOTAL_SLOTS) * 100);
+      const barColor = pct >= 100 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : pct >= 50 ? 'bg-indigo-500' : 'bg-teal';
+      html += `
+        <div>
+          <div class="flex items-center justify-between text-xs mb-1">
+            <span class="font-semibold text-gray-700 dark:text-gray-300">${d.label}</span>
+            <span class="text-gray-500">${d.booked}/${TOTAL_SLOTS} slots${pct >= 100 ? ' 🔴 Full' : ''}</span>
+          </div>
+          <div class="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div class="h-full ${barColor} rounded-full transition-all" style="width:${Math.min(pct,100)}%"></div>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  } catch (err) { el.innerHTML = '<p class="text-red-400 text-sm">Failed to load.</p>'; }
+}
+
+// ---------------------------------------------------------------------------
+// Today tab
+// ---------------------------------------------------------------------------
+async function loadToday() {
+  const dateLabel = document.getElementById('today-date-label');
+  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  await Promise.all([renderTodayRunSheet(), renderAllergyAlerts(), renderBalancesDue()]);
+}
+
+async function renderTodayRunSheet() {
+  const el = document.getElementById('today-runsheet');
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-400 text-sm py-4">Loading...</p>';
+  try {
+    const rows = await callAPI('admin/today', null, 'GET');
+    if (!rows.length) {
+      el.innerHTML = '<div class="text-center py-12"><div class="text-4xl mb-3">🎉</div><p class="text-gray-400">No parties scheduled for today.</p></div>';
+      return;
+    }
+    const SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4};
+    rows.sort((a, b) => (SLOT_ORDER[a.partyTime] || 9) - (SLOT_ORDER[b.partyTime] || 9));
+
+    el.innerHTML = rows.map(b => {
+      const name = escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—';
+      const balanceDue = parseFloat(b.totalAmount) - parseFloat(b.amountPaid);
+      const fullyPaid = balanceDue <= 0.005;
+      const allergyHtml = b.allergyNotes ? `
+        <div class="mt-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 flex items-start gap-2">
+          <span class="text-red-500 text-sm mt-0.5 flex-shrink-0">⚠️</span>
+          <div><span class="text-xs font-bold text-red-700 dark:text-red-300 uppercase">Dietary: </span><span class="text-sm text-red-800 dark:text-red-200">${escapeHtml(b.allergyNotes)}</span></div>
+        </div>` : '';
+      const addonsHtml = b.addonsSummary ? `<div class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">➕ ${escapeHtml(b.addonsSummary)}</div>` : '';
+
+      return `
+        <div class="border-2 border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-4 last:mb-0">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-sm px-3 py-1 rounded-full">${escapeHtml(b.partyTime)}</span>
+                <span class="font-display font-bold text-lg text-gray-900 dark:text-white">${b.roomEmoji || ''} ${escapeHtml(b.roomName)}</span>
+              </div>
+              <div class="text-sm text-gray-600 dark:text-gray-400">${name} · <strong>${b.guestCount} kids</strong></div>
+              <div class="text-sm font-semibold mt-1 text-gray-800 dark:text-gray-200">🍽️ ${escapeHtml(b.foodChoice) || '—'}</div>
+              ${addonsHtml}
+              ${allergyHtml}
+            </div>
+            <div class="text-right flex-shrink-0">
+              <div class="text-lg font-bold ${fullyPaid ? 'text-green-600' : 'text-amber-600'}">
+                ${fullyPaid ? '✅ Paid' : `⚠️ $${balanceDue.toFixed(2)} due`}
+              </div>
+              <div class="text-xs text-gray-400">Total $${parseFloat(b.totalAmount).toFixed(2)}</div>
+              <div class="text-xs text-gray-400 font-mono mt-1">${escapeHtml(b.bookingRef)}</div>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex gap-4 text-xs text-gray-400">
+            ${b.contactEmail ? `<span>✉️ ${escapeHtml(b.contactEmail)}</span>` : ''}
+            ${b.contactPhone ? `<span>📞 ${escapeHtml(b.contactPhone)}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = `<p class="text-red-400 text-sm">Failed to load run sheet: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function renderAllergyAlerts() {
+  const el = document.getElementById('today-allergy-alerts');
+  if (!el) return;
+  el.innerHTML = '<p class="text-amber-600 text-sm">Loading...</p>';
+  try {
+    const rows = await callAPI('admin/allergy-alerts', null, 'GET');
+    if (!rows.length) {
+      el.innerHTML = '<p class="text-amber-700 dark:text-amber-400 text-sm">✅ No dietary alerts in the next 14 days.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(b => {
+      const name = escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—';
+      return `
+        <div class="bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 mb-3 last:mb-0">
+          <div class="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">${b.roomEmoji || ''} ${escapeHtml(b.roomName)} · ${formatDate(b.partyDate)} @ ${escapeHtml(b.partyTime)}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">${name} · ${b.guestCount} kids</div>
+              <div class="mt-1.5 text-sm font-semibold text-red-700 dark:text-red-300">⚠️ ${escapeHtml(b.allergyNotes)}</div>
+            </div>
+            <span class="font-mono text-xs text-indigo-500">${escapeHtml(b.bookingRef)}</span>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = `<p class="text-red-400 text-sm">Failed to load.</p>`;
+  }
+}
+
+async function renderBalancesDue() {
+  const el = document.getElementById('today-balances-due');
+  if (!el) return;
+  el.innerHTML = '<p class="text-gray-400 text-sm">Loading...</p>';
+  try {
+    const rows = await callAPI('admin/balances-due', null, 'GET');
+    // Update stat card too
+    const statEl = document.getElementById('stat-balances-due');
+    if (statEl) statEl.textContent = rows.length;
+
+    if (!rows.length) {
+      el.innerHTML = '<p class="text-gray-400 text-sm">✅ No outstanding balances.</p>';
+      return;
+    }
+    const totalOwed = rows.reduce((s, r) => s + parseFloat(r.balanceDue), 0);
+    el.innerHTML = `
+      <div class="bg-amber-50 dark:bg-amber-900/20 rounded-xl px-4 py-3 mb-4 flex items-center justify-between">
+        <span class="text-sm font-semibold text-amber-800 dark:text-amber-300">${rows.length} booking${rows.length === 1 ? '' : 's'} with outstanding balance</span>
+        <span class="font-bold text-amber-700 dark:text-amber-400">$${totalOwed.toFixed(2)} total owed</span>
+      </div>` +
+    rows.map(b => {
+      const name = escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—';
+      return `
+        <div class="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-800 last:border-0">
+          <div>
+            <div class="font-semibold text-sm text-gray-900 dark:text-gray-100">${b.roomEmoji || ''} ${escapeHtml(b.roomName)} · ${formatDate(b.partyDate)}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">${name} · ${b.contactEmail ? escapeHtml(b.contactEmail) : ''}</div>
+          </div>
+          <div class="text-right ml-3 flex-shrink-0">
+            <div class="font-bold text-amber-600">$${parseFloat(b.balanceDue).toFixed(2)} due</div>
+            <div class="text-xs text-gray-400">of $${parseFloat(b.totalAmount).toFixed(2)} total</div>
+            <div class="text-xs font-mono text-indigo-500">${escapeHtml(b.bookingRef)}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    el.innerHTML = `<p class="text-red-400 text-sm">Failed to load.</p>`;
+  }
 }
 
 // ---------------------------------------------------------------------------
