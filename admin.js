@@ -339,7 +339,7 @@ function parseImportRow(row, colMap, index) {
   if (!matchedRoom) errors.push(`Room "${roomText}" not recognized`);
   if (!date) errors.push(`Date "${dateRaw}" could not be parsed`);
   if (!guests || guests < 1) errors.push('Missing/invalid guest count');
-  if (!['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'].includes(time)) errors.push(`Time "${get('time')}" not a valid slot`);
+  if (!time) errors.push('Missing time');
 
   return {
     index, firstName, lastName, email, phone, roomText, matchedRoom,
