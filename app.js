@@ -61,7 +61,7 @@ async function goToStep(n) {
   if (next) {
     next.style.display = 'block';
     next.classList.remove('step-enter-forward', 'step-enter-back');
-    void next.offsetWidth; // force reflow to restart animation
+    void next.offsetWidth;
     next.classList.add(direction === 'forward' ? 'step-enter-forward' : 'step-enter-back');
   }
 
@@ -215,7 +215,6 @@ function openBooking() {
     void box.offsetWidth;
     box.classList.add('modal-animate');
   }
-
   resetWizard();
 }
 
@@ -357,35 +356,29 @@ function launchConfetti() {
   const container = document.getElementById('confettiContainer');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#4F46E5','#0E9F6E','#F59E0B','#EC4899','#EF4444','#3B82F6','#8B5CF6','#F97316','#06B6D4'];
+  const colors = ['#4F46E5','#0E9F6E','#F59E0B','#EC4899','#EF4444','#3B82F6','#8B5CF6','#F97316'];
 
-  function spawnBatch(count, delayMs) {
+  [0, 450].forEach(delay => {
     setTimeout(() => {
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < 55; i++) {
         const piece = document.createElement('div');
-        const isRibbon = Math.random() > 0.62;
-        const size = 6 + Math.random() * 9;
+        const isRibbon = Math.random() > 0.6;
+        const size = 6 + Math.random() * 8;
         piece.style.cssText = `
           position:absolute;
           left:${Math.random() * 100}%;
-          top:${Math.random() * 12}%;
+          top:${Math.random() * 10}%;
           width:${isRibbon ? 4 : size}px;
-          height:${isRibbon ? (12 + Math.random() * 10) : size}px;
+          height:${isRibbon ? (12 + Math.random() * 8) : size}px;
           background:${colors[Math.floor(Math.random() * colors.length)]};
-          border-radius:${Math.random() > 0.42 ? '50%' : '2px'};
-          animation:confettiFall ${1.5 + Math.random() * 1.4}s ease-out ${i * 0.022}s forwards;
+          border-radius:${Math.random() > 0.4 ? '50%' : '2px'};
+          animation:confettiFall ${1.5 + Math.random() * 1.3}s ease-out ${i * 0.02}s forwards;
           transform:rotate(${Math.random() * 360}deg);
-          opacity:1;
         `;
         container.appendChild(piece);
       }
-    }, delayMs);
-  }
-
-  spawnBatch(72, 0);
-  spawnBatch(55, 360);
-  spawnBatch(38, 720);
-  spawnBatch(22, 1100);
+    }, delay);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
     dateInput.min = today;
   }
 
-  // Navbar glass scroll effect
   window.addEventListener('scroll', () => {
     const nav = document.querySelector('nav');
     if (nav) nav.classList.toggle('scrolled', window.scrollY > 20);

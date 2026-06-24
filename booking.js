@@ -222,7 +222,7 @@ function renderSlotsHtml(slots, unavailableSlots) {
     } else {
       const checkIcon = selected
         ? `<div class="mt-1.5"><svg viewBox="0 0 14 14" width="16" height="16" fill="none" class="mx-auto"><path d="M2 7l4 4 6-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`
-        : `<div class="mt-1.5 text-xs font-semibold text-green-600 bg-green-50 rounded-full px-2 py-0.5 inline-block">Available</div>`;
+        : '';
       html += `
         <div class="${cls}" onclick="selectTime('${slot}', this)">
           <div class="font-display font-bold text-base">${slot}</div>

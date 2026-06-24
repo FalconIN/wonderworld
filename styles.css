@@ -322,10 +322,6 @@ html.dark .modal-box .border-gray-200 { border-color: var(--dk-bg3); }
 html.dark .modal-box .border-gray-100 { border-color: var(--dk-bg2); }
 html.dark .ab-card { background: var(--dk-bg2) !important; border-color: var(--dk-bg3) !important; color: var(--dk-text1); }
 
-/* ═══════════════════════════════════════════════════════════
-   PREMIUM UI/UX — micro-interactions, spring animations, celebration
-═══════════════════════════════════════════════════════════ */
-
 /* ── Directional step transitions ────────────────────────────── */
 .step-enter-forward { animation: stepSlideInRight .38s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .step-enter-back    { animation: stepSlideInLeft  .38s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -431,13 +427,7 @@ html.dark .ab-card { background: var(--dk-bg2) !important; border-color: var(--d
 
 /* ── Step indicator enhancements ─────────────────────────────── */
 .step-dot { transition: all .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.step-dot.active { animation: dotPulseWave 2s ease infinite; }
-.step-dot.done   { animation: dotPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-@keyframes dotPulseWave {
-  0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0.5), inset 0 1px 0 rgba(255,255,255,0.3); }
-  65%  { box-shadow: 0 0 0 9px rgba(59,130,246,0), inset 0 1px 0 rgba(255,255,255,0.3); }
-  100% { box-shadow: 0 0 0 0 rgba(59,130,246,0), inset 0 1px 0 rgba(255,255,255,0.3); }
-}
+.step-dot.done { animation: dotPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 @keyframes dotPop {
   0%   { transform: scale(0.55); }
   55%  { transform: scale(1.28); }
@@ -452,25 +442,6 @@ html.dark .ab-card { background: var(--dk-bg2) !important; border-color: var(--d
   to   { opacity: 1; transform: translateY(0)    scale(1);     }
 }
 .modal-animate { animation: modalSlideUp .44s cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-/* ── Hero floating elements ──────────────────────────────────── */
-@keyframes floatA {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50%       { transform: translateY(-18px) rotate(12deg); }
-}
-@keyframes floatB {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50%       { transform: translateY(-14px) rotate(-9deg); }
-}
-@keyframes floatC {
-  0%, 100% { transform: translateY(0); }
-  38%       { transform: translateY(-12px) rotate(7deg); }
-  72%       { transform: translateY(-6px) rotate(-5deg); }
-}
-.float-a { animation: floatA 3.8s ease-in-out infinite; }
-.float-b { animation: floatB 4.4s ease-in-out infinite 0.6s; }
-.float-c { animation: floatC 5.2s ease-in-out infinite 1.2s; }
-.float-d { animation: floatA 4.7s ease-in-out infinite 1.9s; }
 
 /* ── Celebration screen ──────────────────────────────────────── */
 .celebration-ring {
@@ -508,20 +479,8 @@ html.dark .ab-card { background: var(--dk-bg2) !important; border-color: var(--d
   to   { opacity: 1; transform: translateY(0);    }
 }
 
-/* Booking ref shimmer pulse */
-@keyframes refPulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.7; letter-spacing: 0.1em; }
-}
-.ref-pulse { animation: refPulse 2.5s ease infinite 1.2s; display: inline-block; }
-
 /* ── Selected room checkmark badge ───────────────────────────── */
-@keyframes checkBadgePop {
-  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
-  65%  { transform: scale(1.22) rotate(5deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-.room-check-badge { animation: checkBadgePop .4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.room-check-badge { animation: dotPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
 /* ── Navbar scroll glass effect ──────────────────────────────── */
 nav.scrolled {
