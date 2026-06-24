@@ -67,7 +67,11 @@ let slotSubscription = null;
 // ---------------------------------------------------------------------------
 function adjustGuests(delta) {
   state.guests = Math.max(1, Math.min(24, state.guests + delta));
-  document.getElementById('guestCount').textContent = state.guests;
+  const el = document.getElementById('guestCount');
+  el.textContent = state.guests;
+  el.classList.remove('count-bounce');
+  void el.offsetWidth;
+  el.classList.add('count-bounce');
   renderRooms();
 }
 
@@ -104,10 +108,16 @@ function buildRoomCard(room, dimmed) {
   const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
   const selClass = selected ? 'room-card selected' : 'room-card';
 
+  const checkBadge = selected ? `
+    <div class="room-check-badge absolute top-3 right-3 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
+      <svg viewBox="0 0 12 12" width="11" height="11" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>` : '';
+
   return `
     <div class="${selClass} ${dimClass} p-4" onclick="selectRoom('${room.id}')">
+      ${checkBadge}
       <div class="flex items-start gap-3">
-        <div class="w-11 h-11 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white">${room.emoji}</div>
+        <div class="w-11 h-11 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white shadow-sm">${room.emoji}</div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap mb-0.5">
             <span class="font-display font-bold text-base leading-tight">${room.name}</span>
@@ -116,7 +126,7 @@ function buildRoomCard(room, dimmed) {
           <div class="text-xs text-gray-400 leading-snug">${room.minGuests}–${room.maxGuests} kids · ${room.tagLine}</div>
           <div class="flex items-center justify-between mt-1.5 flex-wrap gap-1">
             <div class="${c.text} font-display font-bold text-sm">$${room.basePricePerChild}/child</div>
-            ${selected ? '<div class="text-indigo-500 text-xs font-semibold">✓ Selected</div>' : ''}
+            ${selected ? '<div class="text-blue-500 text-xs font-semibold flex items-center gap-1">✓ Selected</div>' : ''}
           </div>
         </div>
       </div>
@@ -203,9 +213,22 @@ function renderSlotsHtml(slots, unavailableSlots) {
     if (unavail)  cls += ' unavailable';
     if (selected) cls += ' selected';
     if (unavail) {
-      html += `<div class="${cls}"><div class="font-semibold">${slot}</div><div class="text-xs opacity-60">– ${ends?.one || ''}</div><div class="text-xs text-gray-400 mt-0.5">Full</div></div>`;
+      html += `
+        <div class="${cls}">
+          <div class="font-display font-bold text-base">${slot}</div>
+          <div class="text-xs opacity-60 mt-0.5">– ${ends?.one || ''}</div>
+          <div class="mt-1.5 text-xs font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 inline-block">Full</div>
+        </div>`;
     } else {
-      html += `<div class="${cls}" onclick="selectTime('${slot}', this)"><div class="font-semibold">${slot}</div><div class="text-xs opacity-75">– ${ends?.one || ''}</div></div>`;
+      const checkIcon = selected
+        ? `<div class="mt-1.5"><svg viewBox="0 0 14 14" width="16" height="16" fill="none" class="mx-auto"><path d="M2 7l4 4 6-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`
+        : `<div class="mt-1.5 text-xs font-semibold text-green-600 bg-green-50 rounded-full px-2 py-0.5 inline-block">Available</div>`;
+      html += `
+        <div class="${cls}" onclick="selectTime('${slot}', this)">
+          <div class="font-display font-bold text-base">${slot}</div>
+          <div class="text-xs opacity-70 mt-0.5">– ${ends?.one || ''}</div>
+          ${checkIcon}
+        </div>`;
     }
   });
   grid.innerHTML = html;

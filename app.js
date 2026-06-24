@@ -50,13 +50,20 @@ async function goToStep(n) {
     if (!await validateStep(state.currentStep)) return;
   }
 
+  const direction = n >= state.currentStep ? 'forward' : 'back';
+
   const prev = document.getElementById(`step${state.currentStep}`);
   if (prev) prev.style.display = 'none';
 
   state.currentStep = n;
 
   const next = document.getElementById(`step${n}`);
-  if (next) next.style.display = 'block';
+  if (next) {
+    next.style.display = 'block';
+    next.classList.remove('step-enter-forward', 'step-enter-back');
+    void next.offsetWidth; // force reflow to restart animation
+    next.classList.add(direction === 'forward' ? 'step-enter-forward' : 'step-enter-back');
+  }
 
   renderStepIndicator(n);
 
@@ -106,8 +113,10 @@ function renderStepIndicator(activeStep) {
     let cls = 'pending';
     if (i < activeStep) cls = 'done';
     if (i === activeStep) cls = 'active';
-    const icon = cls === 'done' ? '✓' : i;
-    html += `<div class="step-dot ${cls}">${icon}</div>`;
+    const icon = cls === 'done'
+      ? `<svg viewBox="0 0 14 14" width="13" height="13" fill="none"><path d="M2 7l4 4 6-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : i;
+    html += `<div class="step-dot ${cls}" title="${steps[i-1]}">${icon}</div>`;
     if (i < 5) html += `<div class="step-line ${i < activeStep ? 'done' : ''}"></div>`;
   }
   el.innerHTML = html;
@@ -199,6 +208,14 @@ function openBooking() {
   const overlay = document.getElementById('bookingOverlay');
   if (overlay) overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+
+  const box = document.getElementById('bookingBox');
+  if (box) {
+    box.classList.remove('modal-animate');
+    void box.offsetWidth;
+    box.classList.add('modal-animate');
+  }
+
   resetWizard();
 }
 
@@ -340,23 +357,35 @@ function launchConfetti() {
   const container = document.getElementById('confettiContainer');
   if (!container) return;
   container.innerHTML = '';
-  const colors = ['#4F46E5','#0E9F6E','#F59E0B','#EC4899','#EF4444','#3B82F6'];
-  for (let i = 0; i < 55; i++) {
-    const piece = document.createElement('div');
-    piece.className = 'confetti-piece';
-    piece.style.cssText = `
-      left: ${Math.random() * 100}%;
-      top: ${Math.random() * 30}%;
-      background: ${colors[Math.floor(Math.random() * colors.length)]};
-      animation-delay: ${Math.random() * 1.2}s;
-      animation-duration: ${1.2 + Math.random()}s;
-      transform: rotate(${Math.random() * 360}deg);
-      width: ${6 + Math.random() * 8}px;
-      height: ${6 + Math.random() * 8}px;
-      border-radius: ${Math.random() > .5 ? '50%' : '2px'};
-    `;
-    container.appendChild(piece);
+  const colors = ['#4F46E5','#0E9F6E','#F59E0B','#EC4899','#EF4444','#3B82F6','#8B5CF6','#F97316','#06B6D4'];
+
+  function spawnBatch(count, delayMs) {
+    setTimeout(() => {
+      for (let i = 0; i < count; i++) {
+        const piece = document.createElement('div');
+        const isRibbon = Math.random() > 0.62;
+        const size = 6 + Math.random() * 9;
+        piece.style.cssText = `
+          position:absolute;
+          left:${Math.random() * 100}%;
+          top:${Math.random() * 12}%;
+          width:${isRibbon ? 4 : size}px;
+          height:${isRibbon ? (12 + Math.random() * 10) : size}px;
+          background:${colors[Math.floor(Math.random() * colors.length)]};
+          border-radius:${Math.random() > 0.42 ? '50%' : '2px'};
+          animation:confettiFall ${1.5 + Math.random() * 1.4}s ease-out ${i * 0.022}s forwards;
+          transform:rotate(${Math.random() * 360}deg);
+          opacity:1;
+        `;
+        container.appendChild(piece);
+      }
+    }, delayMs);
   }
+
+  spawnBatch(72, 0);
+  spawnBatch(55, 360);
+  spawnBatch(38, 720);
+  spawnBatch(22, 1100);
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +485,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const today = new Date().toISOString().split('T')[0];
     dateInput.min = today;
   }
+
+  // Navbar glass scroll effect
+  window.addEventListener('scroll', () => {
+    const nav = document.querySelector('nav');
+    if (nav) nav.classList.toggle('scrolled', window.scrollY > 20);
+  }, { passive: true });
 });
 
 // ---------------------------------------------------------------------------
