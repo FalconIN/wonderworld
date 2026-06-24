@@ -7,11 +7,11 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Fredoka:wght@600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="styles.css" />
 
-<!-- Firebase JS v9 compat (drop-in for v8-style SDK) -->
+<!-- Firebase JS v9 compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
@@ -23,6 +23,11 @@
     theme: {
       extend: {
         colors: {
+          ink:      '#111010',
+          cream:    '#FDFAF4',
+          zap:      '#F6EB00',
+          punch:    '#FF3B6B',
+          steel:    '#EEEDE8',
           teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5', dark: '#065F46' },
           indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF', dark: '#1e3a8a' },
           blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
@@ -31,8 +36,8 @@
           offwhite: '#EFF6FF',
         },
         fontFamily: {
-          display: ['Fredoka', 'sans-serif'],
-          body:    ['Nunito', 'sans-serif'],
+          display: ['Syne', 'sans-serif'],
+          body:    ['DM Sans', 'sans-serif'],
         },
         borderRadius: { '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem' },
         boxShadow: {
@@ -45,12 +50,11 @@
     },
   };
 </script>
-
 </head>
 <body>
 
 <!-- ── PIN GATE ─────────────────────────────────────────── -->
-<div id="pinGateOverlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1e1b4b,#0E9F6E);display:flex;align-items:center;justify-content:center;padding:20px;">
+<div id="pinGateOverlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#111010,#FF3B6B);display:flex;align-items:center;justify-content:center;padding:20px;">
   <div style="background:white;border-radius:24px;padding:40px 32px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.4);">
     <img src="wwmascot-64.png" alt="Wonder World" style="width:56px;height:56px;border-radius:14px;margin:0 auto 16px;image-rendering:pixelated;" />
     <h1 style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#111827;margin-bottom:6px;">Wonder World Westgate</h1>
@@ -58,7 +62,7 @@
     <input id="pinGateInput" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off"
       style="width:100%;text-align:center;font-size:32px;letter-spacing:12px;font-weight:700;padding:14px;border:2px solid #E5E7EB;border-radius:14px;outline:none;font-family:'Fredoka',sans-serif;color:#111827;" />
     <div id="pinGateError" style="color:#EF4444;font-size:13px;margin-top:10px;display:none;">Incorrect PIN, try again.</div>
-    <button onclick="checkPinGate()" style="margin-top:18px;width:100%;background:linear-gradient(135deg,#4F46E5,#4338CA);color:white;font-weight:700;font-size:16px;border:none;border-radius:14px;padding:14px;cursor:pointer;font-family:'Fredoka',sans-serif;">Enter</button>
+    <button onclick="checkPinGate()" style="margin-top:18px;width:100%;background:linear-gradient(135deg,#FF3B6B,#d42a58);color:white;font-weight:700;font-size:16px;border:none;border-radius:14px;padding:14px;cursor:pointer;font-family:'Fredoka',sans-serif;">Enter</button>
   </div>
 </div>
 <script>
@@ -99,509 +103,505 @@
   })();
 </script>
 
-<!-- ── NAVBAR ───────────────────────────────────────────── -->
+<!-- ── NAVBAR ── -->
 <nav>
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-2">
-      <img src="wwmascot-64.png" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" style="image-rendering:pixelated" />
-      <span class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></span>
+    <a href="/" class="ww-logo">
+      <img src="wwmascot-64.png" alt="" class="w-8 h-8 rounded-lg" style="image-rendering:pixelated"/>
+      Wonder World&nbsp;<em>Westgate</em>
+    </a>
+    <div class="hidden md:flex items-center gap-7 text-sm font-medium" style="color:rgba(17,16,16,0.55)">
+      <a href="#about" class="hover:text-black transition-colors" style="color:inherit">About</a>
+      <a href="#rooms" class="hover:text-black transition-colors" style="color:inherit">Party Rooms</a>
+      <a href="#menu" class="hover:text-black transition-colors" style="color:inherit">Menu</a>
+      <a href="#rules" class="hover:text-black transition-colors" style="color:inherit">Rules</a>
+      <a href="#hours" class="hover:text-black transition-colors" style="color:inherit">Hours</a>
+      <a href="#faq" class="hover:text-black transition-colors" style="color:inherit">FAQs</a>
     </div>
-    <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
-      <a href="#about" class="hover:text-indigo-500 transition-colors">About</a>
-      <a href="#rooms" class="hover:text-indigo-500 transition-colors">Party Rooms</a>
-      <a href="#menu" class="hover:text-indigo-500 transition-colors">Menu</a>
-      <a href="#rules" class="hover:text-indigo-500 transition-colors">Rules</a>
-      <a href="#hours" class="hover:text-indigo-500 transition-colors">Hours</a>
-      <a href="#faq" class="hover:text-indigo-500 transition-colors">FAQs</a>
-    </div>
-    <div class="flex items-center gap-3">
-      <div id="navAuthArea">
-        <a href="/login" class="text-sm font-semibold text-gray-600 hover:text-indigo-500 transition-colors mr-2 hidden md:inline">Sign In</a>
-        <button onclick="openBooking()" class="btn-primary text-sm py-2.5 px-5">Book a Party</button>
-      </div>
+    <div id="navAuthArea" class="flex items-center gap-3">
+      <a href="/login" class="text-sm font-semibold hidden md:inline hover:opacity-50 transition-opacity" style="color:var(--ink)">Sign In</a>
+      <button onclick="openBooking()" class="ww-btn-punch">Book a Party</button>
     </div>
   </div>
 </nav>
 
-<!-- ── HERO ──────────────────────────────────────────────── -->
-<section class="hero-bg relative overflow-hidden">
-  <div class="max-w-6xl mx-auto px-5 py-20 md:py-28 flex flex-col md:flex-row items-center gap-12 relative z-10">
-    <div class="flex-1 text-center md:text-left">
-      <div class="inline-block bg-white/15 text-white text-sm font-bold rounded-full px-4 py-1.5 mb-5 backdrop-blur-md border border-white/20">Auckland's Favourite Indoor Play Centre</div>
-      <h1 class="font-display font-bold text-5xl md:text-6xl text-white leading-tight mb-5">
-        The Birthday Party<br/>They'll <span class="text-orange-300">Never Forget</span>
-      </h1>
-      <p class="text-white/90 text-lg md:text-xl leading-relaxed mb-8 max-w-lg font-body">
-        Epic play, incredible food, and zero stress for you. Wonder World Westgate has dedicated party rooms, dedicated staff, and everything sorted — so you can actually enjoy the day too.
-      </p>
-      <div class="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-        <button onclick="openBooking()" class="btn-primary text-lg py-4 px-8">
-          Book a Party Room
-        </button>
-        <button onclick="openBooking()" class="font-display font-bold text-lg bg-white/15 hover:bg-white/25 text-white border-2 border-white/30 rounded-2xl py-4 px-8 transition-all backdrop-blur-sm">
-          General Admission
-        </button>
-      </div>
-      <div class="mt-8 flex items-center gap-6 justify-center md:justify-start text-white/85 text-sm font-semibold">
-        <div class="flex items-center gap-2"><span class="text-yellow-300">★</span> <span><strong class="text-white">4.9</strong> on Google</span></div>
-        <div class="w-px h-4 bg-white/30"></div>
-        <div>Westgate, Auckland</div>
-        <div class="w-px h-4 bg-white/30 hidden sm:block"></div>
-        <div class="hidden sm:block">Open 7 days</div>
-      </div>
+<!-- ── HERO ── -->
+<section class="ww-hero">
+  <div class="ww-hero-left">
+    <p class="ww-eyebrow">Westgate · Auckland · Open 7 Days</p>
+    <h1 class="ww-hero-h1">Big fun.<br/><em>Zero stress.</em></h1>
+    <p class="ww-hero-sub">Dedicated party rooms, real kids' food, and your own host on the day — so you can stop organising and actually enjoy the party.</p>
+    <div class="ww-hero-actions">
+      <button onclick="openBooking()" class="ww-btn-punch ww-btn-lg">Book a Party Room</button>
+      <button onclick="openBooking()" class="ww-btn-ghost ww-btn-lg">General Admission</button>
     </div>
-    <div class="flex-1 flex items-center justify-center">
-      <a href="https://www.google.com/maps/search/T2+%26+3,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814" target="_blank" rel="noopener noreferrer" class="relative w-72 h-72 md:w-96 md:h-96 block group">
-        <div class="absolute inset-0 rounded-full bg-white/10 backdrop-blur-sm border-2 border-white/20"></div>
-        <div class="absolute inset-6 rounded-full overflow-hidden border border-white/15 shadow-2xl">
-          <iframe
-            src="https://www.google.com/maps?q=T2+%263,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814&output=embed"
-            class="w-full h-full"
-            style="border:0; filter: saturate(1.1); pointer-events:none;"
-            loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"
-            title="Wonder World Westgate location map"
-          ></iframe>
-          <div class="absolute inset-0 bg-indigo-900/0 group-hover:bg-indigo-900/10 transition-colors flex items-end justify-center pb-4">
-            <div class="bg-white text-gray-900 font-display font-bold text-sm rounded-full px-4 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
-              📍 Open in Google Maps
-            </div>
-          </div>
-        </div>
-        <div class="absolute -top-3 -right-3 bg-amber-400 text-gray-900 font-display font-bold text-sm rounded-2xl px-3 py-2 shadow-lg rotate-3 pointer-events-none">
-          Find Us! 📍
-        </div>
-        <div class="absolute -bottom-3 -left-3 bg-white text-gray-800 font-semibold text-xs rounded-xl px-3 py-2 shadow-lg -rotate-2 pointer-events-none">
-          Westgate, Auckland
-        </div>
-      </a>
+    <div class="ww-hero-trust">
+      <strong>★★★★★ 4.9</strong>&nbsp;on Google
+      <span class="ww-dot">·</span>
+      Auckland's favourite indoor play centre
     </div>
   </div>
-  <div class="absolute bottom-0 left-0 right-0 overflow-hidden leading-none z-10">
-    <svg viewBox="0 0 1440 60" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="display:block;width:100%;height:60px;">
-      <path d="M0,40 C360,80 1080,0 1440,40 L1440,60 L0,60 Z" fill="#EFF6FF"/>
-    </svg>
+  <div class="ww-hero-right">
+    <div class="ww-price-block">
+      <span class="ww-price-label">Parties from</span>
+      <span class="ww-price-num">$39</span>
+      <span class="ww-price-sub">per child</span>
+    </div>
+    <div class="ww-hero-stats">
+      <div class="ww-stat"><strong>4</strong> exclusive party rooms</div>
+      <div class="ww-stat"><strong>90</strong> min party sessions</div>
+      <div class="ww-stat"><strong>1</strong> dedicated host, just for you</div>
+    </div>
+    <a href="https://www.google.com/maps/search/T2+%26+3,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814" target="_blank" rel="noopener noreferrer" class="ww-address-link">
+      📍 33/47 Northside Drive, Westgate
+    </a>
   </div>
 </section>
 
-<!-- ── ABOUT ─────────────────────────────────────────────── -->
-<section id="about" class="py-16 bg-offwhite">
-  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Why Families Love Wonder World</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto font-body">We've thought of everything — so the only thing on your to-do list is showing up and celebrating.</p>
+<!-- Wave: ink → cream -->
+<div class="ww-wave" style="background:var(--ink)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,20 C320,70 1120,0 1440,50 L1440,70 L0,70 Z" fill="#FDFAF4"/>
+  </svg>
+</div>
+
+<!-- ── ABOUT ── -->
+<section id="about" class="ww-about">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Why families love Wonder World</h2>
+    <p class="ww-section-lead">Everything sorted — so the only thing on your to-do list is showing up and celebrating.</p>
+  </div>
+  <div class="ww-about-grid">
+    <div class="ww-about-card">
+      <div class="ww-about-num">4<em>+</em></div>
+      <h3>Exclusive Party Rooms</h3>
+      <p>From cosy 8-guest rooms to our epic Big Room for up to 24 kids — every space decorated and ready to go.</p>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
-        <div class="w-16 h-16 rounded-2xl bg-blue-light border-2 border-blue-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
-          <svg class="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-xl mb-2 text-gray-900">4 Exclusive Party Rooms</h3>
-        <p class="text-gray-500 text-sm leading-relaxed font-body">From cosy 8-guest rooms to our epic Big Room that fits up to 24 kids. Every space is decorated and ready to go.</p>
-      </div>
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
-        <div class="w-16 h-16 rounded-2xl bg-orange-50 border-2 border-orange-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
-          <svg class="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-xl mb-2 text-gray-900">Real Kids' Food</h3>
-        <p class="text-gray-500 text-sm leading-relaxed font-body">Choose from nuggets or mini burgers — all freshly prepared daily. Fries and blackcurrant drinks included. Outside birthday cake is welcome!</p>
-      </div>
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
-        <div class="w-16 h-16 rounded-2xl bg-teal-light border-2 border-green-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
-          <svg class="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        </div>
-        <h3 class="font-display font-bold text-xl mb-2 text-gray-900">Your Own Party Host</h3>
-        <p class="text-gray-500 text-sm leading-relaxed font-body">A dedicated Wonder World team member runs the show so you're free to mingle, take photos, and actually relax.</p>
-      </div>
+    <div class="ww-about-card">
+      <div class="ww-about-num">1</div>
+      <h3>Dedicated Host</h3>
+      <p>A Wonder World team member runs the show on the day, so you're free to mingle, take photos, and actually relax.</p>
+    </div>
+    <div class="ww-about-card">
+      <div class="ww-about-num">0</div>
+      <h3>Outside Food Stress</h3>
+      <p>Real, freshly made food included — nuggets or mini burgers, fries, and drinks. Your birthday cake is always welcome.</p>
     </div>
   </div>
 </section>
 
-<!-- ── PARTY ROOMS ────────────────────────────────────────── -->
-<section id="rooms" class="py-16 bg-white">
-  <div class="max-w-6xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Choose Your Room</h2>
-      <p class="text-gray-500 text-lg">Pick the perfect space for your crew size and budget.</p>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="rounded-3xl overflow-hidden border-2 border-indigo-light shadow-soft hover:shadow-card transition-all hover:-translate-y-1 bg-gradient-to-br from-indigo-light to-white">
-        <div class="p-7">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center text-2xl">🌟</div>
-            <div>
-              <div class="font-display font-bold text-xl text-gray-900">The Big Room</div>
-              <div class="text-xs font-semibold text-indigo-500 uppercase tracking-wide">Exclusive Extra Large Zone</div>
-            </div>
-            <span class="ml-auto bg-amber-400 text-gray-900 text-xs font-bold rounded-full px-3 py-1">POPULAR</span>
-          </div>
-          <div class="flex gap-4 mb-4">
-            <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
-              <div class="font-display font-bold text-2xl text-indigo-500">12–24</div>
-              <div class="text-xs text-gray-500 mt-0.5">Kids min 12</div>
-            </div>
-            <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
-              <div class="font-display font-bold text-2xl text-indigo-500">$39+</div>
-              <div class="text-xs text-gray-500 mt-0.5">Per child</div>
-            </div>
-            <div class="bg-white rounded-xl p-3 text-center flex-1 shadow-sm">
-              <div class="font-display font-bold text-2xl text-indigo-500">90 min</div>
-              <div class="text-xs text-gray-500 mt-0.5">Party room</div>
-            </div>
-          </div>
-          <p class="text-gray-500 text-sm mb-5">Our largest and most spectacular space — perfect for big friend groups. Includes playground entry ($26.80 value), 90 min party room access, 15 min early setup entry, and choice of food & snacks.</p>
-          <button onclick="openBooking()" class="btn-primary w-full py-3 text-base">Book The Big Room →</button>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 gap-4">
-        <div class="rounded-2xl border-2 border-yellow-100 bg-yellow-50 p-5 flex items-center gap-4 hover:shadow-card transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openBooking()">
-          <div class="w-12 h-12 rounded-xl bg-yellow-400 flex items-center justify-center text-2xl flex-shrink-0">☀️</div>
-          <div class="flex-1">
-            <div class="font-display font-bold text-lg">Sunshine Room <span class="text-yellow-600 text-sm font-normal">(Yellow)</span></div>
-            <div class="text-xs text-gray-500">Min 8 kids · Bright & cheerful</div>
-          </div>
-          <div class="text-right">
-            <div class="font-display font-bold text-lg text-yellow-600">$39/child</div>
-            <div class="text-xs text-gray-400">base rate</div>
-          </div>
-        </div>
-        <div class="rounded-2xl border-2 border-purple-100 bg-purple-50 p-5 flex items-center gap-4 hover:shadow-card transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openBooking()">
-          <div class="w-12 h-12 rounded-xl bg-purple-400 flex items-center justify-center text-2xl flex-shrink-0">🌙</div>
-          <div class="flex-1">
-            <div class="font-display font-bold text-lg">Dream Room <span class="text-purple-600 text-sm font-normal">(Purple)</span></div>
-            <div class="text-xs text-gray-500">Min 8 kids · Magical & dreamy</div>
-          </div>
-          <div class="text-right">
-            <div class="font-display font-bold text-lg text-purple-600">$39/child</div>
-            <div class="text-xs text-gray-400">base rate</div>
-          </div>
-        </div>
-        <div class="rounded-2xl border-2 border-green-100 bg-green-50 p-5 flex items-center gap-4 hover:shadow-card transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openBooking()">
-          <div class="w-12 h-12 rounded-xl bg-green-400 flex items-center justify-center text-2xl flex-shrink-0">🌿</div>
-          <div class="flex-1">
-            <div class="font-display font-bold text-lg">Wonder Forest Room <span class="text-green-600 text-sm font-normal">(Green)</span></div>
-            <div class="text-xs text-gray-500">Min 8 kids · Nature adventure</div>
-          </div>
-          <div class="text-right">
-            <div class="font-display font-bold text-lg text-green-600">$39/child</div>
-            <div class="text-xs text-gray-400">base rate</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="mt-8 bg-blue-light border-2 border-blue-200 rounded-2xl p-5 text-sm text-blue-900 flex flex-wrap gap-6 justify-center text-center font-body" style="box-shadow:0 4px 14px rgba(30,58,138,0.08);">
-      <div><strong class="font-display">Booking Times</strong><br/>9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</div>
-      <div class="w-px bg-blue-200 hidden md:block"></div>
-      <div><strong class="font-display">Outside Cake</strong><br/>Welcome — bring your own!</div>
-      <div class="w-px bg-blue-200 hidden md:block"></div>
-      <div><strong class="font-display">Allergies</strong><br/>Please inform us in advance</div>
-      <div class="w-px bg-blue-200 hidden md:block"></div>
-      <div><strong class="font-display">Extra Kids</strong><br/>Charged at package rate</div>
-    </div>
+<!-- Wave: cream → ink -->
+<div class="ww-wave" style="background:var(--cream)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,50 C320,0 1120,70 1440,20 L1440,70 L0,70 Z" fill="#111010"/>
+  </svg>
+</div>
 
-    <div class="mt-6 bg-red-600 text-white rounded-2xl p-5 flex items-center gap-4 shadow-lg">
-      <span class="text-4xl flex-shrink-0">🚫</span>
+<!-- ── PARTY ROOMS ── -->
+<section id="rooms" class="ww-rooms">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Choose your room.</h2>
+    <p class="ww-section-lead">Pick the perfect space for your crew size and budget.</p>
+  </div>
+  <div class="ww-rooms-grid">
+
+    <!-- Big Room -->
+    <div class="ww-room-card featured accent-zap">
       <div>
-        <div class="font-display font-bold text-xl">NO OUTSIDE FOOD OR DRINKS ALLOWED</div>
-        <div class="text-sm text-red-100 mt-0.5">For the safety and cleanliness of our play area. Water bottles are permitted.</div>
+        <h3 class="ww-room-name">The Big Room <span class="ww-room-tag">Popular</span></h3>
+        <p class="ww-room-detail">Our largest space — perfect for big friend groups</p>
+      </div>
+      <div class="ww-room-stats">
+        <div>
+          <div class="ww-room-stat-val">12–24</div>
+          <div class="ww-room-stat-label">kids</div>
+        </div>
+        <div>
+          <div class="ww-room-stat-val">$39<span style="font-size:1rem">+</span></div>
+          <div class="ww-room-stat-label">per child</div>
+        </div>
+        <div>
+          <div class="ww-room-stat-val">90 min</div>
+          <div class="ww-room-stat-label">session</div>
+        </div>
+      </div>
+      <p class="ww-room-desc">Includes playground entry ($26.80 value), 15 min early setup, and choice of food and snacks.</p>
+      <div class="ww-room-cta">
+        <button onclick="openBooking()" class="ww-btn-punch">Book The Big Room →</button>
       </div>
     </div>
-    <div class="mt-8 text-center">
-      <button onclick="openBooking()" class="btn-primary text-lg py-4 px-10">Start Booking — It's Quick & Easy</button>
+
+    <!-- Sunshine Room -->
+    <div class="ww-room-card accent-zap" onclick="openBooking()" style="cursor:pointer">
+      <h3 class="ww-room-name">Sunshine Room</h3>
+      <p class="ww-room-detail">Yellow · Bright & cheerful</p>
+      <div class="ww-room-stats">
+        <div>
+          <div class="ww-room-stat-val">Min 8</div>
+          <div class="ww-room-stat-label">kids</div>
+        </div>
+        <div>
+          <div class="ww-room-stat-val">$39</div>
+          <div class="ww-room-stat-label">per child</div>
+        </div>
+      </div>
+      <div class="ww-room-cta">
+        <button onclick="event.stopPropagation();openBooking()" class="ww-btn-punch">Book →</button>
+      </div>
+    </div>
+
+    <!-- Dream Room -->
+    <div class="ww-room-card accent-purple" onclick="openBooking()" style="cursor:pointer">
+      <h3 class="ww-room-name">Dream Room</h3>
+      <p class="ww-room-detail">Purple · Magical & dreamy</p>
+      <div class="ww-room-stats">
+        <div>
+          <div class="ww-room-stat-val">Min 8</div>
+          <div class="ww-room-stat-label">kids</div>
+        </div>
+        <div>
+          <div class="ww-room-stat-val">$39</div>
+          <div class="ww-room-stat-label">per child</div>
+        </div>
+      </div>
+      <div class="ww-room-cta">
+        <button onclick="event.stopPropagation();openBooking()" class="ww-btn-punch">Book →</button>
+      </div>
+    </div>
+
+    <!-- Wonder Forest Room -->
+    <div class="ww-room-card accent-green" onclick="openBooking()" style="cursor:pointer">
+      <h3 class="ww-room-name">Wonder Forest Room</h3>
+      <p class="ww-room-detail">Green · Nature adventure</p>
+      <div class="ww-room-stats">
+        <div>
+          <div class="ww-room-stat-val">Min 8</div>
+          <div class="ww-room-stat-label">kids</div>
+        </div>
+        <div>
+          <div class="ww-room-stat-val">$39</div>
+          <div class="ww-room-stat-label">per child</div>
+        </div>
+      </div>
+      <div class="ww-room-cta">
+        <button onclick="event.stopPropagation();openBooking()" class="ww-btn-punch">Book →</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Info strip -->
+  <div class="ww-rooms-note">
+    <span><strong>Booking Times</strong>9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</span>
+    <span><strong>Outside Cake</strong>Welcome — bring your own!</span>
+    <span><strong>Allergies</strong>Inform us in advance</span>
+    <span><strong>Extra Kids</strong>Charged at package rate</span>
+  </div>
+
+  <!-- No outside food -->
+  <div class="ww-no-food-banner">
+    <span style="font-size:1.5rem;flex-shrink:0">🚫</span>
+    <div><strong>No outside food or drinks</strong> — For the safety and cleanliness of our play area. Water bottles are permitted.</div>
+  </div>
+
+  <div style="text-align:center;margin-top:2.5rem">
+    <button onclick="openBooking()" class="ww-btn-punch ww-btn-lg">Start Booking — It's Quick & Easy</button>
+  </div>
+</section>
+
+<!-- Wave: ink → zap -->
+<div class="ww-wave" style="background:var(--ink)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,20 C320,70 1120,0 1440,50 L1440,70 L0,70 Z" fill="#F6EB00"/>
+  </svg>
+</div>
+
+<!-- ── PARTY MENU ── -->
+<section id="menu" class="ww-menu">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Party Room Menu</h2>
+    <p class="ww-section-lead">Everything made fresh daily with kid-friendly ingredients.</p>
+  </div>
+  <div class="ww-menu-body">
+
+    <!-- Base package -->
+    <div class="ww-menu-base">
+      <p class="ww-menu-base-label">Every party includes</p>
+      <h3>$39 per child — what you get</h3>
+      <div class="ww-menu-includes">
+        <div class="ww-menu-include-item">Playground entry ($26.80 value)</div>
+        <div class="ww-menu-include-item">90 min party room access</div>
+        <div class="ww-menu-include-item">15 min early entry for setup</div>
+        <div class="ww-menu-include-item">Fries + blackcurrant drink</div>
+      </div>
+      <div class="ww-menu-food-choice">
+        <p>Choose one main per child</p>
+        <div class="ww-menu-food-choices">
+          <div class="ww-food-pill">🍗 Chicken Nuggets</div>
+          <div class="ww-food-pill">🍔 Mini Burger</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add-ons grid -->
+    <div class="ww-menu-extras-grid">
+      <div class="ww-menu-extra-card">
+        <h4>Add-On Pizzas</h4>
+        <div class="ww-menu-extra-row">
+          <span>Ham &amp; Cheese Pizza (11")</span>
+          <span class="ww-price-tag">$25</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>Vegetarian Pizza (11")</span>
+          <span class="ww-price-tag">$25</span>
+        </div>
+      </div>
+      <div class="ww-menu-extra-card">
+        <h4>Fried Chicken Platter</h4>
+        <div class="ww-menu-extra-row">
+          <span>10 Nuggets · 6 Fried · 6 Karaage · Fries · Sauces</span>
+          <span class="ww-price-tag">$39</span>
+        </div>
+      </div>
+      <div class="ww-menu-extra-card">
+        <h4>Adult Platters</h4>
+        <div class="ww-menu-extra-row">
+          <span>15 pcs Ham &amp; Cheese Sandwiches</span>
+          <span class="ww-price-tag">$60</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>Seafood Platter (Fish, Prawn, Calamari)</span>
+          <span class="ww-price-tag">$49</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>40 pcs Sushi Platter</span>
+          <span class="ww-price-tag">$60</span>
+        </div>
+      </div>
+      <div class="ww-menu-extra-card">
+        <h4>Sushi Platters</h4>
+        <div class="ww-menu-extra-row">
+          <span>Kids Party Platter (48 pcs)</span>
+          <span class="ww-price-tag">$49.90</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>Ocean Deluxe Set (14 pcs)</span>
+          <span class="ww-price-tag">$39.90</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>Salmon Supreme (10 pcs)</span>
+          <span class="ww-price-tag">$28.90</span>
+        </div>
+        <div class="ww-menu-extra-row">
+          <span>24 pcs Sushi Platter</span>
+          <span class="ww-price-tag">$30</span>
+        </div>
+      </div>
+    </div>
+    <p class="ww-menu-note">Made fresh daily · Please inform us of any allergies · Outside birthday cake welcome</p>
+  </div>
+</section>
+
+<!-- Wave: zap → punch -->
+<div class="ww-wave" style="background:var(--zap)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,50 C320,0 1120,70 1440,20 L1440,70 L0,70 Z" fill="#FF3B6B"/>
+  </svg>
+</div>
+
+<!-- ── PRICES ── -->
+<section id="prices" class="ww-prices">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Simple, transparent pricing.</h2>
+    <p class="ww-section-lead">From $39 per child — everything you need for an epic party, no hidden extras.</p>
+  </div>
+  <div class="ww-prices-actions">
+    <a href="/prices" class="ww-btn-white">View Full Pricing</a>
+    <button onclick="openBooking()" class="ww-btn-outline-white">Book a Party</button>
+  </div>
+  <p class="ww-prices-small">Party packages from $39/child · General admission from $23.80 · Open 7 days</p>
+</section>
+
+<!-- Wave: punch → cream -->
+<div class="ww-wave" style="background:var(--punch)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,20 C320,70 1120,0 1440,50 L1440,70 L0,70 Z" fill="#FDFAF4"/>
+  </svg>
+</div>
+
+<!-- ── RULES ── -->
+<section id="rules" class="ww-rules">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2" id="rulesLink">Rules &amp; Safety Policy</h2>
+    <p class="ww-section-lead">Please read before visiting — keeping Wonder World safe and fun for everyone.</p>
+  </div>
+  <div class="ww-rules-grid">
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">🧦</div>
+      <div>
+        <h3>Grip Socks Required</h3>
+        <p>Non-slip socks must be worn on all play equipment at all times. No shoes in the playground.</p>
+      </div>
+    </div>
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">👨‍👩‍👧</div>
+      <div>
+        <h3>Parent Supervision Required</h3>
+        <p>Children must be supervised by a parent or legal guardian at all times. Our staff assist but are not responsible for child supervision.</p>
+      </div>
+    </div>
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">⚠️</div>
+      <div>
+        <h3>Play at Your Own Risk</h3>
+        <p>Use of playground equipment involves inherent risks. By entering, all guests acknowledge and accept these risks.</p>
+      </div>
+    </div>
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">🚫</div>
+      <div>
+        <h3>No Outside Food or Drinks</h3>
+        <p>For safety and cleanliness of our play area. Water bottles are permitted.</p>
+      </div>
+    </div>
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">🏗️</div>
+      <div>
+        <h3>No Climbing Exterior Structures</h3>
+        <p>No rough play or pushing. No misuse of equipment. Follow all staff instructions at all times.</p>
+      </div>
+    </div>
+    <div class="ww-rule-card">
+      <div class="ww-rule-icon">📷</div>
+      <div>
+        <h3>Photography &amp; CCTV</h3>
+        <p>Photos may be taken for promotional use. CCTV is in operation. Inform staff on entry if you wish to opt out.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Liability Waiver -->
+  <div class="ww-waiver">
+    <h3>⚖️ Terms of Entry &amp; Liability Waiver</h3>
+    <div class="ww-waiver-items">
+      <div class="ww-waiver-item"><strong>1. Play at Your Own Risk</strong> — Use of the playground involves inherent risks including slips, falls, collisions, and injuries. By entering, all guests acknowledge and accept these risks.</div>
+      <div class="ww-waiver-item"><strong>2. Parent / Guardian Supervision</strong> — Children must be supervised at all times. Our staff are present to assist but are not responsible for child supervision.</div>
+      <div class="ww-waiver-item"><strong>3. Health &amp; Safety Rules</strong> — Grip socks must be worn. No rough play or pushing. No climbing on exterior structures. Do not use equipment when unwell or injured.</div>
+      <div class="ww-waiver-item"><strong>4. Liability Disclaimer</strong> — To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, or loss of personal belongings.</div>
+      <div class="ww-waiver-item"><strong>5. Photography &amp; Media</strong> — Photos or videos may be taken for promotional purposes. Inform staff upon entry if you do not wish to be included.</div>
+      <div class="ww-waiver-item"><strong>6. Right of Refusal</strong> — Management reserves the right to refuse entry to anyone behaving in an unsafe or inappropriate manner.</div>
+      <div class="ww-waiver-item"><strong>7. Cancellations &amp; Refunds</strong> — 14+ days before: full refund · 7–13 days before: 50% refund · Under 7 days: non-refundable.</div>
     </div>
   </div>
 </section>
 
-<!-- ── PARTY MENU ─────────────────────────────────────────── -->
-<section id="menu" class="py-16 bg-offwhite">
-  <div class="max-w-6xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Party Room Menu</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto">Everything is made fresh daily with kid-friendly ingredients.</p>
-    </div>
+<!-- Wave: cream → steel -->
+<div class="ww-wave" style="background:var(--cream)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,50 C320,0 1120,70 1440,20 L1440,70 L0,70 Z" fill="#EEEDE8"/>
+  </svg>
+</div>
 
-    <!-- Basic Package -->
-    <div class="clay-card p-8 mb-8">
-      <div class="flex flex-col md:flex-row md:items-center gap-6 mb-6">
-        <div class="rounded-2xl px-6 py-4 text-center flex-shrink-0 text-white" style="background:linear-gradient(135deg,#1E3A8A,#3B82F6);box-shadow:0 6px 20px rgba(30,58,138,0.3);">
-          <div class="font-display font-bold text-4xl">$39</div>
-          <div class="text-sm font-semibold opacity-90">per kid</div>
-          <div class="text-xs opacity-75 mt-1">Basic Party</div>
-        </div>
-        <div>
-          <h3 class="font-display font-bold text-2xl text-gray-900 mb-1">What's Included</h3>
-          <p class="text-gray-500 text-sm mb-3">Everything you need for a fun and easy party!</p>
-          <div class="flex flex-wrap gap-3">
-            <span class="bg-blue-light text-blue-800 text-xs font-bold rounded-full px-3 py-1.5 border border-blue-200">Playground Entry (Value $26.80)</span>
-            <span class="bg-blue-light text-blue-800 text-xs font-bold rounded-full px-3 py-1.5 border border-blue-200">90 Min Party Room Access</span>
-            <span class="bg-blue-light text-blue-800 text-xs font-bold rounded-full px-3 py-1.5 border border-blue-200">15 Min Early Entry for Setup</span>
-            <span class="bg-blue-light text-blue-800 text-xs font-bold rounded-full px-3 py-1.5 border border-blue-200">Choice of Food & Snacks</span>
-          </div>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-offwhite rounded-2xl p-4">
-          <div class="font-display font-bold text-base text-gray-900 mb-2">🍽️ Food <span class="text-xs font-normal text-gray-500">(choose one)</span></div>
-          <div class="space-y-1 text-sm text-gray-600">
-            <div class="flex items-center gap-2">🍗 Nuggets</div>
-            <div class="flex items-center gap-2">🍔 Mini Burger</div>
-          </div>
-        </div>
-        <div class="bg-offwhite rounded-2xl p-4">
-          <div class="font-display font-bold text-base text-gray-900 mb-2">🍟 Snacks</div>
-          <div class="text-sm text-gray-600">🍟 Fries</div>
-        </div>
-        <div class="bg-offwhite rounded-2xl p-4">
-          <div class="font-display font-bold text-base text-gray-900 mb-2">🥤 Drinks</div>
-          <div class="text-sm text-gray-600">🫐 Blackcurrant Drink</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add-ons & Extras -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
-      <div class="clay-card p-5">
-        <div class="font-display font-bold text-lg text-gray-900 mb-3">Add-Ons</div>
-        <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>🍕 Extra Ham & Cheese Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
-          <div class="flex justify-between"><span>🍕 Vegetarian Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
-        </div>
-      </div>
-      <div class="clay-card p-5">
-        <div class="font-display font-bold text-lg text-gray-900 mb-3">Adult Platter</div>
-        <div class="space-y-1 text-sm text-gray-600">
-          <div class="flex justify-between"><span>15 pcs Ham & Cheese Sandwiches</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span></div>
-          <div class="flex justify-between"><span>40 pcs Sushi Platter</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span></div>
-          <div class="flex justify-between"><span>24 pcs Sushi Platter</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$30</span></div>
-        </div>
-      </div>
-      <div class="clay-card p-5">
-        <div class="flex items-center justify-between mb-3">
-          <div class="font-display font-bold text-lg text-gray-900">Fried Chicken Platter</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39</span>
-        </div>
-        <div class="space-y-1 text-sm text-gray-600">
-          <div>10 Chicken Nuggets</div>
-          <div>6 Fried Chicken</div>
-          <div>6 Chicken Karaage</div>
-          <div>Fries · Tomato Sauce · Aioli Sauce</div>
-        </div>
-      </div>
-      <div class="clay-card p-5">
-        <div class="flex items-center justify-between mb-3">
-          <div class="font-display font-bold text-lg text-gray-900">Seafood Platter</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49</span>
-        </div>
-        <div class="space-y-1 text-sm text-gray-600">
-          <div>8 Crumbed Fish Bites · 6 Prawn Twister</div>
-          <div>6 Prawn Tempura · 6 Calamari</div>
-          <div>Fries · Tomato Sauce · Aioli Sauce</div>
-        </div>
-      </div>
-      <div class="clay-card p-5">
-        <div class="font-display font-bold text-lg text-gray-900 mb-3">Sushi Platters</div>
-        <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>Salmon Supreme Platter</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$28.90</span></div>
-          <div class="text-xs text-gray-400 -mt-1">4 pcs Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
-          <div class="flex justify-between"><span>Ocean Deluxe Set</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39.90</span></div>
-          <div class="text-xs text-gray-400 -mt-1">4 pcs Tempura Prawn Dragon Roll · 4 pcs Salmon Avocado Roll · 4 Nigiri · 2 Aburi Salmon</div>
-        </div>
-      </div>
-      <div class="clay-card p-5">
-        <div class="font-display font-bold text-lg text-gray-900 mb-3">More Sushi</div>
-        <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>Kids Party Platter (48 pcs)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49.90</span></div>
-          <div class="text-xs text-gray-400 -mt-1">Fresh Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
-          <div class="flex justify-between"><span>Green Garden Platter (28 pcs)</span><span class="font-bold text-indigo-600">$42.90</span></div>
-          <div class="text-xs text-gray-400 -mt-1">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
-        </div>
-      </div>
-    </div>
-    <p class="text-center text-xs text-gray-400">Made fresh daily · Kid-friendly ingredients · Please inform us of any allergies in advance · Outside birthday cake allowed</p>
+<!-- ── HOURS ── -->
+<section id="hours" class="ww-hours">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Opening Hours</h2>
+    <p class="ww-section-lead">We're open 7 days a week — celebrate whenever the moment calls for it.</p>
+  </div>
+  <div class="max-w-lg mx-auto rounded-2xl overflow-hidden" style="border:1.5px solid rgba(17,16,16,0.1)">
+    <div id="hoursTable"></div>
   </div>
 </section>
 
-<!-- ── PRICES ─────────────────────────────────────────────── -->
-<section id="prices" class="py-12 bg-white">
-  <div class="max-w-3xl mx-auto px-5 text-center">
-    <h2 class="font-display font-bold text-4xl text-gray-900 mb-4">Simple, Transparent Pricing</h2>
-    <p class="text-gray-500 text-lg mb-8 max-w-xl mx-auto">Everything you need for an epic party — from $39 per child. Click below to see full pricing and what's included.</p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="/prices" class="btn-primary text-lg py-4 px-10">View Full Pricing</a>
-      <button onclick="openBooking()" class="btn-secondary text-lg py-4 px-10">Book a Party</button>
-    </div>
-    <p class="text-gray-400 text-sm mt-6">Party packages from $39/child · General admission from $23.80 · Open 7 days</p>
+<!-- Wave: steel → cream -->
+<div class="ww-wave" style="background:var(--steel)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,20 C320,70 1120,0 1440,50 L1440,70 L0,70 Z" fill="#FDFAF4"/>
+  </svg>
+</div>
+
+<!-- ── FAQ ── -->
+<section id="faq" class="ww-faq">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Frequently Asked Questions</h2>
+  </div>
+  <div id="faqAccordion" class="space-y-3 max-w-3xl mx-auto"></div>
+</section>
+
+<!-- Wave: cream → ink -->
+<div class="ww-wave" style="background:var(--cream)">
+  <svg viewBox="0 0 1440 70" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+    <path d="M0,50 C320,0 1120,70 1440,20 L1440,70 L0,70 Z" fill="#111010"/>
+  </svg>
+</div>
+
+<!-- ── CONTACT ── -->
+<section id="contact" class="ww-contact">
+  <div class="ww-section-header">
+    <h2 class="ww-section-h2">Get In Touch</h2>
+    <p class="ww-section-lead">Questions? Our team is here to help make your party perfect.</p>
+  </div>
+  <div class="ww-contact-cards">
+    <a href="tel:+6495550123" class="ww-contact-card">
+      <div class="ww-contact-card-icon">📞</div>
+      <div>
+        <div class="ww-contact-card-label">Call Us</div>
+        <div class="ww-contact-card-val">(09) 555 0123</div>
+        <div class="ww-contact-card-sub">Mon–Fri 9 AM – 6 PM</div>
+      </div>
+    </a>
+    <a href="mailto:hello@wonderworldwestgate.co.nz" class="ww-contact-card">
+      <div class="ww-contact-card-icon">✉️</div>
+      <div>
+        <div class="ww-contact-card-label">Email Us</div>
+        <div class="ww-contact-card-val">hello@wonderworld<wbr/>westgate.co.nz</div>
+        <div class="ww-contact-card-sub">We reply within 24 hours</div>
+      </div>
+    </a>
+  </div>
+  <button onclick="toggleDirections()" class="ww-directions-btn">📍 Get Directions</button>
+  <div id="directionsCard" class="hidden">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.05rem;color:white;margin-bottom:0.5rem">Wonder World Westgate</div>
+    <address style="color:rgba(255,255,255,0.62);font-style:normal;font-size:0.875rem;line-height:1.7;margin-bottom:0.75rem">
+      T2 &amp; 3, 33/47 Northside Drive<br/>
+      Westgate, Auckland 0814<br/>
+      New Zealand
+    </address>
+    <p style="font-size:0.82rem;color:rgba(255,255,255,0.45);margin-bottom:1rem">🅿️ Free parking available in the Westgate Shopping Centre car park.</p>
+    <a href="https://www.google.com/maps/search/T2+%26+3,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814" target="_blank" rel="noopener noreferrer" class="ww-btn-punch" style="font-size:0.875rem">
+      Open in Google Maps →
+    </a>
   </div>
 </section>
 
-<!-- ── RULES & POLICY ─────────────────────────────────────── -->
-<section id="rules" class="py-16 bg-offwhite">
-  <div class="max-w-4xl mx-auto px-5">
-    <div class="text-center mb-8">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Rules & Safety Policy</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto">Please read before visiting — keeping Wonder World safe and fun for everyone!</p>
-    </div>
-
-    <!-- Key Rules -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center text-xl flex-shrink-0">🧦</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">Grip Socks Required</div>
-          <p class="text-gray-500 text-sm">For safety and hygiene, grip or non-slip socks must be worn on all play equipment at all times. No shoes in the playground.</p>
-        </div>
-      </div>
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-orange-100 flex items-center justify-center text-xl flex-shrink-0">👨‍👩‍👧</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">Parent Supervision Required</div>
-          <p class="text-gray-500 text-sm">Children must be supervised by a parent or legal guardian at all times. Our staff assist but are not responsible for child supervision.</p>
-        </div>
-      </div>
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-red-100 flex items-center justify-center text-xl flex-shrink-0">⚠️</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">Play at Your Own Risk</div>
-          <p class="text-gray-500 text-sm">Use of playground equipment involves inherent risks including slips, falls, collisions, and injuries. By entering, you acknowledge and accept these risks.</p>
-        </div>
-      </div>
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-yellow-100 flex items-center justify-center text-xl flex-shrink-0">🚫</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">No Outside Food or Drinks</div>
-          <p class="text-gray-500 text-sm">For safety and cleanliness of our play area, no outside food or drinks are allowed in the playground. Water bottles are permitted.</p>
-        </div>
-      </div>
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-green-100 flex items-center justify-center text-xl flex-shrink-0">🏗️</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">No Climbing on Exterior Structures</div>
-          <p class="text-gray-500 text-sm">Do not climb on exterior structures, nets, or fences. No rough play, pushing or misuse of equipment. Follow all staff instructions at all times.</p>
-        </div>
-      </div>
-      <div class="clay-card p-5 flex gap-4 items-start">
-        <div class="w-11 h-11 rounded-xl bg-purple-100 flex items-center justify-center text-xl flex-shrink-0">📷</div>
-        <div>
-          <div class="font-display font-bold text-base text-gray-900 mb-1">Photography & CCTV</div>
-          <p class="text-gray-500 text-sm">Photos or videos may be taken for promotional purposes and CCTV is in operation. Please inform staff upon entry if you do not wish to be included.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Liability Waiver -->
-    <div class="bg-gray-900 text-white rounded-3xl p-8">
-      <h3 class="font-display font-bold text-2xl mb-5">⚖️ Terms of Entry & Liability Waiver</h3>
-      <div class="space-y-4 text-sm text-gray-300 leading-relaxed">
-        <div><strong class="text-white">1. Play at Your Own Risk</strong> — Use of the playground equipment involves inherent risks including slips, falls, collisions, and injuries. By entering the premises, all guests acknowledge and accept these risks.</div>
-        <div><strong class="text-white">2. Parent / Guardian Supervision</strong> — Children must be supervised by a parent or legal guardian at all times. Our staff are present to assist but are not responsible for child supervision.</div>
-        <div><strong class="text-white">3. Health & Safety Rules</strong> — Grip socks must be worn on all play equipment. No rough play or pushing. No climbing on exterior structures. Do not use equipment when unwell or injured. Follow all staff instructions at all times.</div>
-        <div><strong class="text-white">4. Liability Disclaimer</strong> — To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for: injury or accidents occurring during use of the facilities, or loss, theft, or damage to personal belongings.</div>
-        <div><strong class="text-white">5. Personal Belongings</strong> — All personal items are brought onto the premises at the owner's risk.</div>
-        <div><strong class="text-white">6. Photography & Media</strong> — Photos or videos may be taken for promotional purposes. Please inform staff upon entry if you do not wish to be included.</div>
-        <div><strong class="text-white">7. Right of Refusal</strong> — Management reserves the right to refuse entry or remove any person behaving in an unsafe, disruptive, or inappropriate manner.</div>
-        <div><strong class="text-white">8. Cancellations & Refunds</strong> — Party room bookings cancelled 14 or more days before the party date receive a full refund. Cancellations made 7–13 days before receive a 50% refund. Cancellations made less than 7 days before the party date are non-refundable.</div>
-        <div><strong class="text-white">9. Acceptance of Terms</strong> — By entering the premises, you confirm that you have read, understood, and agreed to these Terms of Entry.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── HOURS ──────────────────────────────────────────────── -->
-<section id="hours" class="py-16 bg-white">
-  <div class="max-w-4xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Opening Hours</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto">We're open 7 days a week so you can celebrate whenever the moment calls for it!</p>
-    </div>
-    <div class="max-w-lg mx-auto rounded-3xl overflow-hidden shadow-card border border-gray-100">
-      <div id="hoursTable"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── FAQ ───────────────────────────────────────────────── -->
-<section id="faq" class="py-16 bg-offwhite">
-  <div class="max-w-3xl mx-auto px-5">
-    <div class="text-center mb-12">
-      <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Frequently Asked Questions</h2>
-    </div>
-    <div id="faqAccordion" class="space-y-3"></div>
-  </div>
-</section>
-
-<!-- ── CONTACT ────────────────────────────────────────────── -->
-<section id="contact" class="py-16 bg-white">
-  <div class="max-w-3xl mx-auto px-5 text-center">
-    <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Get In Touch</h2>
-    <p class="text-gray-500 text-lg mb-10">Questions? Our team is here to help make your party perfect.</p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center items-stretch mb-8">
-      <a href="tel:+6495550123" class="clay-card flex items-center gap-4 text-blue-900 font-semibold rounded-2xl px-7 py-5 hover:shadow-card transition-all hover:-translate-y-0.5 flex-1 justify-center sm:justify-start max-w-xs cursor-pointer">
-        <span class="text-3xl flex-shrink-0">📞</span>
-        <div class="text-left">
-          <div class="text-xs text-blue-500 uppercase tracking-widest font-bold mb-0.5">Call Us</div>
-          <div class="text-lg font-bold">(09) 555 0123</div>
-          <div class="text-xs text-indigo-400 mt-0.5">Mon–Fri 9 AM – 6 PM</div>
-        </div>
-      </a>
-      <a href="mailto:hello@wonderworldwestgate.co.nz" class="clay-card flex items-center gap-4 text-teal-700 font-semibold rounded-2xl px-7 py-5 hover:shadow-card transition-all hover:-translate-y-0.5 flex-1 justify-center sm:justify-start max-w-xs cursor-pointer">
-        <span class="text-3xl flex-shrink-0">✉️</span>
-        <div class="text-left">
-          <div class="text-xs text-teal-600 uppercase tracking-widest font-bold mb-0.5">Email Us</div>
-          <div class="text-base font-bold leading-tight">hello@wonderworld<wbr/>westgate.co.nz</div>
-          <div class="text-xs text-teal-400 mt-0.5">We reply within 24 hours</div>
-        </div>
-      </a>
-    </div>
-    <button onclick="toggleDirections()" class="inline-flex items-center gap-3 bg-gray-900 hover:bg-gray-700 text-white font-display font-bold rounded-2xl px-8 py-4 text-lg transition-all hover:-translate-y-0.5 hover:shadow-lg mx-auto">
-      <span>📍</span> Get Directions
-    </button>
-    <div id="directionsCard" class="hidden mt-6 clay-card p-6 text-left max-w-sm mx-auto">
-      <div class="font-display font-bold text-xl text-gray-900 mb-1">Wonder World Westgate</div>
-      <address class="not-italic text-gray-600 text-sm leading-relaxed mb-3">
-        T2 & 3, 33/47 Northside Drive<br/>
-        Westgate, Auckland 0814<br/>
-        New Zealand
-      </address>
-      <div class="text-sm text-gray-500 mb-4">🅿️ Free parking available in the Westgate Shopping Centre car park.</div>
-      <a href="https://www.google.com/maps/search/T2+%26+3,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 bg-indigo text-white font-semibold rounded-xl px-5 py-2.5 text-sm hover:bg-indigo-dark transition-colors">
-        Open in Google Maps →
-      </a>
-    </div>
-  </div>
-</section>
-
-<!-- ── FOOTER ─────────────────────────────────────────────── -->
-<footer class="bg-gray-900 text-white py-12">
-  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between gap-8">
+<!-- ── FOOTER ── -->
+<footer class="ww-footer">
+  <div class="ww-footer-inner">
     <div>
-      <div class="font-display font-bold text-2xl mb-2">Wonder World Westgate</div>
-      <div class="text-gray-400 text-sm">Auckland's home for epic kids' parties.</div>
-      <div class="text-gray-400 text-sm mt-2">📍 Westgate Shopping Centre, Auckland</div>
-      <div class="text-gray-400 text-sm">📞 (09) 555 0123</div>
-      <div class="text-gray-400 text-sm">✉️ hello@wonderworldwestgate.co.nz</div>
+      <div class="ww-footer-brand">Wonder World <em>Westgate</em></div>
+      <p class="ww-footer-tagline">
+        Auckland's home for epic kids' parties.<br/>
+        📍 Westgate Shopping Centre, Auckland<br/>
+        📞 (09) 555 0123<br/>
+        ✉️ hello@wonderworldwestgate.co.nz
+      </p>
     </div>
-    <div class="flex gap-12 text-sm">
-      <div>
-        <div class="font-semibold text-gray-300 mb-3">Explore</div>
-        <div class="text-gray-400 space-y-2">
-          <div><a href="#rooms" class="hover:text-white transition-colors">Party Rooms</a></div>
-          <div><a href="#menu" class="hover:text-white transition-colors">Party Menu</a></div>
-          <div><a href="#rules" class="hover:text-white transition-colors">Rules & Policy</a></div>
-        </div>
+    <div class="ww-footer-links">
+      <div class="ww-footer-col">
+        <h4>Explore</h4>
+        <a href="#rooms">Party Rooms</a>
+        <a href="#menu">Party Menu</a>
+        <a href="#rules">Rules &amp; Policy</a>
       </div>
-      <div>
-        <div class="font-semibold text-gray-300 mb-3">Info</div>
-        <div class="text-gray-400 space-y-2">
-          <div><a href="#hours" class="hover:text-white transition-colors">Opening Hours</a></div>
-          <div><a href="#prices" class="hover:text-white transition-colors">Pricing</a></div>
-          <div><a href="/admin" class="hover:text-white transition-colors">Admin</a></div>
-        </div>
+      <div class="ww-footer-col">
+        <h4>Info</h4>
+        <a href="#hours">Opening Hours</a>
+        <a href="/prices">Pricing</a>
+        <a href="/admin">Admin</a>
       </div>
     </div>
   </div>
-  <div class="max-w-6xl mx-auto px-5 mt-10 pt-6 border-t border-gray-800 text-gray-500 text-xs text-center">
-    © 2025 Wonder World Westgate. All rights reserved. New Zealand.
-  </div>
+  <div class="ww-footer-bottom">© 2025 Wonder World Westgate. All rights reserved. New Zealand.</div>
 </footer>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -628,7 +628,7 @@
 
     <div class="overflow-y-auto" style="max-height: calc(90vh - 140px)">
 
-      <!-- ── STEP 0: AUTH ─────────────────────────────────── -->
+      <!-- ── STEP 0: AUTH ── -->
       <div id="step0" class="step-panel p-6 md:p-8">
         <div class="text-center mb-7">
           <div class="text-5xl mb-3">👋</div>
@@ -641,7 +641,6 @@
             <button id="tabLogin" onclick="switchAuth('login')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all text-gray-500">Log In</button>
           </div>
 
-          <!-- Google Sign-In -->
           <button onclick="signInWithGoogle()" class="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-xl py-3 px-4 font-semibold text-gray-700 hover:bg-gray-50 transition-all">
             <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
             Continue with Google
@@ -671,16 +670,16 @@
           </div>
 
           <button onclick="submitAuth()" class="btn-primary w-full py-4" id="authSubmitBtn">
-            <span id="authBtnText">Create My Account & Continue →</span>
+            <span id="authBtnText">Create My Account &amp; Continue →</span>
             <span id="authBtnSpinner" class="hidden">
               <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
             </span>
           </button>
-          <p class="text-xs text-gray-400 text-center mt-3">By continuing you agree to our <span class="text-indigo-500 cursor-pointer" onclick="document.getElementById('rulesLink').scrollIntoView()">Terms of Entry & Liability Waiver</span>.</p>
+          <p class="text-xs text-gray-400 text-center mt-3">By continuing you agree to our <span class="text-indigo-500 cursor-pointer" onclick="document.getElementById('rulesLink').scrollIntoView()">Terms of Entry &amp; Liability Waiver</span>.</p>
         </div>
       </div>
 
-      <!-- ── STEP 1: ROOM ─────────────────────────────────── -->
+      <!-- ── STEP 1: ROOM ── -->
       <div id="step1" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">Pick your party room</h2>
         <p class="text-gray-500 text-sm mb-5">How many kids are coming? We'll show you the perfect options.</p>
@@ -695,11 +694,11 @@
         </div>
         <div id="roomCards" class="space-y-3"></div>
         <div class="mt-5 pt-4 border-t border-gray-100 flex justify-end">
-          <button onclick="goToStep(2)" class="btn-primary py-3 px-8" id="step1Next" disabled>Continue to Date & Time →</button>
+          <button onclick="goToStep(2)" class="btn-primary py-3 px-8" id="step1Next" disabled>Continue to Date &amp; Time →</button>
         </div>
       </div>
 
-      <!-- ── STEP 2: DATE & TIME ──────────────────────────── -->
+      <!-- ── STEP 2: DATE & TIME ── -->
       <div id="step2" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">When's the big day?</h2>
         <p class="text-gray-500 text-sm mb-5">Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</p>
@@ -743,19 +742,18 @@
         </div>
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(1)" class="btn-secondary py-3 px-6">← Back</button>
-          <button onclick="goToStep(3)" class="btn-primary py-3 px-8" id="step2Next" disabled>Food & Allergies →</button>
+          <button onclick="goToStep(3)" class="btn-primary py-3 px-8" id="step2Next" disabled>Food &amp; Allergies →</button>
         </div>
       </div>
 
-      <!-- ── STEP 3: FOOD ─────────────────────────────────── -->
+      <!-- ── STEP 3: FOOD ── -->
       <div id="step3" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">What's on the menu?</h2>
         <p class="text-gray-500 text-sm mb-2">Pick your main meal (included) and add any extras you'd like.</p>
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">
-          🎂 Outside birthday cake welcome · 🍟 Fries & 🫐 Blackcurrant Drink included · Extra kids charged at package rate
+          🎂 Outside birthday cake welcome · 🍟 Fries &amp; 🫐 Blackcurrant Drink included · Extra kids charged at package rate
         </div>
 
-        <!-- Food split -->
         <div class="mb-6">
           <label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label>
           <div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Numbers must add up to total guests.</div>
@@ -794,7 +792,7 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🍕</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Ham & Cheese Pizza (11-inch)</div>
+                  <div class="font-semibold text-sm text-gray-800">Ham &amp; Cheese Pizza (11-inch)</div>
                   <div class="text-xs text-gray-400">Extra pizza for the party</div>
                 </div>
               </div>
@@ -813,7 +811,7 @@
                 <div class="text-2xl flex-shrink-0">🍕</div>
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-sm text-gray-800">Vegetarian Pizza (11-inch)</div>
-                  <div class="text-xs text-gray-400">Mushroom, Tomato & Spinach</div>
+                  <div class="text-xs text-gray-400">Mushroom, Tomato &amp; Spinach</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
@@ -867,7 +865,7 @@
                 <div class="text-2xl flex-shrink-0">🥪</div>
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-sm text-gray-800">Adult Platter — 15 pcs Sandwiches</div>
-                  <div class="text-xs text-gray-400">Ham & Cheese Sandwiches</div>
+                  <div class="text-xs text-gray-400">Ham &amp; Cheese Sandwiches</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
@@ -952,11 +950,8 @@
               </div>
             </div>
 
-
-
           </div>
 
-          <!-- Running add-on subtotal -->
           <div id="addonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold">
             <span>Add-ons subtotal:</span><span id="addonSubtotalAmount">$0.00</span>
           </div>
@@ -966,22 +961,13 @@
         <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5">
           <div class="flex items-center gap-2 mb-3">
             <span class="text-2xl">⚠️</span>
-            <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3>
+            <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements &amp; Allergies</h3>
           </div>
           <p class="text-amber-700 text-sm mb-4">Please let us know about any allergies or dietary needs — your guests' safety is our top priority.</p>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <label class="allergy-check">
-              <input type="checkbox" id="allergyGluten" />
-              <span class="text-sm font-medium">🌾 Gluten-Free</span>
-            </label>
-            <label class="allergy-check">
-              <input type="checkbox" id="allergyDairy" />
-              <span class="text-sm font-medium">🥛 Dairy-Free</span>
-            </label>
-            <label class="allergy-check">
-              <input type="checkbox" id="allergyNuts" />
-              <span class="text-sm font-medium">🥜 Nut Allergy</span>
-            </label>
+            <label class="allergy-check"><input type="checkbox" id="allergyGluten" /><span class="text-sm font-medium">🌾 Gluten-Free</span></label>
+            <label class="allergy-check"><input type="checkbox" id="allergyDairy" /><span class="text-sm font-medium">🥛 Dairy-Free</span></label>
+            <label class="allergy-check"><input type="checkbox" id="allergyNuts" /><span class="text-sm font-medium">🥜 Nut Allergy</span></label>
           </div>
           <label class="lbl">Specify any exact allergies or dietary requirements.</label>
           <textarea class="field" rows="3" placeholder="e.g. 2 children require gluten-free nuggets. 1 child has a severe tree nut allergy." id="allergyNotes" style="resize:vertical;"></textarea>
@@ -989,11 +975,11 @@
 
         <!-- Liability Waiver -->
         <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5">
-          <h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3>
+          <h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry &amp; Liability Waiver</h3>
           <p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p>
           <label class="flex items-start gap-3 cursor-pointer">
             <input type="checkbox" id="liabilityWaiver" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
-            <span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry & Liability Waiver on behalf of all guests attending this party.</span>
+            <span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry &amp; Liability Waiver on behalf of all guests attending this party.</span>
           </label>
         </div>
 
@@ -1003,14 +989,13 @@
         </div>
       </div>
 
-      <!-- ── STEP 4: PAYMENT (Stripe) ─────────────────────── -->
+      <!-- ── STEP 4: PAYMENT ── -->
       <div id="step4" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">Secure payment</h2>
         <p class="text-gray-500 text-sm mb-5">Your booking is nearly confirmed — just one more step!</p>
 
         <div id="orderSummaryPill" class="bg-indigo-light rounded-xl p-4 mb-5 text-sm"></div>
 
-        <!-- Stripe Payment Element injected here dynamically when step 4 is reached -->
         <div id="stripe-payment-wrapper" class="mb-4"></div>
         <div id="stripe-payment-errors" class="text-red-500 text-sm mb-3" role="alert"></div>
 
@@ -1022,7 +1007,7 @@
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(3)" class="btn-secondary py-3 px-6">← Back</button>
           <button onclick="processStripePayment()" class="btn-primary py-3 px-8" id="payBtn">
-            <span id="payBtnText">Pay & Confirm →</span>
+            <span id="payBtnText">Pay &amp; Confirm →</span>
             <span id="payBtnSpinner" class="hidden">
               <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
             </span>
@@ -1031,7 +1016,7 @@
         <p class="text-xs text-gray-400 text-center mt-3">🔒 Payments processed securely via Stripe. PCI-DSS compliant.</p>
       </div>
 
-      <!-- ── STEP 5: CONTACT DETAILS ───────────────────────── -->
+      <!-- ── STEP 5: CONTACT DETAILS ── -->
       <div id="step5" class="step-panel p-6 md:p-8" style="display:none">
         <div class="text-center mb-6">
           <div class="w-20 h-20 rounded-full bg-teal-light flex items-center justify-center text-4xl mx-auto mb-4 success-icon">✅</div>
@@ -1059,7 +1044,7 @@
         <div class="mt-5 flex justify-between">
           <button onclick="goToStep(4)" class="btn-secondary py-3 px-6">← Back</button>
           <button onclick="finaliseBooking()" class="btn-primary py-3 px-8" id="finaliseBtn">
-            <span id="finaliseBtnText">Send My Passes & Confirm 🎈</span>
+            <span id="finaliseBtnText">Send My Passes &amp; Confirm 🎈</span>
             <span id="finaliseBtnSpinner" class="hidden">
               <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
             </span>
@@ -1067,12 +1052,10 @@
         </div>
       </div>
 
-      <!-- ── STEP 6: CONFIRMATION ──────────────────────────── -->
+      <!-- ── STEP 6: CONFIRMATION ── -->
       <div id="step6" class="step-panel p-6 md:p-8 text-center relative overflow-hidden" style="display:none">
         <div id="confettiContainer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
         <div class="relative z-10">
-
-          <!-- Animated celebration ring with SVG checkmark -->
           <div class="celebration-ring mb-5">
             <svg class="celebration-check" viewBox="0 0 52 52">
               <circle class="check-circle" cx="26" cy="26" r="24"/>
@@ -1095,7 +1078,7 @@
           </div>
           <div class="stagger-6">
             <button onclick="viewMyBookings()" class="btn-secondary py-3 px-8 mb-3 mr-3">View My Bookings</button>
-            <button onclick="closeBooking()" class="btn-primary py-4 px-10 text-lg">Close & Head Back Home</button>
+            <button onclick="closeBooking()" class="btn-primary py-4 px-10 text-lg">Close &amp; Head Back Home</button>
           </div>
         </div>
       </div>
