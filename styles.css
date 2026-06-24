@@ -498,3 +498,43 @@ nav.scrolled {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #BFDBFE; border-radius: 999px; }
 ::-webkit-scrollbar-thumb:hover { background: #93C5FD; }
+
+/* ── Reviews marquee ─────────────────────────────────────────── */
+.marquee-outer { overflow: hidden; width: 100%; }
+.marquee-track {
+  display: flex;
+  gap: 1.25rem;
+  width: max-content;
+  animation: marqueeScroll 35s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+@keyframes marqueeScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.review-card {
+  min-width: 320px;
+  max-width: 380px;
+  background: white;
+  border: 2px solid #DBEAFE;
+  border-radius: 1.5rem;
+  padding: 1.75rem;
+  box-shadow: 0 6px 20px rgba(30,58,138,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+  flex-shrink: 0;
+  cursor: default;
+}
+.review-stars { color: #F59E0B; font-size: 1.05rem; letter-spacing: 2px; margin-bottom: 0.75rem; }
+.review-quote {
+  font-style: italic;
+  color: #374151;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+  font-family: 'Nunito', sans-serif;
+}
+.review-name {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1E3A8A;
+}
