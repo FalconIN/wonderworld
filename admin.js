@@ -335,7 +335,7 @@ function parseImportRow(row, colMap, index) {
 
   const errors = [];
   if (!firstName) errors.push('Missing first name');
-  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) errors.push('Invalid/missing email');
+  if (email && !/^[^@]+@[^@]+\.[^@]+$/.test(email)) errors.push('Invalid email address');
   if (!matchedRoom) errors.push(`Room "${roomText}" not recognized`);
   if (!date) errors.push(`Date "${dateRaw}" could not be parsed`);
   if (!guests || guests < 1) errors.push('Missing/invalid guest count');
@@ -378,7 +378,7 @@ function renderImportPreview(headerRow, colMap) {
 
   const errEl = document.getElementById('importErrors');
   const detectedFields = Object.keys(colMap);
-  const requiredFields = ['firstName', 'email', 'room', 'guests', 'date', 'time'];
+  const requiredFields = ['firstName', 'room', 'guests', 'date', 'time'];
   const missingRequired = requiredFields.filter(f => !detectedFields.includes(f));
   if (missingRequired.length > 0) {
     errEl.style.display = 'block';
