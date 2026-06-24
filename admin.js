@@ -839,6 +839,10 @@ async function loadWeekendCapacity() {
 // ---------------------------------------------------------------------------
 // Today tab
 // ---------------------------------------------------------------------------
+function printRunSheet() {
+  window.print();
+}
+
 async function loadToday() {
   const dateLabel = document.getElementById('today-date-label');
   if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -1082,10 +1086,15 @@ async function viewBooking(bookingId) {
         <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ')}</div>
-      ${booking.status !== 'cancelled' ? `
-      <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="btn-primary w-full py-3 mt-2" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
-        Cancel This Booking
-      </button>` : ''}
+      <div class="flex gap-3 mt-2">
+        <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+          ✉️ Resend Confirmation
+        </button>
+        ${booking.status !== 'cancelled' ? `
+        <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
+          Cancel Booking
+        </button>` : ''}
+      </div>
     </div>`;
 
   document.getElementById('bookingDetailModal').style.display = 'flex';
@@ -1093,6 +1102,16 @@ async function viewBooking(bookingId) {
 
 function closeBookingModal() {
   document.getElementById('bookingDetailModal').style.display = 'none';
+}
+
+async function resendConfirmationEmail(bookingId, bookingRef) {
+  if (!confirm(`Resend the confirmation email for booking ${bookingRef}?`)) return;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, {}, 'POST');
+    alert('✅ Confirmation email resent.');
+  } catch (err) {
+    alert('Failed to resend: ' + err.message);
+  }
 }
 
 async function cancelBooking(bookingId, bookingRef) {
@@ -1219,7 +1238,7 @@ async function refundPayment(paymentId, stripePaymentIntentId, amount) {
 // ---------------------------------------------------------------------------
 async function loadCustomers() {
   const tbody = document.getElementById('customers-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   try {
     allCustomers = await callAPI('admin/customers?limit=200', null, 'GET');
@@ -1232,7 +1251,7 @@ function renderCustomersTable(customers) {
   if (!tbody) return;
 
   if (!customers || customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
     return;
   }
 
@@ -1251,10 +1270,12 @@ function renderCustomersTable(customers) {
     } else {
       adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
     }
+    const bookingCount = nonCancelled.length;
     return `<tr>
       <td class="font-semibold text-sm">${name}</td>
       <td class="text-sm">${c.email || '—'}</td>
       <td class="text-sm">${c.phone || '—'}</td>
+      <td class="text-sm">${bookingCount} ${bookingCount === 1 ? 'party' : 'parties'}</td>
       <td class="font-semibold">$${totalSpent.toFixed(2)}</td>
       <td>${adminCell}</td>
     </tr>`;
@@ -1282,23 +1303,23 @@ function handleSearch(query) {
   const q = query.toLowerCase();
   if (currentTab === 'bookings') {
     renderBookingsTable(allBookings.filter(b =>
-      (b.booking_ref || '').toLowerCase().includes(q) ||
-      (b.contact_email || '').toLowerCase().includes(q) ||
-      (b.party_rooms?.name || '').toLowerCase().includes(q)
+      (b.bookingRef || '').toLowerCase().includes(q) ||
+      (b.contactEmail || '').toLowerCase().includes(q) ||
+      (b.roomName || '').toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'customers') {
     renderCustomersTable(allCustomers.filter(c =>
       (c.email || '').toLowerCase().includes(q) ||
       (c.phone || '').toLowerCase().includes(q) ||
-      `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase().includes(q)
+      `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'payments') {
     renderPaymentsTable(allPayments.filter(p =>
-      (p.bookings?.booking_ref || '').toLowerCase().includes(q) ||
-      (p.bookings?.contact_email || '').toLowerCase().includes(q) ||
-      (p.cardholder_name || '').toLowerCase().includes(q)
+      (p.bookingRef || '').toLowerCase().includes(q) ||
+      (p.contactEmail || '').toLowerCase().includes(q) ||
+      (p.cardholderName || '').toLowerCase().includes(q)
     ));
   }
 }
@@ -1346,13 +1367,6 @@ async function adminSignOut() {
 // ---------------------------------------------------------------------------
 // Add Booking Modal
 // ---------------------------------------------------------------------------
-const ROOM_SLUGS = {
-  big: 'big',
-  sunshine: 'sunshine',
-  dream: 'dream',
-  forest: 'forest',
-};
-
 // Mirrors the customer-facing ROOMS array in booking.js
 const AB_ROOMS = [
   { id: 'big',      name: 'The Big Room',      emoji: '🌟', minGuests: 12, maxGuests: 24, pricePerChild: 39 },
@@ -1371,15 +1385,17 @@ const AB_SLOT_END_TIMES = {
 
 // Mirrors the customer-facing ADDON_PRICES in booking.js
 const AB_ADDON_PRICES = {
-  pizza_ham:       { label: 'Ham & Cheese Pizza',     price: 25 },
-  pizza_veg:       { label: 'Vegetarian Pizza',       price: 25 },
-  platter_chicken: { label: 'Fried Chicken Platter',  price: 39 },
-  platter_seafood: { label: 'Seafood Platter',        price: 49 },
-  adult_sandwich:  { label: 'Adult Sandwich Platter', price: 60 },
-  sushi_40:        { label: 'Sushi Platter (40 pcs)', price: 60 },
-  sushi_24:        { label: 'Sushi Platter (24 pcs)', price: 30 },
-  sushi_salmon:    { label: 'Salmon Supreme Platter', price: 28.90 },
-  sushi_ocean:     { label: 'Ocean Deluxe Set',       price: 39.90 },
+  pizza_ham:       { label: 'Ham & Cheese Pizza',         price: 25 },
+  pizza_veg:       { label: 'Vegetarian Pizza',           price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',      price: 39 },
+  platter_seafood: { label: 'Seafood Platter',            price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter',     price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)',     price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)',     price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter',     price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',           price: 39.90 },
+  sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28 pcs)', price: 42.90 },
 };
 
 // Local state for the manual booking modal
@@ -1496,9 +1512,8 @@ async function abSelectRoom(roomId) {
 
   abRenderRoomCards();
 
-  const slug = ROOM_SLUGS[roomId];
   try {
-    const roomRow = await callAPI(`rooms/by-slug/${slug}`, null, 'GET');
+    const roomRow = await callAPI(`rooms/by-slug/${roomId}`, null, 'GET');
     abState.selectedRoomDbId = roomRow?.id || null;
   } catch {
     abState.selectedRoomDbId = null;
@@ -1884,6 +1899,28 @@ function ebUpdateOrderSummary() {
     <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
       <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
     </div>`;
+
+  ebUpdateBalanceDue();
+}
+
+function ebGetCalculatedTotal() {
+  const booking = editBookingState.booking;
+  if (!booking) return 0;
+  const ratePerChild = (booking.baseAmount && booking.guestCount)
+    ? parseFloat(booking.baseAmount) / booking.guestCount : 39;
+  return (ratePerChild * editBookingState.guests) + ebGetAddonTotal();
+}
+
+function ebUpdateBalanceDue() {
+  const total = ebGetCalculatedTotal();
+  const paid = parseFloat(document.getElementById('eb_amountPaid').value);
+  const el = document.getElementById('eb_balanceDue');
+  if (el && !isNaN(paid) && paid < total - 0.005) {
+    el.textContent = `⚠️ Balance due on the day: $${(total - paid).toFixed(2)} NZD`;
+    el.classList.remove('hidden');
+  } else if (el) {
+    el.classList.add('hidden');
+  }
 }
 
 async function submitEditBooking() {
