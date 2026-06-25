@@ -502,8 +502,7 @@ function changeFoodSplit(type, delta) {
   const veges   = parseInt(document.getElementById('vegeCount').textContent)   || 0;
 
   const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
-  const others  = total - current;
-  const next    = Math.max(0, Math.min(current + delta, others));
+  const next    = Math.max(0, current + delta);
 
   if (type === 'nuggets')      document.getElementById('nuggetCount').textContent = next;
   else if (type === 'burgers') document.getElementById('burgerCount').textContent = next;
@@ -528,6 +527,7 @@ function changeFoodSplit(type, delta) {
     if (v > 0) parts.push(v + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
   } else {
+    if (errEl) errEl.classList.remove('hidden');
     state.selectedFood = null;
   }
 }
