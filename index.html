@@ -422,7 +422,7 @@
         <div class="font-display font-bold text-lg text-gray-900 mb-3">Drinks</div>
         <div class="space-y-2 text-sm text-gray-600">
           <div class="flex justify-between"><span>🥤 Coke · Sprite · Fanta · L&P</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$10</span></div>
-          <div class="flex justify-between"><span>🍊 Orange Juice · Apple Juice (1 Jar)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span></div>
+          <div class="flex justify-between"><span>🍊 Orange Juice · Apple Juice (1 Jug)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span></div>
         </div>
       </div>
     </div>
@@ -1106,8 +1106,8 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🥤</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Coke · Sprite · Fanta · L&P</div>
-                  <div class="text-xs text-gray-400">Per bottle</div>
+                  <div class="font-semibold text-sm text-gray-800">Soft Drink</div>
+                  <div class="text-xs text-gray-400">Coke · Sprite · Fanta · L&P — per bottle</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
@@ -1118,6 +1118,15 @@
                   <button onclick="changeAddon('drinks_soda', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
+              <div id="sodaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+                <div class="text-xs text-gray-500 mb-2 font-semibold">Which flavour(s)?</div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" onclick="toggleSodaType('Coke')" id="sodaBtn_Coke" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Coke</button>
+                  <button type="button" onclick="toggleSodaType('Sprite')" id="sodaBtn_Sprite" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Sprite</button>
+                  <button type="button" onclick="toggleSodaType('Fanta')" id="sodaBtn_Fanta" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Fanta</button>
+                  <button type="button" onclick="toggleSodaType('L&amp;P')" id="sodaBtn_LandP" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">L&amp;P</button>
+                </div>
+              </div>
             </div>
 
             <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
@@ -1125,7 +1134,7 @@
                 <div class="text-2xl flex-shrink-0">🍊</div>
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-sm text-gray-800">Orange Juice · Apple Juice</div>
-                  <div class="text-xs text-gray-400">1 Jar</div>
+                  <div class="text-xs text-gray-400">1 Jug</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">

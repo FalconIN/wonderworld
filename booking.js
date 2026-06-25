@@ -434,8 +434,8 @@ const ADDON_PRICES = {
   sushi_ocean:     { label: 'Ocean Deluxe Set',         price: 39.90 },
   sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
-  drinks_soda:     { label: 'Coke / Sprite / Fanta / L&P', price: 10 },
-  drinks_juice:    { label: 'OJ / Apple Juice (1 Jar)', price: 26 },
+  drinks_soda:     { label: 'Soft Drink', price: 10 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)', price: 26 },
 };
 
 function changeAddon(id, delta) {
@@ -445,7 +445,37 @@ function changeAddon(id, delta) {
   state.addons[id] = next;
   const el = document.getElementById('addon_' + id);
   if (el) el.textContent = next;
+
+  if (id === 'drinks_soda') {
+    const picker = document.getElementById('sodaTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.sodaTypes = [];
+      document.querySelectorAll('.soda-type-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+        btn.classList.add('border-gray-200', 'text-gray-600');
+      });
+    }
+  }
+
   updateAddonSubtotal();
+  renderOrderSummary();
+}
+
+function toggleSodaType(type) {
+  if (!state.sodaTypes) state.sodaTypes = [];
+  const idx = state.sodaTypes.indexOf(type);
+  if (idx === -1) state.sodaTypes.push(type);
+  else state.sodaTypes.splice(idx, 1);
+
+  document.querySelectorAll('.soda-type-btn').forEach(btn => {
+    const selected = state.sodaTypes.includes(btn.textContent.trim());
+    btn.classList.toggle('border-indigo-500', selected);
+    btn.classList.toggle('bg-indigo-50', selected);
+    btn.classList.toggle('text-indigo-700', selected);
+    btn.classList.toggle('border-gray-200', !selected);
+    btn.classList.toggle('text-gray-600', !selected);
+  });
   renderOrderSummary();
 }
 
@@ -475,7 +505,11 @@ function getAddonSummaryLines() {
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => {
       const a = ADDON_PRICES[id];
-      return { label: a.label, qty, price: a.price, subtotal: a.price * qty };
+      let label = a.label;
+      if (id === 'drinks_soda' && state.sodaTypes && state.sodaTypes.length > 0) {
+        label = 'Soft Drink (' + state.sodaTypes.join(', ') + ')';
+      }
+      return { label, qty, price: a.price, subtotal: a.price * qty };
     });
 }
 function renderOrderSummary() {
