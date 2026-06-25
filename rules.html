@@ -245,12 +245,367 @@
       </div>
       <div id="step3" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">What's on the menu?</h2>
-        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">🎂 Outside birthday cake welcome · 🍟 Fries & 🫐 Blackcurrant Drink included</div>
-        <div class="mb-6"><label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label><div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Numbers must add up to total guests.</div><div class="grid grid-cols-2 gap-3"><div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="nuggetCard"><div class="text-4xl mb-2">🍗</div><div class="font-display font-bold text-base">Chicken Nuggets</div><div class="text-xs text-green-600 font-semibold mb-3">Included</div><div class="flex items-center justify-center gap-3"><button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button><span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span><button onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button></div></div><div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard"><div class="text-4xl mb-2">🍔</div><div class="font-display font-bold text-base">Mini Burger</div><div class="text-xs text-green-600 font-semibold mb-3">Included</div><div class="flex items-center justify-center gap-3"><button onclick="changeFoodSplit('burgers', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button><span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="burgerCount">0</span><button onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div id="foodSplitTotal" class="mt-2 text-xs text-center text-gray-400">0 / <span id="foodSplitOf">10</span> selected</div></div>
-        <div class="mb-6"><div class="font-display font-bold text-base text-gray-900 mb-3">➕ Add-Ons <span class="text-gray-400 font-normal text-sm">(optional)</span></div><div class="space-y-2" id="addonList"><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍕</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Ham & Cheese Pizza (11-inch)</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span><div class="flex items-center gap-1"><button onclick="changeAddon('pizza_ham', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_ham">0</span><button onclick="changeAddon('pizza_ham', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍕</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Vegetarian Pizza (11-inch)</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span><div class="flex items-center gap-1"><button onclick="changeAddon('pizza_veg', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_veg">0</span><button onclick="changeAddon('pizza_veg', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍗</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Fried Chicken Platter</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39</span><div class="flex items-center gap-1"><button onclick="changeAddon('platter_chicken', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_chicken">0</span><button onclick="changeAddon('platter_chicken', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🦐</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Seafood Platter</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49</span><div class="flex items-center gap-1"><button onclick="changeAddon('platter_seafood', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_seafood">0</span><button onclick="changeAddon('platter_seafood', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🥪</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Adult Platter — Sandwiches (15 pcs)</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span><div class="flex items-center gap-1"><button onclick="changeAddon('adult_sandwich', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_adult_sandwich">0</span><button onclick="changeAddon('adult_sandwich', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍣</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Sushi Platter — 40 pcs</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_40', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_40">0</span><button onclick="changeAddon('sushi_40', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍣</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Sushi Platter — 24 pcs</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$30</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_24', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_24">0</span><button onclick="changeAddon('sushi_24', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍣</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Salmon Supreme Platter</div><div class="text-xs text-gray-400">4 Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$28.90</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_salmon', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_salmon">0</span><button onclick="changeAddon('sushi_salmon', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-start gap-3 mb-2"><div class="text-2xl flex-shrink-0">🍱</div><div class="flex-1 min-w-0"><div class="font-semibold text-sm text-gray-800">Ocean Deluxe Set</div><div class="text-xs text-gray-400">4 Tempura Prawn Dragon Roll · 4 Salmon Avocado · 4 Nigiri · 2 Aburi Salmon</div></div></div><div class="flex items-center justify-between pl-1"><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39.90</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_ocean', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_ocean">0</span><button onclick="changeAddon('sushi_ocean', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div></div><div id="addonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold"><span>Add-ons subtotal:</span><span id="addonSubtotalAmount">$0.00</span></div></div>
-        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5"><div class="flex items-center gap-2 mb-3"><span class="text-2xl">⚠️</span><h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3></div><p class="text-amber-700 text-sm mb-4">Please let us know about any allergies or dietary needs.</p><div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4"><label class="allergy-check"><input type="checkbox" id="allergyGluten" /><span class="text-sm font-medium">🌾 Gluten-Free</span></label><label class="allergy-check"><input type="checkbox" id="allergyDairy" /><span class="text-sm font-medium">🥛 Dairy-Free</span></label><label class="allergy-check"><input type="checkbox" id="allergyNuts" /><span class="text-sm font-medium">🥜 Nut Allergy</span></label></div><label class="lbl">Specify any exact allergies.</label><textarea class="field" rows="3" id="allergyNotes" style="resize:vertical;"></textarea></div>
-        <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5"><h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3><p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="liabilityWaiver" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" /><span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry & Liability Waiver on behalf of all guests attending this party.</span></label></div>
-        <div class="mt-5 flex justify-between"><button onclick="goToStep(2)" class="btn-secondary py-3 px-6">← Back</button><button onclick="goToStep(4)" class="btn-primary py-3 px-8">Payment →</button></div>
+        <p class="text-gray-500 text-sm mb-2">Pick your main meal (included) and add any extras you'd like.</p>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">
+          🎂 Outside birthday cake welcome · 🍟 Fries & 🫐 Blackcurrant Drink included · Extra kids charged at package rate
+        </div>
+
+        <!-- Food split -->
+        <div class="mb-6">
+          <label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label>
+          <div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Total exceeds the number of kids — reduce one of the options.</div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="nuggetCard">
+              <div class="text-4xl mb-2">🍗</div>
+              <div class="font-display font-bold text-sm">Chicken Nuggets</div>
+              <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span>
+                <button id="nuggetPlus" onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
+              </div>
+            </div>
+            <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard">
+              <div class="text-4xl mb-2">🍔</div>
+              <div class="font-display font-bold text-sm">Mini Burger</div>
+              <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeFoodSplit('burgers', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="burgerCount">0</span>
+                <button id="burgerPlus" onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
+              </div>
+            </div>
+            <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="vegeCard">
+              <div class="text-4xl mb-2">🥦</div>
+              <div class="font-display font-bold text-sm">Vege Mini Burger</div>
+              <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeFoodSplit('veges', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="vegeCount">0</span>
+                <button id="vegePlus" onclick="changeFoodSplit('veges', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
+              </div>
+            </div>
+          </div>
+          <div id="foodSplitTotal" class="mt-2 text-xs text-center text-gray-400">0 / <span id="foodSplitOf">10</span> selected</div>
+        </div>
+
+        <!-- Add-ons -->
+        <div class="mb-6">
+          <div class="font-display font-bold text-base text-gray-900 mb-1">➕ Add-Ons <span class="text-gray-400 font-normal text-sm">(optional extras)</span></div>
+          <p class="text-xs text-gray-400 mb-3">Prices are per item — added to your total.</p>
+          <div class="space-y-2" id="addonList">
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍕</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Salami & Cheese Pizza (11-inch)</div>
+                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('pizza_salami', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_salami">0</span>
+                  <button onclick="changeAddon('pizza_salami', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍕</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Chorizo & Cheese Pizza (11-inch)</div>
+                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('pizza_chorizo', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_chorizo">0</span>
+                  <button onclick="changeAddon('pizza_chorizo', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍕</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Plain Cheese Pizza (11-inch)</div>
+                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('pizza_plain', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_plain">0</span>
+                  <button onclick="changeAddon('pizza_plain', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍗</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Fried Chicken Platter</div>
+                  <div class="text-xs text-gray-400">10 Nuggets · 6 Fried Chicken · 6 Karaage · Fries · Sauces</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('platter_chicken', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_chicken">0</span>
+                  <button onclick="changeAddon('platter_chicken', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🦐</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Seafood Platter</div>
+                  <div class="text-xs text-gray-400">8 Fish Bites · 6 Prawn Twister · 6 Tempura · 6 Calamari · Fries · Sauces</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('platter_seafood', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_seafood">0</span>
+                  <button onclick="changeAddon('platter_seafood', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🥪</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Adult Platter — 15 pcs Sandwiches</div>
+                  <div class="text-xs text-gray-400">Ham & Cheese Sandwiches</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('adult_sandwich', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_adult_sandwich">0</span>
+                  <button onclick="changeAddon('adult_sandwich', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍣</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Sushi Platter — 40 pcs</div>
+                  <div class="text-xs text-gray-400">Adult sushi platter</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_40', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_40">0</span>
+                  <button onclick="changeAddon('sushi_40', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍣</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Sushi Platter — 24 pcs</div>
+                  <div class="text-xs text-gray-400">Smaller sushi platter</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$30</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_24', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_24">0</span>
+                  <button onclick="changeAddon('sushi_24', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍣</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Salmon Supreme Platter</div>
+                  <div class="text-xs text-gray-400">4 Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$28.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_salmon', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_salmon">0</span>
+                  <button onclick="changeAddon('sushi_salmon', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍱</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Ocean Deluxe Set</div>
+                  <div class="text-xs text-gray-400">4 Tempura Prawn Dragon Roll · 4 Salmon Avocado · 4 Nigiri · 2 Aburi Salmon</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_ocean', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_ocean">0</span>
+                  <button onclick="changeAddon('sushi_ocean', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍣</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Kids Party Platter (48 pcs)</div>
+                  <div class="text-xs text-gray-400">Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_kids48', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_kids48">0</span>
+                  <button onclick="changeAddon('sushi_kids48', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🥗</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Green Garden Platter (28 pcs)</div>
+                  <div class="text-xs text-gray-400">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$42.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_garden28', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_garden28">0</span>
+                  <button onclick="changeAddon('sushi_garden28', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🥤</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Soft Drink</div>
+                  <div class="text-xs text-gray-400">Coke · Sprite · Fanta · L&P — per bottle</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$10</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('drinks_soda', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_soda">0</span>
+                  <button onclick="changeAddon('drinks_soda', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+              <div id="sodaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
+                  <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" onclick="toggleSodaType('Coke')" id="sodaBtn_Coke" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Coke</button>
+                  <button type="button" onclick="toggleSodaType('Sprite')" id="sodaBtn_Sprite" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Sprite</button>
+                  <button type="button" onclick="toggleSodaType('Fanta')" id="sodaBtn_Fanta" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Fanta</button>
+                  <button type="button" onclick="toggleSodaType('L&amp;P')" id="sodaBtn_LandP" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">L&amp;P</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍊</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Orange Juice · Apple Juice</div>
+                  <div class="text-xs text-gray-400">1 Jug</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('drinks_juice', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_juice">0</span>
+                  <button onclick="changeAddon('drinks_juice', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Running add-on subtotal -->
+          <div id="addonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold">
+            <span>Add-ons subtotal:</span><span id="addonSubtotalAmount">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Allergies -->
+        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">⚠️</span>
+            <h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3>
+          </div>
+          <p class="text-amber-700 text-sm mb-4">Please let us know about any allergies or dietary needs — your guests' safety is our top priority.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <label class="allergy-check">
+              <input type="checkbox" id="allergyGluten" />
+              <span class="text-sm font-medium">🌾 Gluten-Free</span>
+            </label>
+            <label class="allergy-check">
+              <input type="checkbox" id="allergyDairy" />
+              <span class="text-sm font-medium">🥛 Dairy-Free</span>
+            </label>
+            <label class="allergy-check">
+              <input type="checkbox" id="allergyNuts" />
+              <span class="text-sm font-medium">🥜 Nut Allergy</span>
+            </label>
+          </div>
+          <label class="lbl">Specify any exact allergies or dietary requirements.</label>
+          <textarea class="field" rows="3" placeholder="e.g. 2 children require gluten-free nuggets. 1 child has a severe tree nut allergy." id="allergyNotes" style="resize:vertical;"></textarea>
+        </div>
+
+        <!-- Liability Waiver -->
+        <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5">
+          <h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3>
+          <p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p>
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="liabilityWaiver" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry & Liability Waiver on behalf of all guests attending this party.</span>
+          </label>
+        </div>
+
+        <div class="mt-5 flex justify-between">
+          <button onclick="goToStep(2)" class="btn-secondary py-3 px-6">← Back</button>
+          <button onclick="goToStep(4)" class="btn-primary py-3 px-8">Payment →</button>
+        </div>
       </div>
       <div id="step4" class="step-panel p-6 md:p-8" style="display:none">
         <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">Secure payment</h2><p class="text-gray-500 text-sm mb-5">Your booking is nearly confirmed!</p>
