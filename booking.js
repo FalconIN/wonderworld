@@ -422,8 +422,9 @@ function buildConfirmationCard() {
 // Add-on prices
 // ---------------------------------------------------------------------------
 const ADDON_PRICES = {
-  pizza_ham:       { label: 'Ham & Cheese Pizza',       price: 25 },
-  pizza_veg:       { label: 'Vegetarian Pizza',         price: 25 },
+  pizza_salami:    { label: 'Salami & Cheese Pizza',    price: 25 },
+  pizza_chorizo:   { label: 'Chorizo & Cheese Pizza',   price: 25 },
+  pizza_plain:     { label: 'Plain Cheese Pizza',       price: 25 },
   platter_chicken: { label: 'Fried Chicken Platter',    price: 39 },
   platter_seafood: { label: 'Seafood Platter',          price: 49 },
   adult_sandwich:  { label: 'Adult Sandwich Platter',   price: 60 },
@@ -431,7 +432,10 @@ const ADDON_PRICES = {
   sushi_24:        { label: 'Sushi Platter (24 pcs)',   price: 30 },
   sushi_salmon:    { label: 'Salmon Supreme Platter',   price: 28.90 },
   sushi_ocean:     { label: 'Ocean Deluxe Set',         price: 39.90 },
-
+  sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
+  drinks_soda:     { label: 'Coke / Sprite / Fanta / L&P', price: 10 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jar)', price: 26 },
 };
 
 function changeAddon(id, delta) {

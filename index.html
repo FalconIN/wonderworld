@@ -138,9 +138,9 @@
         <button onclick="openBooking()" class="btn-primary text-lg py-4 px-8">
           Book a Party Room
         </button>
-        <button onclick="openBooking()" class="font-display font-bold text-lg bg-white/15 hover:bg-white/25 text-white border-2 border-white/30 rounded-2xl py-4 px-8 transition-all backdrop-blur-sm">
+        <a href="/prices#general-admission" class="font-display font-bold text-lg bg-white/15 hover:bg-white/25 text-white border-2 border-white/30 rounded-2xl py-4 px-8 transition-all backdrop-blur-sm">
           General Admission
-        </button>
+        </a>
       </div>
       <div class="mt-8 flex items-center gap-6 justify-center md:justify-start text-white/85 text-sm font-semibold">
         <div class="flex items-center gap-2"><span class="text-yellow-300">★</span> <span><strong class="text-white">4.9</strong> on Google</span></div>
@@ -345,6 +345,7 @@
           <div class="space-y-1 text-sm text-gray-600">
             <div class="flex items-center gap-2">🍗 Nuggets</div>
             <div class="flex items-center gap-2">🍔 Mini Burger</div>
+            <div class="flex items-center gap-2">🥦 Vege Mini Burger</div>
           </div>
         </div>
         <div class="bg-offwhite rounded-2xl p-4">
@@ -363,8 +364,9 @@
       <div class="clay-card p-5">
         <div class="font-display font-bold text-lg text-gray-900 mb-3">Add-Ons</div>
         <div class="space-y-2 text-sm text-gray-600">
-          <div class="flex justify-between"><span>🍕 Extra Ham & Cheese Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
-          <div class="flex justify-between"><span>🍕 Vegetarian Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Salami & Cheese Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Chorizo & Cheese Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
+          <div class="flex justify-between"><span>🍕 Plain Cheese Pizza (11-inch)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span></div>
         </div>
       </div>
       <div class="clay-card p-5">
@@ -414,6 +416,13 @@
           <div class="text-xs text-gray-400 -mt-1">Fresh Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
           <div class="flex justify-between"><span>Green Garden Platter (28 pcs)</span><span class="font-bold text-indigo-600">$42.90</span></div>
           <div class="text-xs text-gray-400 -mt-1">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
+        </div>
+      </div>
+      <div class="clay-card p-5">
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">Drinks</div>
+        <div class="space-y-2 text-sm text-gray-600">
+          <div class="flex justify-between"><span>🥤 Coke · Sprite · Fanta · L&P</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$10</span></div>
+          <div class="flex justify-between"><span>🍊 Orange Juice · Apple Juice (1 Jar)</span><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span></div>
         </div>
       </div>
     </div>
@@ -836,12 +845,12 @@
         <div class="mb-6">
           <label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label>
           <div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Numbers must add up to total guests.</div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-3 gap-3">
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="nuggetCard">
               <div class="text-4xl mb-2">🍗</div>
-              <div class="font-display font-bold text-base">Chicken Nuggets</div>
+              <div class="font-display font-bold text-sm">Chicken Nuggets</div>
               <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
-              <div class="flex items-center justify-center gap-3">
+              <div class="flex items-center justify-center gap-2">
                 <button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span>
                 <button onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
@@ -849,12 +858,22 @@
             </div>
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard">
               <div class="text-4xl mb-2">🍔</div>
-              <div class="font-display font-bold text-base">Mini Burger</div>
+              <div class="font-display font-bold text-sm">Mini Burger</div>
               <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
-              <div class="flex items-center justify-center gap-3">
+              <div class="flex items-center justify-center gap-2">
                 <button onclick="changeFoodSplit('burgers', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="burgerCount">0</span>
                 <button onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+            <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="vegeCard">
+              <div class="text-4xl mb-2">🥦</div>
+              <div class="font-display font-bold text-sm">Vege Mini Burger</div>
+              <div class="text-xs text-green-600 font-semibold mb-3">Included</div>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeFoodSplit('veges', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="vegeCount">0</span>
+                <button onclick="changeFoodSplit('veges', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
               </div>
             </div>
           </div>
@@ -871,16 +890,16 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🍕</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Ham & Cheese Pizza (11-inch)</div>
+                  <div class="font-semibold text-sm text-gray-800">Salami & Cheese Pizza (11-inch)</div>
                   <div class="text-xs text-gray-400">Extra pizza for the party</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
                 <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
                 <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('pizza_ham', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_ham">0</span>
-                  <button onclick="changeAddon('pizza_ham', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  <button onclick="changeAddon('pizza_salami', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_salami">0</span>
+                  <button onclick="changeAddon('pizza_salami', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
             </div>
@@ -889,16 +908,34 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🍕</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Vegetarian Pizza (11-inch)</div>
-                  <div class="text-xs text-gray-400">Mushroom, Tomato & Spinach</div>
+                  <div class="font-semibold text-sm text-gray-800">Chorizo & Cheese Pizza (11-inch)</div>
+                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
                 <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
                 <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('pizza_veg', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_veg">0</span>
-                  <button onclick="changeAddon('pizza_veg', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  <button onclick="changeAddon('pizza_chorizo', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_chorizo">0</span>
+                  <button onclick="changeAddon('pizza_chorizo', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍕</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Plain Cheese Pizza (11-inch)</div>
+                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('pizza_plain', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_plain">0</span>
+                  <button onclick="changeAddon('pizza_plain', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
             </div>
@@ -1029,7 +1066,77 @@
               </div>
             </div>
 
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍣</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Kids Party Platter (48 pcs)</div>
+                  <div class="text-xs text-gray-400">Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_kids48', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_kids48">0</span>
+                  <button onclick="changeAddon('sushi_kids48', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
 
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🥗</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Green Garden Platter (28 pcs)</div>
+                  <div class="text-xs text-gray-400">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$42.90</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('sushi_garden28', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_garden28">0</span>
+                  <button onclick="changeAddon('sushi_garden28', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🥤</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Coke · Sprite · Fanta · L&P</div>
+                  <div class="text-xs text-gray-400">Per bottle</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$10</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('drinks_soda', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_soda">0</span>
+                  <button onclick="changeAddon('drinks_soda', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍊</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Orange Juice · Apple Juice</div>
+                  <div class="text-xs text-gray-400">1 Jar</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('drinks_juice', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_juice">0</span>
+                  <button onclick="changeAddon('drinks_juice', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+            </div>
 
           </div>
 
