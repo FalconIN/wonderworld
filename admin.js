@@ -725,12 +725,14 @@ async function loadMonthRevenue() {
     const last = parseFloat(data.lastMonth || 0);
     const current = parseFloat(data.thisMonth || 0);
     const vsEl = document.getElementById('stat-month-vs');
-    if (last > 0) {
-      const pct = ((current - last) / last * 100).toFixed(0);
-      vsEl.textContent = (pct >= 0 ? '▲' : '▼') + Math.abs(pct) + '% vs last month';
-      vsEl.className = 'text-xs font-semibold ml-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-400');
-    } else {
-      vsEl.textContent = '';
+    if (vsEl) {
+      if (last > 0) {
+        const pct = ((current - last) / last * 100).toFixed(0);
+        vsEl.textContent = (pct >= 0 ? '▲' : '▼') + Math.abs(pct) + '% vs last month';
+        vsEl.className = 'text-xs font-semibold ml-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-400');
+      } else {
+        vsEl.textContent = '';
+      }
     }
     // Pending count note on upcoming stat card
     if (data.pendingCount > 0) {
@@ -1385,17 +1387,20 @@ const AB_SLOT_END_TIMES = {
 
 // Mirrors the customer-facing ADDON_PRICES in booking.js
 const AB_ADDON_PRICES = {
-  pizza_ham:       { label: 'Ham & Cheese Pizza',         price: 25 },
-  pizza_veg:       { label: 'Vegetarian Pizza',           price: 25 },
-  platter_chicken: { label: 'Fried Chicken Platter',      price: 39 },
-  platter_seafood: { label: 'Seafood Platter',            price: 49 },
-  adult_sandwich:  { label: 'Adult Sandwich Platter',     price: 60 },
-  sushi_40:        { label: 'Sushi Platter (40 pcs)',     price: 60 },
-  sushi_24:        { label: 'Sushi Platter (24 pcs)',     price: 30 },
-  sushi_salmon:    { label: 'Salmon Supreme Platter',     price: 28.90 },
-  sushi_ocean:     { label: 'Ocean Deluxe Set',           price: 39.90 },
-  sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',price: 49.90 },
-  sushi_garden28:  { label: 'Green Garden Platter (28 pcs)', price: 42.90 },
+  pizza_salami:    { label: 'Salami & Cheese Pizza (11-inch)', price: 25 },
+  pizza_chorizo:   { label: 'Chorizo & Cheese Pizza (11-inch)', price: 25 },
+  pizza_plain:     { label: 'Plain Cheese Pizza (11-inch)',    price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',           price: 39 },
+  platter_seafood: { label: 'Seafood Platter',                 price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter',          price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)',          price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)',          price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter',          price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',                price: 39.90 },
+  sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',     price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28 pcs)',   price: 42.90 },
+  drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)',        price: 26 },
 };
 
 // Local state for the manual booking modal
@@ -1504,8 +1509,8 @@ async function abSelectRoom(roomId) {
       abState.guests = Math.min(Math.max(abState.guests, room.minGuests), room.maxGuests);
       guestEl.value = abState.guests;
       document.getElementById('ab_foodTarget').textContent = abState.guests;
-      document.getElementById('ab_nuggetCount').textContent = '0';
-      document.getElementById('ab_burgerCount').textContent = '0';
+      document.getElementById('ab_nuggetCount').value = '0';
+      document.getElementById('ab_burgerCount').value = '0';
       document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
     }
   }
