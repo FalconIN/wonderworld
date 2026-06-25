@@ -568,12 +568,12 @@ nav.scrolled {
 .sparkle-el { position: absolute; pointer-events: none; z-index: 2; animation: sparkleDrift ease-in-out infinite; user-select: none; line-height: 1; }
 
 /* ── Scroll reveal ───────────────────────────────────────────── */
-.reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.72s cubic-bezier(0.22,1,0.36,1), transform 0.72s cubic-bezier(0.22,1,0.36,1); }
+.reveal { opacity: 0; transform: translateY(30px); transition: opacity 1.1s cubic-bezier(0.22,1,0.36,1), transform 1.1s cubic-bezier(0.22,1,0.36,1); }
 .reveal.visible { opacity: 1; transform: translateY(0); }
-.reveal-d1 { transition-delay: 0.08s; }
-.reveal-d2 { transition-delay: 0.18s; }
-.reveal-d3 { transition-delay: 0.28s; }
-.reveal-d4 { transition-delay: 0.38s; }
+.reveal-d1 { transition-delay: 0.15s; }
+.reveal-d2 { transition-delay: 0.32s; }
+.reveal-d3 { transition-delay: 0.49s; }
+.reveal-d4 { transition-delay: 0.66s; }
 
 /* ── Shimmer headline text ───────────────────────────────────── */
 .text-shimmer {
