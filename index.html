@@ -124,11 +124,19 @@
 
 <!-- ── HERO ──────────────────────────────────────────────── -->
 <section class="hero-bg relative overflow-hidden">
+  <!-- Aurora blobs -->
+  <div class="aurora-wrap">
+    <div class="aurora-blob aurora-blob-1"></div>
+    <div class="aurora-blob aurora-blob-2"></div>
+    <div class="aurora-blob aurora-blob-3"></div>
+  </div>
+  <!-- Floating sparkles -->
+  <div id="heroSparkles" class="absolute inset-0 pointer-events-none z-1 overflow-hidden"></div>
   <div class="max-w-6xl mx-auto px-5 py-20 md:py-28 flex flex-col md:flex-row items-center gap-12 relative z-10">
     <div class="flex-1 text-center md:text-left">
       <div class="inline-block bg-white/15 text-white text-sm font-bold rounded-full px-4 py-1.5 mb-5 backdrop-blur-md border border-white/20">Auckland's Favourite Indoor Play Centre</div>
       <h1 class="font-display font-bold text-5xl md:text-6xl text-white leading-tight mb-5">
-        The Birthday Party<br/>They'll <span class="text-orange-300">Never Forget</span>
+        The Birthday Party<br/>They'll <span class="text-shimmer">Never Forget</span>
       </h1>
       <p class="text-white/90 text-lg md:text-xl leading-relaxed mb-8 max-w-lg font-body">
         Epic play, incredible food, and zero stress for you. Wonder World Westgate has dedicated party rooms, dedicated staff, and everything sorted — so you can actually enjoy the day too.
@@ -183,6 +191,30 @@
   </div>
 </section>
 
+<!-- ── STATS STRIP ────────────────────────────────────────── -->
+<section class="py-8 bg-white border-b border-indigo-100">
+  <div class="max-w-5xl mx-auto px-5">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
+      <div class="py-5 reveal reveal-d1">
+        <div class="font-display font-bold text-4xl text-indigo-600 stat-val" data-count="500" data-suffix="+">0</div>
+        <div class="text-gray-500 text-sm mt-1">Parties Hosted</div>
+      </div>
+      <div class="py-5 reveal reveal-d2">
+        <div class="font-display font-bold text-4xl text-amber-500 stat-val" data-count="4.9" data-suffix="★" data-decimal="1">0</div>
+        <div class="text-gray-500 text-sm mt-1">Google Rating</div>
+      </div>
+      <div class="py-5 reveal reveal-d3">
+        <div class="font-display font-bold text-4xl text-indigo-600 stat-val" data-count="4" data-suffix=" Rooms">0</div>
+        <div class="text-gray-500 text-sm mt-1">Exclusive Party Rooms</div>
+      </div>
+      <div class="py-5 reveal reveal-d4">
+        <div class="font-display font-bold text-4xl text-teal stat-val" data-count="1000" data-suffix="+">0</div>
+        <div class="text-gray-500 text-sm mt-1">Happy Kids</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── ABOUT ─────────────────────────────────────────────── -->
 <section class="py-16 bg-offwhite">
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -191,28 +223,28 @@
       <p class="text-gray-500 text-lg max-w-xl mx-auto font-body">We've thought of everything — so the only thing on your to-do list is showing up and celebrating.</p>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
+      <div class="clay-card tilt-card p-7 text-center cursor-default reveal reveal-d1">
         <div class="w-16 h-16 rounded-2xl bg-purple-50 border-2 border-purple-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
           <span class="text-3xl">🛝</span>
         </div>
         <h3 class="font-display font-bold text-xl mb-2 text-gray-900">Epic Playground</h3>
         <p class="text-gray-500 text-sm leading-relaxed font-body">Kids get full access to our indoor playground — climbing frames, slides, and more. Entry is included in every party package.</p>
       </div>
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
+      <div class="clay-card tilt-card p-7 text-center cursor-default reveal reveal-d2">
         <div class="w-16 h-16 rounded-2xl bg-blue-light border-2 border-blue-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
           <svg class="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
         </div>
         <h3 class="font-display font-bold text-xl mb-2 text-gray-900">4 Exclusive Party Rooms</h3>
         <p class="text-gray-500 text-sm leading-relaxed font-body">From cosy 8-guest rooms to our epic Big Room that fits up to 24 kids. Every space is decorated and ready to go.</p>
       </div>
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
+      <div class="clay-card tilt-card p-7 text-center cursor-default reveal reveal-d3">
         <div class="w-16 h-16 rounded-2xl bg-orange-50 border-2 border-orange-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
           <svg class="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
         </div>
         <h3 class="font-display font-bold text-xl mb-2 text-gray-900">Real Kids' Food</h3>
         <p class="text-gray-500 text-sm leading-relaxed font-body">Choose from nuggets or mini burgers — all freshly prepared daily. Fries and blackcurrant drinks included. Outside birthday cake is welcome!</p>
       </div>
-      <div class="clay-card p-7 text-center hover:shadow-card cursor-default transition-all hover:-translate-y-1">
+      <div class="clay-card tilt-card p-7 text-center cursor-default reveal reveal-d4">
         <div class="w-16 h-16 rounded-2xl bg-teal-light border-2 border-green-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
           <svg class="w-8 h-8 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         </div>
@@ -226,7 +258,7 @@
 <!-- ── ROOMS TEASER ───────────────────────────────────────── -->
 <section class="py-16 bg-white">
   <div class="max-w-6xl mx-auto px-5">
-    <div class="text-center mb-10">
+    <div class="text-center mb-10 reveal">
       <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Choose Your Party Room</h2>
       <p class="text-gray-500 text-lg max-w-xl mx-auto">4 exclusive spaces — each fully decorated, staffed, and yours for 90 magical minutes.</p>
     </div>
@@ -268,7 +300,7 @@
   <div class="max-w-6xl mx-auto px-5">
     <div class="flex flex-col md:flex-row items-center gap-12">
       <div class="flex-1">
-        <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Legendary Party Food</h2>
+        <h2 class="font-display font-bold text-4xl text-gray-900 mb-3 reveal">Legendary Party Food</h2>
         <p class="text-gray-500 text-lg leading-relaxed mb-6 max-w-lg">Nuggets, mini burgers, fresh sushi, pizza add-ons — all made fresh daily. Kids love it, and there's plenty for the adults too. Outside birthday cake is always welcome.</p>
         <div class="flex flex-wrap gap-2 mb-7">
           <span class="bg-orange-50 border border-orange-200 text-orange-700 text-sm font-semibold rounded-full px-3 py-1">🍗 Chicken Nuggets</span>
@@ -295,7 +327,7 @@
 <!-- ── REVIEWS ──────────────────────────────────────────────── -->
 <section class="py-16 bg-white overflow-hidden">
   <div class="max-w-6xl mx-auto px-5 text-center mb-10">
-    <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">What families are saying</h2>
+    <h2 class="font-display font-bold text-4xl text-gray-900 mb-3 reveal">What families are saying</h2>
     <p class="text-gray-500 text-lg">Real reviews from Wonder World Westgate families on Google</p>
   </div>
   <div class="marquee-outer">
@@ -372,7 +404,7 @@
 <!-- ── FINAL CTA ───────────────────────────────────────────── -->
 <section class="py-20 bg-offwhite">
   <div class="max-w-3xl mx-auto px-5 text-center">
-    <h2 class="font-display font-bold text-4xl md:text-5xl text-gray-900 mb-4">Ready to make it happen?</h2>
+    <h2 class="font-display font-bold text-4xl md:text-5xl text-gray-900 mb-4 reveal">Ready to make it happen?</h2>
     <p class="text-gray-500 text-lg mb-10 max-w-xl mx-auto">Book online in minutes — pick your room, date, and food. We handle everything else so you can be fully present on the day.</p>
     <button onclick="openBooking()" class="btn-primary text-xl py-5 px-14">Book a Party Room</button>
     <p class="text-gray-400 text-sm mt-6">
@@ -1029,6 +1061,78 @@
   </div>
   </div>
 </div>
+
+<!-- ── Landing page enhancements ─────────────────────────────── -->
+<script>
+(function() {
+  /* --- Floating sparkles in hero --- */
+  const SPARKLES = ['✨','⭐','🌟','💫','🎉','🎈','🎊'];
+  const container = document.getElementById('heroSparkles');
+  if (container) {
+    for (let i = 0; i < 14; i++) {
+      const el = document.createElement('span');
+      el.className = 'sparkle-el';
+      el.textContent = SPARKLES[i % SPARKLES.length];
+      el.style.cssText = [
+        'left:' + (5 + Math.floor(i * 6.5) % 92) + '%',
+        'top:' + (8 + (i * 17 % 80)) + '%',
+        'font-size:' + (12 + (i % 4) * 5) + 'px',
+        'animation-duration:' + (3 + (i % 5)) + 's',
+        'animation-delay:' + (i * 0.4) + 's',
+        'opacity:' + (0.5 + (i % 3) * 0.15)
+      ].join(';');
+      container.appendChild(el);
+    }
+  }
+
+  /* --- Scroll reveal (IntersectionObserver) --- */
+  const revealObs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(function(el) { revealObs.observe(el); });
+
+  /* --- Count-up stats --- */
+  function animateCount(el) {
+    const target = parseFloat(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    const decimals = parseInt(el.dataset.decimal || '0');
+    const duration = 1600;
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const val = target * ease;
+      el.textContent = val.toFixed(decimals) + suffix;
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  const statObs = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) { animateCount(e.target); statObs.unobserve(e.target); }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('.stat-val[data-count]').forEach(function(el) { statObs.observe(el); });
+
+  /* --- 3D tilt on about cards --- */
+  document.querySelectorAll('.tilt-card').forEach(function(card) {
+    card.addEventListener('mousemove', function(e) {
+      const r = card.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width  - 0.5) * 14;
+      const y = ((e.clientY - r.top)  / r.height - 0.5) * -14;
+      card.style.transform = 'perspective(700px) rotateX(' + y + 'deg) rotateY(' + x + 'deg) translateY(-5px) scale(1.02)';
+    });
+    card.addEventListener('mouseleave', function() { card.style.transform = ''; });
+  });
+
+  /* --- Navbar scroll glass tighten --- */
+  window.addEventListener('scroll', function() {
+    document.querySelector('nav').classList.toggle('scrolled', window.scrollY > 40);
+  }, { passive: true });
+})();
+</script>
 
 <!-- Scripts — order matters -->
 <script src="firebase.js"></script>

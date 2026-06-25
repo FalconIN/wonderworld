@@ -538,3 +538,61 @@ nav.scrolled {
   font-size: 0.9rem;
   color: #1E3A8A;
 }
+
+/* ── Aurora blobs (hero background) ─────────────────────────── */
+.aurora-wrap { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.aurora-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.22; will-change: transform; }
+.aurora-blob-1 { width: 560px; height: 440px; background: radial-gradient(circle, #7C3AED, #4F46E5); top: -100px; left: -80px; animation: auroraMove1 22s ease-in-out infinite; }
+.aurora-blob-2 { width: 460px; height: 540px; background: radial-gradient(circle, #0891B2, #0E9F6E); bottom: -130px; right: 6%; animation: auroraMove2 28s ease-in-out infinite; }
+.aurora-blob-3 { width: 380px; height: 380px; background: radial-gradient(circle, #F97316, #FBBF24); top: 35%; right: 25%; animation: auroraMove3 20s ease-in-out infinite; }
+@keyframes auroraMove1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(70px, -50px) scale(1.14); }
+  66%       { transform: translate(-35px, 65px) scale(0.93); }
+}
+@keyframes auroraMove2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%       { transform: translate(-80px, -55px) scale(1.11); }
+  75%       { transform: translate(55px, 35px) scale(0.91); }
+}
+@keyframes auroraMove3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(50px, -65px) scale(1.18); }
+}
+
+/* ── Floating sparkles ───────────────────────────────────────── */
+@keyframes sparkleDrift {
+  0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); opacity: 0.7; }
+  50%       { transform: translateY(-22px) rotate(180deg) scale(1.15); opacity: 1; }
+}
+.sparkle-el { position: absolute; pointer-events: none; z-index: 2; animation: sparkleDrift ease-in-out infinite; user-select: none; line-height: 1; }
+
+/* ── Scroll reveal ───────────────────────────────────────────── */
+.reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.72s cubic-bezier(0.22,1,0.36,1), transform 0.72s cubic-bezier(0.22,1,0.36,1); }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-d1 { transition-delay: 0.08s; }
+.reveal-d2 { transition-delay: 0.18s; }
+.reveal-d3 { transition-delay: 0.28s; }
+.reveal-d4 { transition-delay: 0.38s; }
+
+/* ── Shimmer headline text ───────────────────────────────────── */
+.text-shimmer {
+  background: linear-gradient(90deg, #FDE68A 0%, #FFFFFF 35%, #FDE68A 55%, #FCD34D 100%);
+  background-size: 260% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmerSlide 3s linear infinite;
+}
+@keyframes shimmerSlide {
+  from { background-position: 0% center; }
+  to   { background-position: 260% center; }
+}
+
+/* ── 3D tilt card ────────────────────────────────────────────── */
+.tilt-card { transform-style: preserve-3d; will-change: transform; transition: transform 0.18s ease-out, box-shadow 0.18s ease-out; }
+.tilt-card:hover { box-shadow: 0 20px 52px rgba(30,58,138,0.16), inset 0 1px 0 rgba(255,255,255,0.95); }
+
+/* ── Stats strip ─────────────────────────────────────────────── */
+.stat-val { font-variant-numeric: tabular-nums; display: inline-block; }
+
