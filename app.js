@@ -501,9 +501,8 @@ function changeFoodSplit(type, delta) {
   const burgers = parseInt(document.getElementById('burgerCount').textContent) || 0;
   const veges   = parseInt(document.getElementById('vegeCount').textContent)   || 0;
 
-  const current   = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
-  const othersSum = (nuggets + burgers + veges) - current;
-  const next      = Math.max(0, Math.min(current + delta, total - othersSum));
+  const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
+  const next    = Math.max(0, current + delta);
 
   if (type === 'nuggets')      document.getElementById('nuggetCount').textContent = next;
   else if (type === 'burgers') document.getElementById('burgerCount').textContent = next;
@@ -519,19 +518,20 @@ function changeFoodSplit(type, delta) {
   if (totalEl) totalEl.textContent = `${newTotal} / ${total} selected`;
   if (ofEl)    ofEl.textContent = total;
 
-  const errEl = document.getElementById('foodSplitError');
+  // Disable all + buttons when combined total hits the guest count
+  const atMax = newTotal >= total;
+  ['nuggetPlus', 'burgerPlus', 'vegePlus'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = atMax;
+  });
+
   if (newTotal === total) {
-    if (errEl) errEl.classList.add('hidden');
     const parts = [];
     if (n > 0) parts.push(n + ' Nuggets');
     if (b > 0) parts.push(b + ' Mini Burgers');
     if (v > 0) parts.push(v + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
-  } else if (newTotal > total) {
-    if (errEl) errEl.classList.remove('hidden');
-    state.selectedFood = null;
   } else {
-    if (errEl) errEl.classList.add('hidden');
     state.selectedFood = null;
   }
 }
@@ -550,5 +550,9 @@ function initFoodSplit() {
   if (nuggetEl) nuggetEl.textContent = '0';
   if (burgerEl) burgerEl.textContent = '0';
   if (vegeEl)   vegeEl.textContent   = '0';
+  ['nuggetPlus', 'burgerPlus', 'vegePlus'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = false;
+  });
   state.selectedFood = null;
 }

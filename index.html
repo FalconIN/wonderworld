@@ -853,7 +853,7 @@
               <div class="flex items-center justify-center gap-2">
                 <button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span>
-                <button onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
+                <button id="nuggetPlus" onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
               </div>
             </div>
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard">
@@ -863,7 +863,7 @@
               <div class="flex items-center justify-center gap-2">
                 <button onclick="changeFoodSplit('burgers', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="burgerCount">0</span>
-                <button onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
+                <button id="burgerPlus" onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
               </div>
             </div>
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="vegeCard">
@@ -873,7 +873,7 @@
               <div class="flex items-center justify-center gap-2">
                 <button onclick="changeFoodSplit('veges', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="vegeCount">0</span>
-                <button onclick="changeFoodSplit('veges', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button>
+                <button id="vegePlus" onclick="changeFoodSplit('veges', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
               </div>
             </div>
           </div>
