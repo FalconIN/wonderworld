@@ -526,8 +526,11 @@ function changeFoodSplit(type, delta) {
     if (b > 0) parts.push(b + ' Mini Burgers');
     if (v > 0) parts.push(v + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
-  } else {
+  } else if (newTotal > total) {
     if (errEl) errEl.classList.remove('hidden');
+    state.selectedFood = null;
+  } else {
+    if (errEl) errEl.classList.add('hidden');
     state.selectedFood = null;
   }
 }
