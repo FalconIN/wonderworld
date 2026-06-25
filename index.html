@@ -1119,7 +1119,10 @@
                 </div>
               </div>
               <div id="sodaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
-                <div class="text-xs text-gray-500 mb-2 font-semibold">Which flavour(s)?</div>
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
+                  <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                </div>
                 <div class="flex flex-wrap gap-2">
                   <button type="button" onclick="toggleSodaType('Coke')" id="sodaBtn_Coke" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Coke</button>
                   <button type="button" onclick="toggleSodaType('Sprite')" id="sodaBtn_Sprite" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Sprite</button>

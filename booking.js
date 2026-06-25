@@ -451,31 +451,55 @@ function changeAddon(id, delta) {
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
       state.sodaTypes = [];
-      document.querySelectorAll('.soda-type-btn').forEach(btn => {
-        btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
-        btn.classList.add('border-gray-200', 'text-gray-600');
-      });
+    } else {
+      // Trim selections if qty was reduced below current selection count
+      const maxFlavours = Math.min(next, 4);
+      if (state.sodaTypes && state.sodaTypes.length > maxFlavours) {
+        state.sodaTypes = state.sodaTypes.slice(0, maxFlavours);
+      }
     }
+    updateSodaPickerUI();
   }
 
   updateAddonSubtotal();
   renderOrderSummary();
 }
 
-function toggleSodaType(type) {
+function updateSodaPickerUI() {
   if (!state.sodaTypes) state.sodaTypes = [];
-  const idx = state.sodaTypes.indexOf(type);
-  if (idx === -1) state.sodaTypes.push(type);
-  else state.sodaTypes.splice(idx, 1);
+  const qty = state.addons?.drinks_soda || 0;
+  const maxFlavours = Math.min(qty, 4);
+  const selected = state.sodaTypes;
+  const atMax = selected.length >= maxFlavours;
 
   document.querySelectorAll('.soda-type-btn').forEach(btn => {
-    const selected = state.sodaTypes.includes(btn.textContent.trim());
-    btn.classList.toggle('border-indigo-500', selected);
-    btn.classList.toggle('bg-indigo-50', selected);
-    btn.classList.toggle('text-indigo-700', selected);
-    btn.classList.toggle('border-gray-200', !selected);
-    btn.classList.toggle('text-gray-600', !selected);
+    const isSelected = selected.includes(btn.textContent.trim());
+    btn.classList.toggle('border-indigo-500', isSelected);
+    btn.classList.toggle('bg-indigo-50', isSelected);
+    btn.classList.toggle('text-indigo-700', isSelected);
+    btn.classList.toggle('border-gray-200', !isSelected);
+    btn.classList.toggle('text-gray-600', !isSelected);
+    // Grey out unselected buttons once limit reached
+    btn.classList.toggle('opacity-30', atMax && !isSelected);
+    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
   });
+
+  const counter = document.getElementById('sodaTypeCounter');
+  if (counter) counter.textContent = `${selected.length} / ${maxFlavours} selected`;
+}
+
+function toggleSodaType(type) {
+  if (!state.sodaTypes) state.sodaTypes = [];
+  const qty = state.addons?.drinks_soda || 0;
+  const maxFlavours = Math.min(qty, 4);
+  const idx = state.sodaTypes.indexOf(type);
+  if (idx === -1) {
+    if (state.sodaTypes.length >= maxFlavours) return; // already at limit
+    state.sodaTypes.push(type);
+  } else {
+    state.sodaTypes.splice(idx, 1);
+  }
+  updateSodaPickerUI();
   renderOrderSummary();
 }
 

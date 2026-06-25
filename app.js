@@ -162,6 +162,15 @@ async function validateStep(n) {
     if (burgers > 0) parts.push(burgers + ' Mini Burgers');
     if (veges   > 0) parts.push(veges   + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
+    const sodaQty = state.addons?.drinks_soda || 0;
+    if (sodaQty > 0) {
+      const required = Math.min(sodaQty, 4);
+      const picked = state.sodaTypes?.length || 0;
+      if (picked !== required) {
+        showFieldError(`Please select ${required} soft drink flavour${required > 1 ? 's' : ''} (${picked} of ${required} chosen).`);
+        return false;
+      }
+    }
     const waiver = document.getElementById('liabilityWaiver');
     if (waiver && !waiver.checked) {
       showFieldError('Please read and accept the Terms of Entry & Liability Waiver to continue.');
