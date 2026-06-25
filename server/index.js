@@ -65,10 +65,16 @@ app.get('/api/config', (req, res) => res.json(clientConfig()));
 // ---------------------------------------------------------------------------
 // HTML pages — served dynamically so window.__ENV__ is always injected fresh
 // ---------------------------------------------------------------------------
-app.get(['/', '/index.html'],   serveHtml('index.html'));
-app.get(['/login', '/login.html'], serveHtml('login.html'));
-app.get(['/admin', '/admin.html'], serveHtml('admin.html'));
+app.get(['/', '/index.html'],       serveHtml('index.html'));
+app.get(['/login', '/login.html'],   serveHtml('login.html'));
+app.get(['/admin', '/admin.html'],   serveHtml('admin.html'));
 app.get(['/prices', '/prices.html'], serveHtml('prices.html'));
+app.get(['/rooms', '/rooms.html'],   serveHtml('rooms.html'));
+app.get(['/menu', '/menu.html'],     serveHtml('menu.html'));
+app.get(['/faq', '/faq.html'],       serveHtml('faq.html'));
+app.get(['/hours', '/hours.html'],   serveHtml('hours.html'));
+app.get(['/rules', '/rules.html'],   serveHtml('rules.html'));
+app.get(['/contact', '/contact.html'], serveHtml('contact.html'));
 
 // All other static assets (JS, CSS, images, fonts, etc.)
 app.use(express.static(ROOT));
