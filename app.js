@@ -501,8 +501,9 @@ function changeFoodSplit(type, delta) {
   const burgers = parseInt(document.getElementById('burgerCount').textContent) || 0;
   const veges   = parseInt(document.getElementById('vegeCount').textContent)   || 0;
 
-  const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
-  const next    = Math.max(0, current + delta);
+  const current   = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
+  const othersSum = (nuggets + burgers + veges) - current;
+  const next      = Math.max(0, Math.min(current + delta, total - othersSum));
 
   if (type === 'nuggets')      document.getElementById('nuggetCount').textContent = next;
   else if (type === 'burgers') document.getElementById('burgerCount').textContent = next;
