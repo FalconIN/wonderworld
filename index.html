@@ -1065,26 +1065,6 @@
 <!-- ── Landing page enhancements ─────────────────────────────── -->
 <script>
 (function() {
-  /* --- Floating sparkles in hero --- */
-  const SPARKLES = ['✨','⭐','🌟','💫','🎉','🎈','🎊'];
-  const container = document.getElementById('heroSparkles');
-  if (container) {
-    for (let i = 0; i < 14; i++) {
-      const el = document.createElement('span');
-      el.className = 'sparkle-el';
-      el.textContent = SPARKLES[i % SPARKLES.length];
-      el.style.cssText = [
-        'left:' + (5 + Math.floor(i * 6.5) % 92) + '%',
-        'top:' + (8 + (i * 17 % 80)) + '%',
-        'font-size:' + (12 + (i % 4) * 5) + 'px',
-        'animation-duration:' + (3 + (i % 5)) + 's',
-        'animation-delay:' + (i * 0.4) + 's',
-        'opacity:' + (0.5 + (i % 3) * 0.15)
-      ].join(';');
-      container.appendChild(el);
-    }
-  }
-
   /* --- Scroll reveal (IntersectionObserver) --- */
   const revealObs = new IntersectionObserver(function(entries) {
     entries.forEach(function(e) {
