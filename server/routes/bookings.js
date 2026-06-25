@@ -119,6 +119,7 @@ router.post('/bookings', requireAuth, async (req, res) => {
 
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
   let verifiedTotalAmount;
+  let room;
   try {
     const pi = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
     if (pi.status !== 'succeeded') {
@@ -126,11 +127,12 @@ router.post('/bookings', requireAuth, async (req, res) => {
     }
 
     // Compute expected amount server-side from the room price in the database
-    const { rows: [room] } = await pool.query(
+    const { rows: [foundRoom] } = await pool.query(
       'SELECT id, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
-    if (!room) return res.status(400).json({ error: 'Invalid room.' });
+    if (!foundRoom) return res.status(400).json({ error: 'Invalid room.' });
+    room = foundRoom;
 
     const serverBaseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
     const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
