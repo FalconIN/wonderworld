@@ -192,22 +192,22 @@
 </section>
 
 <!-- ── STATS STRIP ────────────────────────────────────────── -->
-<section class="py-8 bg-white border-b border-indigo-100">
+<section id="statsStrip" class="py-8 bg-white border-b border-indigo-100">
   <div class="max-w-5xl mx-auto px-5">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-center">
-      <div class="py-5 reveal reveal-d1">
+      <div class="py-5 stat-item" style="opacity:0;transform:translateY(24px);transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1),transform 0.7s cubic-bezier(0.22,1,0.36,1);">
         <div class="font-display font-bold text-4xl text-indigo-600 stat-val" data-count="500" data-suffix="+">0</div>
         <div class="text-gray-500 text-sm mt-1">Parties Hosted</div>
       </div>
-      <div class="py-5 reveal reveal-d2">
+      <div class="py-5 stat-item" style="opacity:0;transform:translateY(24px);transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1),transform 0.7s cubic-bezier(0.22,1,0.36,1);">
         <div class="font-display font-bold text-4xl text-amber-500 stat-val" data-count="4.9" data-suffix="★" data-decimal="1">0</div>
         <div class="text-gray-500 text-sm mt-1">Google Rating</div>
       </div>
-      <div class="py-5 reveal reveal-d3">
+      <div class="py-5 stat-item" style="opacity:0;transform:translateY(24px);transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1),transform 0.7s cubic-bezier(0.22,1,0.36,1);">
         <div class="font-display font-bold text-4xl text-indigo-600 stat-val" data-count="4" data-suffix=" Rooms">0</div>
         <div class="text-gray-500 text-sm mt-1">Exclusive Party Rooms</div>
       </div>
-      <div class="py-5 reveal reveal-d4">
+      <div class="py-5 stat-item" style="opacity:0;transform:translateY(24px);transition:opacity 0.7s cubic-bezier(0.22,1,0.36,1),transform 0.7s cubic-bezier(0.22,1,0.36,1);">
         <div class="font-display font-bold text-4xl text-teal stat-val" data-count="1000" data-suffix="+">0</div>
         <div class="text-gray-500 text-sm mt-1">Happy Kids</div>
       </div>
@@ -1073,28 +1073,40 @@
   }, { threshold: 0.12 });
   document.querySelectorAll('.reveal').forEach(function(el) { revealObs.observe(el); });
 
-  /* --- Count-up stats --- */
+  /* --- Count-up stats (staggered one-by-one) --- */
   function animateCount(el) {
     const target = parseFloat(el.dataset.count);
     const suffix = el.dataset.suffix || '';
     const decimals = parseInt(el.dataset.decimal || '0');
-    const duration = 1600;
+    const duration = 1400;
     const start = performance.now();
     function step(now) {
       const t = Math.min((now - start) / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
-      const val = target * ease;
-      el.textContent = val.toFixed(decimals) + suffix;
+      el.textContent = (target * ease).toFixed(decimals) + suffix;
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
-  const statObs = new IntersectionObserver(function(entries) {
-    entries.forEach(function(e) {
-      if (e.isIntersecting) { animateCount(e.target); statObs.unobserve(e.target); }
-    });
-  }, { threshold: 0.5 });
-  document.querySelectorAll('.stat-val[data-count]').forEach(function(el) { statObs.observe(el); });
+  var statsTriggered = false;
+  var statStrip = document.getElementById('statsStrip');
+  if (statStrip) {
+    new IntersectionObserver(function(entries, obs) {
+      if (entries[0].isIntersecting && !statsTriggered) {
+        statsTriggered = true;
+        obs.disconnect();
+        var items = statStrip.querySelectorAll('.stat-item');
+        items.forEach(function(item, i) {
+          setTimeout(function() {
+            item.style.opacity = '1';
+            item.style.transform = 'translateY(0)';
+            var counter = item.querySelector('.stat-val[data-count]');
+            if (counter) animateCount(counter);
+          }, i * 350);
+        });
+      }
+    }, { threshold: 0.3 }).observe(statStrip);
+  }
 
   /* --- 3D tilt on about cards --- */
   document.querySelectorAll('.tilt-card').forEach(function(card) {
