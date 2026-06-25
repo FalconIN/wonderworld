@@ -13,6 +13,15 @@ let allBookings   = [];
 let allPayments   = [];
 let allCustomers  = [];
 
+const NZ_TZ = 'Pacific/Auckland';
+function nzDateStr(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: NZ_TZ }).format(d);
+}
+function nzGetDay(d = new Date()) {
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: NZ_TZ, weekday: 'short' }).format(d);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(s);
+}
+
 // ---------------------------------------------------------------------------
 // Init: check admin access via Firebase Auth
 // ---------------------------------------------------------------------------
@@ -464,7 +473,7 @@ async function exportBookingsToExcel() {
   };
 
   const exportRows = rows.map(b => {
-    const bookedOn = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-NZ') : '';
+    const bookedOn = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-NZ', { timeZone: NZ_TZ }) : '';
     const roomName = b.roomName || '';
     return {
       'Date Booked':  bookedOn,
@@ -501,7 +510,7 @@ async function exportBookingsToExcel() {
 
   const filename = useRange
     ? `bookings_${from}_to_${to}.xlsx`
-    : `bookings_all_${new Date().toISOString().split('T')[0]}.xlsx`;
+    : `bookings_all_${nzDateStr()}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -646,7 +655,7 @@ async function renderBookingsDotChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }),
+            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', month: 'short', day: 'numeric' }),
             label: (ctx) => { const n = ctx.raw.y || 0; return `${n} room${n === 1 ? '' : 's'} booked`; },
           },
         },
@@ -809,10 +818,10 @@ async function loadWeekendCapacity() {
     for (let i = 0; i < 42; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      const dow = d.getDay();
+      const dow = nzGetDay(d);
       if (dow === 0 || dow === 6) {
-        const iso = d.toISOString().slice(0, 10);
-        days.push({ iso, label: d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
+        const iso = nzDateStr(d);
+        days.push({ iso, label: d.toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
       }
     }
 
@@ -847,7 +856,7 @@ function printRunSheet() {
 
 async function loadToday() {
   const dateLabel = document.getElementById('today-date-label');
-  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   await Promise.all([renderTodayRunSheet(), renderAllergyAlerts(), renderBalancesDue()]);
 }
@@ -1087,7 +1096,7 @@ async function viewBooking(bookingId) {
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
         <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
       </div>` : ''}
-      <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ')}</div>
+      <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</div>
       <div class="flex gap-3 mt-2">
         <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
           ✉️ Resend Confirmation
@@ -1212,7 +1221,7 @@ function renderPaymentsTable(payments) {
       <td><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
       <td class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
       <td><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
-      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ')}</td>
+      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
       <td>
         ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
@@ -1416,7 +1425,7 @@ let abState = {
 function openAddBookingModal() {
   abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {} };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = nzDateStr();
   document.getElementById('ab_date').min = today;
   document.getElementById('ab_date').value = '';
   document.getElementById('ab_guests').value = 10;

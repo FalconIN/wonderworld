@@ -11,6 +11,15 @@
  *   - Init
  */
 
+const NZ_TZ = 'Pacific/Auckland';
+function nzDateStr(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: NZ_TZ }).format(d);
+}
+function nzGetDay(d = new Date()) {
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: NZ_TZ, weekday: 'short' }).format(d);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(s);
+}
+
 // ---------------------------------------------------------------------------
 // Global state
 // ---------------------------------------------------------------------------
@@ -341,7 +350,7 @@ function resetWizard() {
   // Set min date
   const dateInput = document.getElementById('partyDate');
   if (dateInput) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = nzDateStr();
     dateInput.min   = today;
     dateInput.value = '';
   }
@@ -412,7 +421,7 @@ const HOURS = [
 function renderHours() {
   const table = document.getElementById('hoursTable');
   if (!table) return;
-  const today = new Date().getDay();
+  const today = nzGetDay();
   const todayIndex = today === 0 ? 1 : today >= 1 && today <= 2 ? 2 : 0;
   table.innerHTML = HOURS.map((row, i) => {
     const isToday   = i === todayIndex;
@@ -493,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const dateInput = document.getElementById('partyDate');
   if (dateInput) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = nzDateStr();
     dateInput.min = today;
   }
 
