@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Pricing — Wonder World Westgate</title>
+<title>Contact — Wonder World Westgate</title>
 <link rel="icon" type="image/x-icon" href="favicon.ico" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,19 +38,6 @@
         },
       },
     },
-  };
-</script>
-
-<script>
-  window.__ENV__ = {
-    FIREBASE_API_KEY:             "AIzaSyAZRfR1P2NlOKWUl2PXOp8qa-l9x3w3Bbw",
-    FIREBASE_AUTH_DOMAIN:         "wonderworld-ce5f2.firebaseapp.com",
-    FIREBASE_PROJECT_ID:          "wonderworld-ce5f2",
-    FIREBASE_STORAGE_BUCKET:      "wonderworld-ce5f2.firebasestorage.app",
-    FIREBASE_MESSAGING_SENDER_ID: "829014493900",
-    FIREBASE_APP_ID:              "1:829014493900:web:985bc31a243265efd55069",
-    STRIPE_PK:                    "pk_test_51TiSuNGsKWwyhZzs5USwO5LkiTJIgX3cDQAslU2nz4yl96cYVdnSrF3ms7tslqSRHwSqRnZOf8rbPvPHs1yKIWRT00otZBgTFv",
-    ENVIRONMENT:                  "production"
   };
 </script>
 </head>
@@ -98,9 +85,9 @@
     <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
       <a href="/rooms" class="hover:text-indigo-500 transition-colors">Party Rooms</a>
       <a href="/menu" class="hover:text-indigo-500 transition-colors">Menu</a>
-      <a href="/prices" class="text-indigo-600 font-semibold">Pricing</a>
+      <a href="/prices" class="hover:text-indigo-500 transition-colors">Pricing</a>
       <a href="/faq" class="hover:text-indigo-500 transition-colors">FAQs</a>
-      <a href="/contact" class="hover:text-indigo-500 transition-colors">Contact</a>
+      <a href="/contact" class="text-indigo-600 font-semibold">Contact</a>
     </div>
     <div class="flex items-center gap-3">
       <div id="navAuthArea">
@@ -112,99 +99,91 @@
 </nav>
 
 <!-- ── PAGE HEADER ───────────────────────────────────────── -->
-<div style="background:linear-gradient(135deg,#1E3A8A,#3B82F6);">
+<div style="background:linear-gradient(135deg,#1E3A8A,#0E9F6E);">
   <div class="max-w-6xl mx-auto px-5 py-10 text-center text-white">
-    <h1 class="font-display font-bold text-4xl md:text-5xl mb-2">Pricing</h1>
-    <p class="text-white/80 text-lg">Everything included — no hidden fees. Just show up and celebrate.</p>
+    <h1 class="font-display font-bold text-4xl md:text-5xl mb-2">Get in Touch</h1>
+    <p class="text-white/80 text-lg">We'd love to help you plan the perfect party.</p>
   </div>
 </div>
 
-<div class="max-w-5xl mx-auto px-5 py-16">
+<div class="max-w-4xl mx-auto px-5 py-16">
 
-  <!-- Party Packages -->
-  <div class="text-center mb-12">
-    <h2 class="font-display font-bold text-3xl text-gray-900 mb-3">Party Room Packages</h2>
-    <p class="text-gray-500 text-lg max-w-xl mx-auto">Everything included. Just show up and celebrate.</p>
-  </div>
-
-  <!-- Duration options -->
-  <div class="mb-12 max-w-lg mx-auto">
-    <div class="clay-card p-8 border-2 border-indigo-500 relative">
-      <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-xs font-bold rounded-full px-4 py-1">PARTY PACKAGE</div>
-      <div class="font-display font-bold text-3xl text-gray-900 mb-1">90 Minutes</div>
-      <div class="text-gray-500 text-sm mb-4">Standard party package</div>
-      <div class="font-display font-bold text-6xl text-indigo-600 mb-1">$39</div>
-      <div class="text-gray-400 text-sm mb-6">per child</div>
-      <div class="space-y-2 text-sm text-gray-600 mb-6">
-        <div class="flex items-center gap-2">✅ Playground entry (value $26.80)</div>
-        <div class="flex items-center gap-2">✅ 90 min exclusive party room access</div>
-        <div class="flex items-center gap-2">✅ 15 min early entry for setup</div>
-        <div class="flex items-center gap-2">✅ Choice of Nuggets, Mini Burger, or Vege Mini Burger</div>
-        <div class="flex items-center gap-2">✅ Fries & Blackcurrant Drink</div>
-        <div class="flex items-center gap-2">✅ Dedicated party host</div>
-        <div class="flex items-center gap-2">🎂 Outside birthday cake welcome</div>
-      </div>
-      <button onclick="openBooking()" class="btn-primary w-full py-3 text-center block">Book Now →</button>
+  <!-- Contact Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+    <!-- Phone -->
+    <a href="tel:+6494160917" class="clay-card p-6 text-center block hover:shadow-card transition-shadow group">
+      <div class="text-5xl mb-3">📞</div>
+      <div class="font-display font-bold text-lg text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">Phone</div>
+      <div class="text-indigo-600 font-semibold text-base">09 416 0917</div>
+      <div class="text-gray-400 text-xs mt-2">Mon–Sun · During opening hours</div>
+    </a>
+    <!-- Email -->
+    <a href="mailto:Bookings@wonderworldwestgate.co.nz" class="clay-card p-6 text-center block hover:shadow-card transition-shadow group">
+      <div class="text-5xl mb-3">✉️</div>
+      <div class="font-display font-bold text-lg text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">Email</div>
+      <div class="text-indigo-600 font-semibold text-sm break-words">Bookings@wonderworld<br/>westgate.co.nz</div>
+      <div class="text-gray-400 text-xs mt-2">We reply within 24 hours</div>
+    </a>
+    <!-- Address -->
+    <div class="clay-card p-6 text-center">
+      <div class="text-5xl mb-3">📍</div>
+      <div class="font-display font-bold text-lg text-gray-900 mb-1">Location</div>
+      <div class="text-gray-700 text-sm">T2 &amp; 3, 33/47 Northside Drive</div>
+      <div class="text-gray-700 text-sm">Westgate, Auckland 0814</div>
+      <div class="text-gray-400 text-xs mt-2">Westgate Shopping Centre</div>
     </div>
   </div>
 
-  <!-- Room minimums -->
-  <div class="bg-white rounded-2xl shadow-soft p-6 mb-8">
-    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">Room Requirements</h2>
-    <div class="grid grid-cols-2 gap-4">
-      <div class="bg-indigo-light rounded-xl p-4 text-center">
-        <div class="font-display font-bold text-lg text-indigo-700">Small Rooms</div>
-        <div class="text-sm text-gray-500 mt-1">Sunshine · Dream · Forest</div>
-        <div class="font-bold text-2xl text-indigo-600 mt-2">Min 8 kids</div>
-      </div>
-      <div class="bg-amber-light rounded-xl p-4 text-center">
-        <div class="font-display font-bold text-lg text-amber-700">The Big Room</div>
-        <div class="text-sm text-gray-500 mt-1">Extra large zone</div>
-        <div class="font-bold text-2xl text-amber-600 mt-2">Min 12 kids</div>
-      </div>
+  <!-- Map + Directions -->
+  <div class="clay-card overflow-hidden mb-8">
+    <div class="aspect-video w-full">
+      <iframe
+        src="https://www.google.com/maps?q=T2+%263,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814&output=embed"
+        width="100%"
+        height="100%"
+        style="border:0;"
+        allowfullscreen=""
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        title="Wonder World Westgate location map">
+      </iframe>
     </div>
-    <p class="text-xs text-gray-400 mt-3 text-center">Extra children charged at the same package rate per child.</p>
+    <div class="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <div class="font-display font-bold text-lg text-gray-900">Wonder World Westgate</div>
+        <div class="text-gray-500 text-sm">T2 &amp; 3, 33/47 Northside Drive, Westgate, Auckland 0814</div>
+      </div>
+      <a href="https://www.google.com/maps/search/T2+%26+3,+33%2F47+Northside+Drive,+Westgate,+Auckland+0814"
+         target="_blank"
+         rel="noopener noreferrer"
+         class="btn-primary text-sm py-2.5 px-6 whitespace-nowrap flex-shrink-0">
+        Get Directions →
+      </a>
+    </div>
   </div>
 
-  <!-- Booking times -->
-  <div class="bg-white rounded-2xl shadow-soft p-6 mb-8">
-    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">⏰ Party Room Times</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">9:30 AM</div><div class="text-xs text-gray-400">– 11:00 AM</div></div>
-      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">11:30 AM</div><div class="text-xs text-gray-400">– 1:00 PM</div></div>
-      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">1:30 PM</div><div class="text-xs text-gray-400">– 3:00 PM</div></div>
-      <div class="bg-offwhite rounded-xl p-3 text-center"><div class="font-bold text-gray-800">3:30 PM</div><div class="text-xs text-gray-400">– 5:00 PM</div></div>
-    </div>
-  </div>
-
-  <!-- General Admission -->
-  <div id="general-admission" class="bg-white rounded-2xl shadow-soft p-6 mb-8">
-    <h2 class="font-display font-bold text-2xl text-gray-900 mb-4">🎟️ General Admission</h2>
-    <p class="text-gray-500 text-sm mb-4">Walk-in anytime — no booking needed for general play.</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="bg-teal-light rounded-xl p-4 text-center">
-        <div class="font-bold text-gray-800">Under 1</div>
-        <div class="font-display font-bold text-3xl text-teal mt-1">FREE</div>
-        <div class="text-xs text-gray-400 mt-1">Babies & infants</div>
+  <!-- Directions card -->
+  <div class="bg-white rounded-2xl shadow-soft p-6 mb-12">
+    <h2 class="font-display font-bold text-xl text-gray-900 mb-4">🚗 Getting Here</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-600">
+      <div>
+        <div class="font-semibold text-gray-800 mb-2">By Car</div>
+        <p>We're located inside Westgate Shopping Centre on the North Shore. Enter via Northside Drive and look for Tenant 2 &amp; 3 — we're right inside the main complex.</p>
       </div>
-      <div class="bg-indigo-light rounded-xl p-4 text-center">
-        <div class="font-bold text-gray-800">Ages 1–2</div>
-        <div class="font-display font-bold text-3xl text-indigo mt-1">$23.80</div>
-        <div class="text-xs text-gray-400 mt-1">Per session</div>
-      </div>
-      <div class="bg-amber-light rounded-xl p-4 text-center">
-        <div class="font-bold text-gray-800">Ages 3–13</div>
-        <div class="font-display font-bold text-3xl text-amber mt-1">$26.80</div>
-        <div class="text-xs text-gray-400 mt-1">Per session</div>
+      <div>
+        <div class="font-semibold text-gray-800 mb-2">Parking</div>
+        <p>Free parking is available on-site at Westgate Shopping Centre. Plenty of spaces directly outside — easy for unloading decorations and birthday supplies!</p>
       </div>
     </div>
-    <p class="text-xs text-gray-400 mt-3">One supervising adult enters free with every paying child. Additional adults welcome at no charge.</p>
   </div>
 
   <!-- CTA -->
-  <div class="text-center">
+  <div class="text-center bg-indigo-light rounded-3xl py-12 px-8">
+    <div class="text-5xl mb-4">🎉</div>
+    <h2 class="font-display font-bold text-3xl text-gray-900 mb-3">Ready to book your party?</h2>
+    <p class="text-gray-500 mb-6 max-w-md mx-auto">Don't wait — party rooms book out fast, especially on weekends!</p>
     <button onclick="openBooking()" class="btn-primary text-lg py-4 px-12">Book a Party Room</button>
-    <p class="text-gray-400 text-sm mt-4">Questions? Call us on <a href="tel:+6494160917" class="text-indigo-500">09 416 0917</a> or email <a href="mailto:Bookings@wonderworldwestgate.co.nz" class="text-indigo-500">Bookings@wonderworldwestgate.co.nz</a></p>
+    <p class="text-gray-400 text-xs mt-4">Or call us directly on <a href="tel:+6494160917" class="text-indigo-500">09 416 0917</a> and we'll sort it out.</p>
   </div>
 
 </div>
