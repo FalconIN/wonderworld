@@ -390,7 +390,7 @@ async function finaliseBooking() {
     goToStep(6);
     launchConfetti();
   } catch (err) {
-    showFieldError('Something went wrong: ' + err.message + '. Please contact us at hello@wonderworldwestgate.co.nz');
+    showFieldError('Something went wrong: ' + err.message + '. Please contact us at Bookings@wonderworldwestgate.co.nz');
   } finally {
     setFinaliseLoading(false);
   }

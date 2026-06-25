@@ -433,8 +433,8 @@ function renderHours() {
 // FAQ accordion
 // ---------------------------------------------------------------------------
 const FAQ_DATA = [
-  { q: "What's included in the party package?", a: "Every party includes exclusive use of your chosen room for 2 hours, a dedicated party host, tableware, decorations, and your choice of food for all guests. Complimentary soft drinks are provided for the birthday parents too!" },
-  { q: "Can I bring my own birthday cake?", a: "Absolutely! You're welcome to bring your own cake. We'll provide plates, napkins, and candles — just let us know in advance if you need any special arrangements for cutting and serving." },
+  { q: "What's included in the party package?", a: "Every party includes exclusive use of your chosen room for 90 minutes, a dedicated party host, tableware, decorations, and your choice of food for all guests. Complimentary soft drinks are provided for the birthday parents too!" },
+  { q: "Can I bring my own birthday cake?", a: "Absolutely! You're welcome to bring your own cake. We'll provide plates and napkins — just let us know in advance if you need any special arrangements for cutting and serving." },
   { q: "How far in advance should I book?", a: "We recommend booking at least 3–4 weeks ahead, especially for weekend slots which fill up quickly. Holiday periods (school holidays, Christmas, Easter) can book out 6–8 weeks in advance, so get in early!" },
   { q: "What's the cancellation or rescheduling policy?", a: "Free cancellation or rescheduling up to 7 days before your party date. Within 7 days, a 50% fee applies. No-shows on the day are non-refundable. Contact us early and we'll always do our best to help." },
   { q: "Are parents and adults allowed to stay?", a: "Yes! Parents and caregivers are welcome to stay for the entire party. We have comfortable seating areas and complimentary tea and coffee for adults while the kids have the time of their lives." },

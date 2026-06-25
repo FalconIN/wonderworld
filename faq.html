@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FAQs — Wonder World Westgate</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5', dark: '#065F46' },
+          indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF', dark: '#1e3a8a' },
+          blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
+          cta:    { DEFAULT: '#F97316', dark: '#EA6000' },
+          amber:  { DEFAULT: '#F59E0B', light: '#FEF3C7', dark: '#B45309' },
+          offwhite: '#EFF6FF',
+        },
+        fontFamily: {
+          display: ['Fredoka', 'sans-serif'],
+          body:    ['Nunito', 'sans-serif'],
+        },
+        borderRadius: { '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem' },
+        boxShadow: {
+          soft:  '0 6px 20px rgba(30,58,138,0.08)',
+          card:  '0 12px 36px rgba(30,58,138,0.14)',
+          clay:  '0 8px 24px rgba(30,58,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9)',
+          glow:  '0 0 0 4px rgba(59,130,246,0.2)',
+        },
+      },
+    },
+  };
+</script>
+</head>
+<body>
+
+<!-- ── PIN GATE ─────────────────────────────────────────── -->
+<div id="pinGateOverlay" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#1e1b4b,#0E9F6E);display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:white;border-radius:24px;padding:40px 32px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,0.4);">
+    <img src="wwmascot-64.png" alt="Wonder World" style="width:56px;height:56px;border-radius:14px;margin:0 auto 16px;image-rendering:pixelated;" />
+    <h1 style="font-family:'Fredoka',sans-serif;font-weight:700;font-size:24px;color:#111827;margin-bottom:6px;">Wonder World Westgate</h1>
+    <p style="color:#6B7280;font-size:14px;margin-bottom:24px;">Site under construction — enter PIN to preview</p>
+    <input id="pinGateInput" type="tel" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off"
+      style="width:100%;text-align:center;font-size:32px;letter-spacing:12px;font-weight:700;padding:14px;border:2px solid #E5E7EB;border-radius:14px;outline:none;font-family:'Fredoka',sans-serif;color:#111827;" />
+    <div id="pinGateError" style="color:#EF4444;font-size:13px;margin-top:10px;display:none;">Incorrect PIN, try again.</div>
+    <button onclick="checkPinGate()" style="margin-top:18px;width:100%;background:linear-gradient(135deg,#4F46E5,#4338CA);color:white;font-weight:700;font-size:16px;border:none;border-radius:14px;padding:14px;cursor:pointer;font-family:'Fredoka',sans-serif;">Enter</button>
+  </div>
+</div>
+<script>
+  (function() {
+    const CORRECT_PIN = '2626';
+    const STORAGE_KEY = 'ww_pin_verified';
+    function unlockSite() { document.getElementById('pinGateOverlay').remove(); document.documentElement.style.overflow = ''; }
+    if (sessionStorage.getItem(STORAGE_KEY) === 'true') { unlockSite(); } else {
+      document.documentElement.style.overflow = 'hidden';
+      window.checkPinGate = function() {
+        const val = document.getElementById('pinGateInput').value.trim();
+        if (val === CORRECT_PIN) { sessionStorage.setItem(STORAGE_KEY, 'true'); unlockSite(); }
+        else { document.getElementById('pinGateError').style.display = 'block'; document.getElementById('pinGateInput').value = ''; document.getElementById('pinGateInput').focus(); }
+      };
+      document.addEventListener('DOMContentLoaded', function() {
+        const input = document.getElementById('pinGateInput');
+        if (input) { input.focus(); input.addEventListener('keydown', function(e) { if (e.key === 'Enter') checkPinGate(); }); }
+      });
+    }
+  })();
+</script>
+
+<!-- ── NAVBAR ───────────────────────────────────────────── -->
+<nav>
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <img src="wwmascot-64.png" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" style="image-rendering:pixelated" />
+      <a href="/" class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></a>
+    </div>
+    <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
+      <a href="/#about" class="hover:text-indigo-500 transition-colors">About</a>
+      <a href="/rooms" class="hover:text-indigo-500 transition-colors">Party Rooms</a>
+      <a href="/menu" class="hover:text-indigo-500 transition-colors">Menu</a>
+      <a href="/rules" class="hover:text-indigo-500 transition-colors">Rules</a>
+      <a href="/hours" class="hover:text-indigo-500 transition-colors">Hours</a>
+      <a href="/faq" class="text-indigo-600 font-semibold">FAQs</a>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="navAuthArea">
+        <a href="/login" class="text-sm font-semibold text-gray-600 hover:text-indigo-500 transition-colors mr-2 hidden md:inline">Sign In</a>
+        <button onclick="openBooking()" class="btn-primary text-sm py-2.5 px-5">Book a Party</button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── PAGE HEADER ───────────────────────────────────────── -->
+<div style="background:linear-gradient(135deg,#F97316,#1E3A8A);">
+  <div class="max-w-6xl mx-auto px-5 py-10 text-center text-white">
+    <h1 class="font-display font-bold text-4xl md:text-5xl mb-2">Frequently Asked Questions</h1>
+    <p class="text-white/80 text-lg">Got a question? We've got the answer</p>
+  </div>
+</div>
+
+<!-- ── FAQ ───────────────────────────────────────────────── -->
+<section class="py-16 bg-offwhite">
+  <div class="max-w-3xl mx-auto px-5">
+    <div id="faqAccordion" class="space-y-3"></div>
+
+    <div class="mt-12 text-center clay-card p-8">
+      <h2 class="font-display font-bold text-2xl text-gray-900 mb-3">Still have questions?</h2>
+      <p class="text-gray-500 mb-6">Our team is here to help — get in touch and we'll get back to you within 24 hours.</p>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="tel:+6494160917" class="btn-secondary py-3 px-7 inline-flex items-center gap-2 justify-center">📞 09 416 0917</a>
+        <a href="mailto:Bookings@wonderworldwestgate.co.nz" class="btn-primary py-3 px-7 inline-flex items-center gap-2 justify-center">✉️ Email Us</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────── -->
+<footer class="bg-gray-900 text-white py-12">
+  <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between gap-8">
+    <div>
+      <div class="font-display font-bold text-2xl mb-2">Wonder World Westgate</div>
+      <div class="text-gray-400 text-sm">Auckland's home for epic kids' parties.</div>
+      <div class="text-gray-400 text-sm mt-2">📍 Westgate Shopping Centre, Auckland</div>
+      <div class="text-gray-400 text-sm">📞 09 416 0917</div>
+      <div class="text-gray-400 text-sm">✉️ Bookings@wonderworldwestgate.co.nz</div>
+    </div>
+    <div class="flex gap-12 text-sm">
+      <div>
+        <div class="font-semibold text-gray-300 mb-3">Explore</div>
+        <div class="text-gray-400 space-y-2">
+          <div><a href="/rooms" class="hover:text-white transition-colors">Party Rooms</a></div>
+          <div><a href="/menu" class="hover:text-white transition-colors">Party Menu</a></div>
+          <div><a href="/rules" class="hover:text-white transition-colors">Rules & Policy</a></div>
+        </div>
+      </div>
+      <div>
+        <div class="font-semibold text-gray-300 mb-3">Info</div>
+        <div class="text-gray-400 space-y-2">
+          <div><a href="/hours" class="hover:text-white transition-colors">Opening Hours</a></div>
+          <div><a href="/prices" class="hover:text-white transition-colors">Pricing</a></div>
+          <div><a href="/admin" class="hover:text-white transition-colors">Admin</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="max-w-6xl mx-auto px-5 mt-10 pt-6 border-t border-gray-800 text-gray-500 text-xs text-center">
+    © 2025 Wonder World Westgate. All rights reserved. New Zealand.
+  </div>
+</footer>
+
+<!-- BOOKING WIZARD MODAL -->
+<div id="bookingOverlay" class="modal-overlay" style="display:none;" onclick="handleOverlayClick(event)">
+  <div class="relative w-full max-w-2xl flex flex-col items-end">
+    <button onclick="closeBooking()" class="mb-2 mr-1 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors text-xl font-bold z-20">×</button>
+  <div id="bookingBox" class="w-full bg-white rounded-3xl shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
+    <div id="wizardTopBar" class="bg-white border-b border-gray-100 px-6 pt-5 pb-4">
+      <div id="stepIndicator" class="flex items-center mb-4" style="display:none!important"></div>
+      <div id="timerContainer" style="display:none"><div class="timer-bar" id="timerBar"><span class="text-lg">⏱️</span><div><div class="font-display font-bold text-lg leading-none" id="timerDisplay">15:00</div><div class="text-xs opacity-75">Room hold expires</div></div><div class="ml-auto text-xs opacity-75">Complete your booking before time runs out!</div></div></div>
+    </div>
+    <div class="overflow-y-auto" style="max-height: calc(90vh - 140px)">
+      <div id="step0" class="step-panel p-6 md:p-8">
+        <div class="text-center mb-7"><div class="text-5xl mb-3">👋</div><h2 class="font-display font-bold text-3xl text-gray-900 mb-2">Kia ora! Let's get started</h2><p class="text-gray-500">Create a free account or log in to receive your digital passes.</p></div>
+        <div id="authMode" class="space-y-4">
+          <div class="flex bg-gray-100 rounded-xl p-1 mb-5"><button id="tabSignup" onclick="switchAuth('signup')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all bg-white shadow-sm text-gray-900">Create Account</button><button id="tabLogin" onclick="switchAuth('login')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all text-gray-500">Log In</button></div>
+          <button onclick="signInWithGoogle()" class="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-xl py-3 px-4 font-semibold text-gray-700 hover:bg-gray-50 transition-all"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Continue with Google</button>
+          <div class="flex items-center gap-3"><div class="flex-1 h-px bg-gray-200"></div><span class="text-gray-400 text-xs font-medium">or use email</span><div class="flex-1 h-px bg-gray-200"></div></div>
+          <div id="signupFields"><div class="grid grid-cols-2 gap-3 mb-3"><div><label class="lbl">First Name</label><input class="field" type="text" placeholder="e.g. Sarah" id="authFirstName"/></div><div><label class="lbl">Last Name</label><input class="field" type="text" placeholder="e.g. Thompson" id="authLastName"/></div></div><div class="mb-3"><label class="lbl">Email Address</label><input class="field" type="email" placeholder="hello@example.co.nz" id="authEmail"/></div><div class="mb-5"><label class="lbl">Password</label><input class="field" type="password" placeholder="At least 8 characters" id="authPassword"/></div></div>
+          <div id="loginFields" style="display:none"><div class="mb-3"><label class="lbl">Email Address</label><input class="field" type="email" placeholder="hello@example.co.nz" id="loginEmail"/></div><div class="mb-1"><label class="lbl">Password</label><input class="field" type="password" placeholder="Your password" id="loginPassword"/></div><div class="mb-5 text-right"><button onclick="sendPasswordReset()" class="text-indigo-500 text-xs hover:underline">Forgot password?</button></div></div>
+          <button onclick="submitAuth()" class="btn-primary w-full py-4" id="authSubmitBtn"><span id="authBtnText">Create My Account & Continue →</span><span id="authBtnSpinner" class="hidden"><svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span></button>
+          <p class="text-xs text-gray-400 text-center mt-3">By continuing you agree to our <a href="/rules" target="_blank" class="text-indigo-500">Terms of Entry & Liability Waiver</a>.</p>
+        </div>
+      </div>
+      <div id="step1" class="step-panel p-6 md:p-8" style="display:none">
+        <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">Pick your party room</h2><p class="text-gray-500 text-sm mb-5">How many kids are coming?</p>
+        <div class="mb-5"><label class="lbl">Number of Kids Attending</label><div class="flex items-center gap-3"><button onclick="adjustGuests(-1)" class="w-10 h-10 rounded-xl border-2 border-gray-200 font-bold text-lg hover:border-indigo-400 transition-colors flex items-center justify-center">−</button><span class="font-display font-bold text-2xl w-10 text-center" id="guestCount">10</span><button onclick="adjustGuests(1)" class="w-10 h-10 rounded-xl border-2 border-gray-200 font-bold text-lg hover:border-indigo-400 transition-colors flex items-center justify-center">+</button><span class="text-gray-400 text-sm ml-1">kids</span></div></div>
+        <div id="roomCards" class="space-y-3"></div>
+        <div class="mt-5 pt-4 border-t border-gray-100 flex justify-end"><button onclick="goToStep(2)" class="btn-primary py-3 px-8" id="step1Next" disabled>Continue to Date & Time →</button></div>
+      </div>
+      <div id="step2" class="step-panel p-6 md:p-8" style="display:none">
+        <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">When's the big day?</h2><p class="text-gray-500 text-sm mb-5">Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><label class="lbl">Select Date</label><input class="field" type="date" id="partyDate" onchange="updateTimeSlots()" /><div id="dayTypeTag" class="mt-2 text-xs font-semibold rounded-full px-3 py-1 inline-block" style="display:none"></div></div><div><label class="lbl">Available Time Slots</label><div id="timeSlotGrid" class="grid grid-cols-2 gap-2 mt-1"><div class="text-gray-400 text-sm col-span-2 py-4 text-center">← Select a date first</div></div></div></div>
+        <div class="mt-4 bg-indigo-light rounded-xl p-4 text-sm text-indigo-700"><strong>Each session includes playground entry, room access, 15 min early setup, and choice of food.</strong></div>
+        <div class="mt-4 border-2 border-amber-300 bg-amber-50 rounded-2xl p-4"><div class="flex items-center gap-2 mb-2"><span class="text-xl">💰</span><span class="font-display font-bold text-amber-800">Refund Policy</span></div><div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm"><div class="bg-white rounded-lg p-3 border border-green-200"><div class="font-bold text-green-700">✅ 14+ days before</div><div class="text-gray-600 text-xs mt-0.5">Full refund</div></div><div class="bg-white rounded-lg p-3 border border-amber-200"><div class="font-bold text-amber-700">🔸 7–13 days before</div><div class="text-gray-600 text-xs mt-0.5">50% refund</div></div><div class="bg-white rounded-lg p-3 border border-red-200"><div class="font-bold text-red-700">🚫 Under 7 days</div><div class="text-gray-600 text-xs mt-0.5">No refund</div></div></div></div>
+        <div class="mt-5 flex justify-between"><button onclick="goToStep(1)" class="btn-secondary py-3 px-6">← Back</button><button onclick="goToStep(3)" class="btn-primary py-3 px-8" id="step2Next" disabled>Food & Allergies →</button></div>
+      </div>
+      <div id="step3" class="step-panel p-6 md:p-8" style="display:none">
+        <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">What's on the menu?</h2>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-xs text-amber-700">🎂 Outside birthday cake welcome · 🍟 Fries & 🫐 Blackcurrant Drink included</div>
+        <div class="mb-6"><label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label><div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Numbers must add up to total guests.</div><div class="grid grid-cols-2 gap-3"><div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="nuggetCard"><div class="text-4xl mb-2">🍗</div><div class="font-display font-bold text-base">Chicken Nuggets</div><div class="text-xs text-green-600 font-semibold mb-3">Included</div><div class="flex items-center justify-center gap-3"><button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button><span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span><button onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button></div></div><div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard"><div class="text-4xl mb-2">🍔</div><div class="font-display font-bold text-base">Mini Burger</div><div class="text-xs text-green-600 font-semibold mb-3">Included</div><div class="flex items-center justify-center gap-3"><button onclick="changeFoodSplit('burgers', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button><span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="burgerCount">0</span><button onclick="changeFoodSplit('burgers', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div id="foodSplitTotal" class="mt-2 text-xs text-center text-gray-400">0 / <span id="foodSplitOf">10</span> selected</div></div>
+        <div class="mb-6"><div class="font-display font-bold text-base text-gray-900 mb-3">➕ Add-Ons</div><div class="space-y-2" id="addonList"><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍕</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Ham & Cheese Pizza (11-inch)</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span><div class="flex items-center gap-1"><button onclick="changeAddon('pizza_ham', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_ham">0</span><button onclick="changeAddon('pizza_ham', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍕</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Vegetarian Pizza (11-inch)</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span><div class="flex items-center gap-1"><button onclick="changeAddon('pizza_veg', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_veg">0</span><button onclick="changeAddon('pizza_veg', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍗</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Fried Chicken Platter</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39</span><div class="flex items-center gap-1"><button onclick="changeAddon('platter_chicken', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_chicken">0</span><button onclick="changeAddon('platter_chicken', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🦐</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Seafood Platter</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49</span><div class="flex items-center gap-1"><button onclick="changeAddon('platter_seafood', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_seafood">0</span><button onclick="changeAddon('platter_seafood', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🥪</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Adult Sandwiches Platter (15 pcs)</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span><div class="flex items-center gap-1"><button onclick="changeAddon('adult_sandwich', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_adult_sandwich">0</span><button onclick="changeAddon('adult_sandwich', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍣</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Sushi Platter — 40 pcs</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_40', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_40">0</span><button onclick="changeAddon('sushi_40', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍣</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Sushi Platter — 24 pcs</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$30</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_24', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_24">0</span><button onclick="changeAddon('sushi_24', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍣</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Salmon Supreme Platter</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$28.90</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_salmon', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_salmon">0</span><button onclick="changeAddon('sushi_salmon', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div><div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100"><div class="flex items-center gap-3"><div class="text-2xl">🍱</div><div class="flex-1"><div class="font-semibold text-sm text-gray-800">Ocean Deluxe Set</div></div><span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39.90</span><div class="flex items-center gap-1"><button onclick="changeAddon('sushi_ocean', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button><span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_ocean">0</span><button onclick="changeAddon('sushi_ocean', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button></div></div></div></div><div id="addonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold"><span>Add-ons subtotal:</span><span id="addonSubtotalAmount">$0.00</span></div></div>
+        <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 mb-5"><div class="flex items-center gap-2 mb-3"><span class="text-2xl">⚠️</span><h3 class="font-display font-bold text-lg text-amber-800">Dietary Requirements & Allergies</h3></div><p class="text-amber-700 text-sm mb-4">Please let us know about any allergies or dietary needs.</p><div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4"><label class="allergy-check"><input type="checkbox" id="allergyGluten" /><span class="text-sm font-medium">🌾 Gluten-Free</span></label><label class="allergy-check"><input type="checkbox" id="allergyDairy" /><span class="text-sm font-medium">🥛 Dairy-Free</span></label><label class="allergy-check"><input type="checkbox" id="allergyNuts" /><span class="text-sm font-medium">🥜 Nut Allergy</span></label></div><label class="lbl">Specify any exact allergies.</label><textarea class="field" rows="3" id="allergyNotes" style="resize:vertical;"></textarea></div>
+        <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-5"><h3 class="font-display font-bold text-base text-gray-900 mb-3">⚖️ Terms of Entry & Liability Waiver</h3><p class="text-xs text-gray-500 mb-4 leading-relaxed">By proceeding with this booking you confirm that all guests will comply with Wonder World Westgate's rules: grip socks must be worn at all times, children must be supervised by a parent or guardian, play is at your own risk, no outside food or drink in the playground (water bottles permitted), no climbing on exterior structures, and management reserves the right to refuse entry. To the fullest extent permitted under New Zealand law, Wonder World, its owners, employees, and contractors are not liable for injuries, accidents, loss, theft, or damage to personal belongings.</p><label class="flex items-start gap-3 cursor-pointer"><input type="checkbox" id="liabilityWaiver" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" /><span class="text-sm font-semibold text-gray-800">I have read and agree to the Terms of Entry & Liability Waiver on behalf of all guests attending this party.</span></label></div>
+        <div class="mt-5 flex justify-between"><button onclick="goToStep(2)" class="btn-secondary py-3 px-6">← Back</button><button onclick="goToStep(4)" class="btn-primary py-3 px-8">Payment →</button></div>
+      </div>
+      <div id="step4" class="step-panel p-6 md:p-8" style="display:none">
+        <h2 class="font-display font-bold text-2xl text-gray-900 mb-1">Secure payment</h2><p class="text-gray-500 text-sm mb-5">Your booking is nearly confirmed!</p>
+        <div id="orderSummaryPill" class="bg-indigo-light rounded-xl p-4 mb-5 text-sm"></div><div id="stripe-payment-wrapper" class="mb-4"></div><div id="stripe-payment-errors" class="text-red-500 text-sm mb-3" role="alert"></div>
+        <div class="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2"><span>💰</span><span><strong>Refund policy:</strong> Full refund 14+ days · 50% refund 7–13 days · No refund under 7 days.</span></div>
+        <div class="mt-5 flex justify-between"><button onclick="goToStep(3)" class="btn-secondary py-3 px-6">← Back</button><button onclick="processStripePayment()" class="btn-primary py-3 px-8" id="payBtn"><span id="payBtnText">Pay & Confirm →</span><span id="payBtnSpinner" class="hidden"><svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span></button></div>
+        <p class="text-xs text-gray-400 text-center mt-3">🔒 Payments processed securely via Stripe. PCI-DSS compliant.</p>
+      </div>
+      <div id="step5" class="step-panel p-6 md:p-8" style="display:none">
+        <div class="text-center mb-6"><div class="w-20 h-20 rounded-full bg-teal-light flex items-center justify-center text-4xl mx-auto mb-4 success-icon">✅</div><h2 class="font-display font-bold text-3xl text-gray-900 mb-2">You're almost there! 🎉</h2><p class="text-gray-500">Payment confirmed! Enter contact details below.</p></div>
+        <div class="bg-teal-50 border-2 border-teal-200 rounded-2xl p-5 mb-6 text-sm text-teal-700"><strong>📲 Your booking receipt and digital entry passes will be sent via Email and SMS instantly.</strong></div>
+        <div class="space-y-4"><div><label class="lbl">Email Address</label><input class="field" type="email" id="confirmEmail" placeholder="hello@example.co.nz" /></div><div><label class="lbl">Mobile Number (NZ)</label><div class="flex gap-2"><span class="field w-20 text-center font-semibold text-gray-600 bg-gray-50 flex-shrink-0 flex items-center justify-center">🇳🇿 +64</span><input class="field flex-1" type="tel" inputmode="numeric" id="confirmPhone" placeholder="21 234 5678" /></div></div></div>
+        <div class="mt-5 flex justify-between"><button onclick="goToStep(4)" class="btn-secondary py-3 px-6">← Back</button><button onclick="finaliseBooking()" class="btn-primary py-3 px-8" id="finaliseBtn"><span id="finaliseBtnText">Send My Passes & Confirm 🎈</span><span id="finaliseBtnSpinner" class="hidden"><svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span></button></div>
+      </div>
+      <div id="step6" class="step-panel p-6 md:p-8 text-center relative overflow-hidden" style="display:none">
+        <div id="confettiContainer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+        <div class="relative z-10"><div class="celebration-ring mb-5"><svg class="celebration-check" viewBox="0 0 52 52"><circle class="check-circle" cx="26" cy="26" r="24"/><path class="check-path" d="M12 27l9 9 19-20"/></svg></div><h2 class="font-display font-bold text-3xl text-gray-900 mb-2">It's officially booked!</h2><p class="text-gray-500 mb-6">We've sent your receipt and digital entry passes!</p><div id="bookingSummaryCard" class="bg-gradient-to-br from-indigo-light to-teal-light rounded-2xl p-6 text-left mb-6"></div><div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-4"><strong>📅 What happens next?</strong> Our events team will call you within 24 hours.</div><div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 mb-6"><strong>🧦 Reminder:</strong> All guests must wear grip or non-slip socks.</div><button onclick="viewMyBookings()" class="btn-secondary py-3 px-8 mb-3 mr-3">View My Bookings</button><button onclick="closeBooking()" class="btn-primary py-4 px-10 text-lg">Close & Head Back Home</button></div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<script src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="booking.js?v=2"></script>
+<script src="payment.js"></script>
+<script src="app.js?v=2"></script>
+</body>
+</html>
