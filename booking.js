@@ -433,7 +433,7 @@ const ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
   drinks_soda:     { label: 'Soft Drink', price: 10 },
-  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)', price: 26 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)', price: 27 },
 };
 
 function changeAddon(id, delta) {
@@ -448,12 +448,16 @@ function changeAddon(id, delta) {
     const picker = document.getElementById('sodaTypePicker');
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
-      state.sodaTypes = [];
-    } else {
-      // Trim selections if qty was reduced below current selection count
-      const maxFlavours = Math.min(next, 4);
-      if (state.sodaTypes && state.sodaTypes.length > maxFlavours) {
-        state.sodaTypes = state.sodaTypes.slice(0, maxFlavours);
+      state.sodaTypes = {};
+    } else if (state.sodaTypes) {
+      let total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.sodaTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.sodaTypes[types[i]], excess);
+        state.sodaTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.sodaTypes[types[i]] === 0) delete state.sodaTypes[types[i]];
       }
     }
     updateSodaPickerUI();
@@ -504,39 +508,31 @@ function changeAddon(id, delta) {
 }
 
 function updateSodaPickerUI() {
-  if (!state.sodaTypes) state.sodaTypes = [];
+  if (!state.sodaTypes) state.sodaTypes = {};
   const qty = state.addons?.drinks_soda || 0;
-  const maxFlavours = Math.min(qty, 4);
-  const selected = state.sodaTypes;
-  const atMax = selected.length >= maxFlavours;
-
-  document.querySelectorAll('.soda-type-btn').forEach(btn => {
-    const isSelected = selected.includes(btn.textContent.trim());
-    btn.classList.toggle('border-indigo-500', isSelected);
-    btn.classList.toggle('bg-indigo-50', isSelected);
-    btn.classList.toggle('text-indigo-700', isSelected);
-    btn.classList.toggle('border-gray-200', !isSelected);
-    btn.classList.toggle('text-gray-600', !isSelected);
-    // Grey out unselected buttons once limit reached
-    btn.classList.toggle('opacity-30', atMax && !isSelected);
-    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
+  const total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('sodaQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.sodaTypes[type] || 0;
+    const plusEl = document.getElementById('sodaPlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
   });
-
   const counter = document.getElementById('sodaTypeCounter');
-  if (counter) counter.textContent = `${selected.length} / ${maxFlavours} selected`;
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
 }
 
-function toggleSodaType(type) {
-  if (!state.sodaTypes) state.sodaTypes = [];
+function changeSodaType(type, delta) {
+  if (!state.sodaTypes) state.sodaTypes = {};
   const qty = state.addons?.drinks_soda || 0;
-  const maxFlavours = Math.min(qty, 4);
-  const idx = state.sodaTypes.indexOf(type);
-  if (idx === -1) {
-    if (state.sodaTypes.length >= maxFlavours) return; // already at limit
-    state.sodaTypes.push(type);
-  } else {
-    state.sodaTypes.splice(idx, 1);
-  }
+  const total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.sodaTypes[type] || 0) + delta);
+  if (next === 0) delete state.sodaTypes[type]; else state.sodaTypes[type] = next;
   updateSodaPickerUI();
   renderOrderSummary();
 }
@@ -634,8 +630,9 @@ function getAddonSummaryLines() {
     .map(([id, qty]) => {
       const a = ADDON_PRICES[id];
       let label = a.label;
-      if (id === 'drinks_soda' && state.sodaTypes && state.sodaTypes.length > 0) {
-        label = 'Soft Drink (' + state.sodaTypes.join(', ') + ')';
+      if (id === 'drinks_soda' && state.sodaTypes && Object.keys(state.sodaTypes).length > 0) {
+        const parts = Object.entries(state.sodaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = 'Soft Drink (' + parts.join(', ') + ')';
       }
       if (id === 'drinks_juice' && state.juiceTypes && Object.keys(state.juiceTypes).length > 0) {
         const parts = Object.entries(state.juiceTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);

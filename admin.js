@@ -1407,7 +1407,7 @@ const AB_ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',     price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28 pcs)',   price: 42.90 },
   drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
-  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)',        price: 26 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)',        price: 27 },
 };
 
 // Local state for the manual booking modal

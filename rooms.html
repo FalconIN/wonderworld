@@ -641,13 +641,41 @@
               <div id="sodaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
                 <div class="flex items-center justify-between mb-2">
                   <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
-                  <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                  <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <button type="button" onclick="toggleSodaType('Coke')" id="sodaBtn_Coke" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Coke</button>
-                  <button type="button" onclick="toggleSodaType('Sprite')" id="sodaBtn_Sprite" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Sprite</button>
-                  <button type="button" onclick="toggleSodaType('Fanta')" id="sodaBtn_Fanta" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Fanta</button>
-                  <button type="button" onclick="toggleSodaType('L&amp;P')" id="sodaBtn_LandP" class="soda-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">L&amp;P</button>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Coke</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeSodaType('Coke', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="sodaQty_Coke">0</span>
+                      <button type="button" onclick="changeSodaType('Coke', 1)" id="sodaPlus_Coke" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Sprite</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeSodaType('Sprite', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="sodaQty_Sprite">0</span>
+                      <button type="button" onclick="changeSodaType('Sprite', 1)" id="sodaPlus_Sprite" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Fanta</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeSodaType('Fanta', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="sodaQty_Fanta">0</span>
+                      <button type="button" onclick="changeSodaType('Fanta', 1)" id="sodaPlus_Fanta" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">L&amp;P</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeSodaType('L&amp;P', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="sodaQty_LandP">0</span>
+                      <button type="button" onclick="changeSodaType('L&amp;P', 1)" id="sodaPlus_LandP" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -661,7 +689,7 @@
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
-                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$26</span>
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$27</span>
                 <div class="flex items-center gap-1">
                   <button onclick="changeAddon('drinks_juice', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
                   <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_juice">0</span>
@@ -819,8 +847,8 @@
 <!-- Scripts — order matters -->
 <script src="firebase.js"></script>
 <script src="auth.js"></script>
-<script src="booking.js?v=10"></script>
+<script src="booking.js?v=11"></script>
 <script src="payment.js"></script>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
