@@ -422,9 +422,7 @@ function buildConfirmationCard() {
 // Add-on prices
 // ---------------------------------------------------------------------------
 const ADDON_PRICES = {
-  pizza_salami:    { label: 'Salami & Cheese Pizza',    price: 25 },
-  pizza_chorizo:   { label: 'Chorizo & Cheese Pizza',   price: 25 },
-  pizza_plain:     { label: 'Plain Cheese Pizza',       price: 25 },
+  pizza_11:        { label: '11-inch Pizza',            price: 25 },
   platter_chicken: { label: 'Fried Chicken Platter',    price: 39 },
   platter_seafood: { label: 'Seafood Platter',          price: 49 },
   adult_sandwich:  { label: 'Adult Sandwich Platter',   price: 60 },
@@ -459,6 +457,34 @@ function changeAddon(id, delta) {
       }
     }
     updateSodaPickerUI();
+  }
+
+  if (id === 'drinks_juice') {
+    const picker = document.getElementById('juiceTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.juiceTypes = [];
+    } else {
+      const maxTypes = Math.min(next, 2);
+      if (state.juiceTypes && state.juiceTypes.length > maxTypes) {
+        state.juiceTypes = state.juiceTypes.slice(0, maxTypes);
+      }
+    }
+    updateJuicePickerUI();
+  }
+
+  if (id === 'pizza_11') {
+    const picker = document.getElementById('pizzaTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.pizzaTypes = [];
+    } else {
+      const maxTypes = Math.min(next, 5);
+      if (state.pizzaTypes && state.pizzaTypes.length > maxTypes) {
+        state.pizzaTypes = state.pizzaTypes.slice(0, maxTypes);
+      }
+    }
+    updatePizzaPickerUI();
   }
 
   updateAddonSubtotal();
@@ -503,6 +529,80 @@ function toggleSodaType(type) {
   renderOrderSummary();
 }
 
+function updateJuicePickerUI() {
+  if (!state.juiceTypes) state.juiceTypes = [];
+  const qty = state.addons?.drinks_juice || 0;
+  const maxTypes = Math.min(qty, 2);
+  const selected = state.juiceTypes;
+  const atMax = selected.length >= maxTypes;
+
+  document.querySelectorAll('.juice-type-btn').forEach(btn => {
+    const isSelected = selected.includes(btn.textContent.trim());
+    btn.classList.toggle('border-indigo-500', isSelected);
+    btn.classList.toggle('bg-indigo-50', isSelected);
+    btn.classList.toggle('text-indigo-700', isSelected);
+    btn.classList.toggle('border-gray-200', !isSelected);
+    btn.classList.toggle('text-gray-600', !isSelected);
+    btn.classList.toggle('opacity-30', atMax && !isSelected);
+    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
+  });
+
+  const counter = document.getElementById('juiceTypeCounter');
+  if (counter) counter.textContent = `${selected.length} / ${maxTypes} selected`;
+}
+
+function toggleJuiceType(type) {
+  if (!state.juiceTypes) state.juiceTypes = [];
+  const qty = state.addons?.drinks_juice || 0;
+  const maxTypes = Math.min(qty, 2);
+  const idx = state.juiceTypes.indexOf(type);
+  if (idx === -1) {
+    if (state.juiceTypes.length >= maxTypes) return;
+    state.juiceTypes.push(type);
+  } else {
+    state.juiceTypes.splice(idx, 1);
+  }
+  updateJuicePickerUI();
+  renderOrderSummary();
+}
+
+function updatePizzaPickerUI() {
+  if (!state.pizzaTypes) state.pizzaTypes = [];
+  const qty = state.addons?.pizza_11 || 0;
+  const maxTypes = Math.min(qty, 5);
+  const selected = state.pizzaTypes;
+  const atMax = selected.length >= maxTypes;
+
+  document.querySelectorAll('.pizza-type-btn').forEach(btn => {
+    const isSelected = selected.includes(btn.textContent.trim());
+    btn.classList.toggle('border-indigo-500', isSelected);
+    btn.classList.toggle('bg-indigo-50', isSelected);
+    btn.classList.toggle('text-indigo-700', isSelected);
+    btn.classList.toggle('border-gray-200', !isSelected);
+    btn.classList.toggle('text-gray-600', !isSelected);
+    btn.classList.toggle('opacity-30', atMax && !isSelected);
+    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
+  });
+
+  const counter = document.getElementById('pizzaTypeCounter');
+  if (counter) counter.textContent = `${selected.length} / ${maxTypes} selected`;
+}
+
+function togglePizzaType(type) {
+  if (!state.pizzaTypes) state.pizzaTypes = [];
+  const qty = state.addons?.pizza_11 || 0;
+  const maxTypes = Math.min(qty, 5);
+  const idx = state.pizzaTypes.indexOf(type);
+  if (idx === -1) {
+    if (state.pizzaTypes.length >= maxTypes) return;
+    state.pizzaTypes.push(type);
+  } else {
+    state.pizzaTypes.splice(idx, 1);
+  }
+  updatePizzaPickerUI();
+  renderOrderSummary();
+}
+
 function updateAddonSubtotal() {
   const subtotal = getAddonTotal();
   const el = document.getElementById('addonSubtotal');
@@ -532,6 +632,12 @@ function getAddonSummaryLines() {
       let label = a.label;
       if (id === 'drinks_soda' && state.sodaTypes && state.sodaTypes.length > 0) {
         label = 'Soft Drink (' + state.sodaTypes.join(', ') + ')';
+      }
+      if (id === 'drinks_juice' && state.juiceTypes && state.juiceTypes.length > 0) {
+        label = 'Juice Jug (' + state.juiceTypes.join(', ') + ')';
+      }
+      if (id === 'pizza_11' && state.pizzaTypes && state.pizzaTypes.length > 0) {
+        label = '11-inch Pizza (' + state.pizzaTypes.join(', ') + ')';
       }
       return { label, qty, price: a.price, subtotal: a.price * qty };
     });

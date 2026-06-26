@@ -299,52 +299,29 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🍕</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Salami & Cheese Pizza (11-inch)</div>
-                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+                  <div class="font-semibold text-sm text-gray-800">11-inch Pizza</div>
+                  <div class="text-xs text-gray-400">Ham &amp; Cheese · Salami &amp; Cheese · Chorizo &amp; Cheese · Plain Cheese · Vege — per pizza</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
                 <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
                 <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('pizza_salami', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_salami">0</span>
-                  <button onclick="changeAddon('pizza_salami', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  <button onclick="changeAddon('pizza_11', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_11">0</span>
+                  <button onclick="changeAddon('pizza_11', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
-            </div>
-
-            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <div class="flex items-start gap-3 mb-2">
-                <div class="text-2xl flex-shrink-0">🍕</div>
-                <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Chorizo & Cheese Pizza (11-inch)</div>
-                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
+              <div id="pizzaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
+                  <div id="pizzaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
                 </div>
-              </div>
-              <div class="flex items-center justify-between pl-1">
-                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
-                <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('pizza_chorizo', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_chorizo">0</span>
-                  <button onclick="changeAddon('pizza_chorizo', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
-              <div class="flex items-start gap-3 mb-2">
-                <div class="text-2xl flex-shrink-0">🍕</div>
-                <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Plain Cheese Pizza (11-inch)</div>
-                  <div class="text-xs text-gray-400">Extra pizza for the party</div>
-                </div>
-              </div>
-              <div class="flex items-center justify-between pl-1">
-                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
-                <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('pizza_plain', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_plain">0</span>
-                  <button onclick="changeAddon('pizza_plain', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" onclick="togglePizzaType('Ham &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Ham &amp; Cheese</button>
+                  <button type="button" onclick="togglePizzaType('Salami &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Salami &amp; Cheese</button>
+                  <button type="button" onclick="togglePizzaType('Chorizo &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Chorizo &amp; Cheese</button>
+                  <button type="button" onclick="togglePizzaType('Plain Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Plain Cheese</button>
+                  <button type="button" onclick="togglePizzaType('Vege Pizza')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Vege Pizza</button>
                 </div>
               </div>
             </div>
@@ -555,6 +532,16 @@
                   <button onclick="changeAddon('drinks_juice', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
                   <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_juice">0</span>
                   <button onclick="changeAddon('drinks_juice', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                </div>
+              </div>
+              <div id="juiceTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
+                  <div id="juiceTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" onclick="toggleJuiceType('Orange Juice')" class="juice-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Orange Juice</button>
+                  <button type="button" onclick="toggleJuiceType('Apple Juice')" class="juice-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Apple Juice</button>
                 </div>
               </div>
             </div>

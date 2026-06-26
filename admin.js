@@ -1396,9 +1396,7 @@ const AB_SLOT_END_TIMES = {
 
 // Mirrors the customer-facing ADDON_PRICES in booking.js
 const AB_ADDON_PRICES = {
-  pizza_salami:    { label: 'Salami & Cheese Pizza (11-inch)', price: 25 },
-  pizza_chorizo:   { label: 'Chorizo & Cheese Pizza (11-inch)', price: 25 },
-  pizza_plain:     { label: 'Plain Cheese Pizza (11-inch)',    price: 25 },
+  pizza_11:        { label: '11-inch Pizza',                  price: 25 },
   platter_chicken: { label: 'Fried Chicken Platter',           price: 39 },
   platter_seafood: { label: 'Seafood Platter',                 price: 49 },
   adult_sandwich:  { label: 'Adult Sandwich Platter',          price: 60 },
