@@ -38,7 +38,7 @@ const state = {
   allergyNotes:   '',
   allergies:      [],
   addons:         {},
-  sodaTypes:      [],
+  sodaTypes:      {},
   confirmEmail:   '',
   confirmPhone:   '',
   bookingRef:     '',
@@ -173,10 +173,10 @@ async function validateStep(n) {
     state.selectedFood = parts.join(' + ');
     const sodaQty = state.addons?.drinks_soda || 0;
     if (sodaQty > 0) {
-      const required = Math.min(sodaQty, 4);
-      const picked = state.sodaTypes?.length || 0;
+      const required = sodaQty;
+      const picked = state.sodaTypes ? Object.values(state.sodaTypes).reduce((s, v) => s + v, 0) : 0;
       if (picked !== required) {
-        showFieldError(`Please select ${required} soft drink flavour${required > 1 ? 's' : ''} (${picked} of ${required} chosen).`);
+        showFieldError(`Please allocate all ${required} soft drink${required > 1 ? 's' : ''} (${picked} of ${required} allocated).`);
         return false;
       }
     }
