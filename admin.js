@@ -1418,10 +1418,13 @@ let abState = {
   selectedDate: null,
   selectedTime: null,
   addons: {},
+  sodaTypes: {},
+  juiceTypes: {},
+  pizzaTypes: {},
 };
 
 function openAddBookingModal() {
-  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {} };
+  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, juiceTypes: {}, pizzaTypes: {} };
 
   const today = nzDateStr();
   document.getElementById('ab_date').min = today;
@@ -1597,22 +1600,147 @@ function abOnFoodInput() {
   abUpdateOrderSummary();
 }
 
+// ── Shared type-picker helpers (used by both ab_ and eb_ forms) ──────────────
+
+const TYPE_PICKER_IDS = new Set(['drinks_soda', 'drinks_juice', 'pizza_11']);
+
+function getAddonTypeMap(addonId) {
+  if (addonId === 'drinks_soda')  return { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  if (addonId === 'drinks_juice') return { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
+  if (addonId === 'pizza_11')     return { 'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese', 'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza' };
+  return {};
+}
+
+function getAddonTypeStateKey(addonId) {
+  if (addonId === 'drinks_soda')  return 'sodaTypes';
+  if (addonId === 'drinks_juice') return 'juiceTypes';
+  if (addonId === 'pizza_11')     return 'pizzaTypes';
+  return null;
+}
+
+function buildAdminTypePickerHtml(prefix, addonId, currentQty, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  const types = addonState[stateKey] || {};
+  const total = Object.values(types).reduce((s, v) => s + v, 0);
+  const atMax = total >= currentQty;
+  const hiddenClass = currentQty === 0 ? ' hidden' : '';
+  let rows = '';
+  Object.entries(getAddonTypeMap(addonId)).forEach(([type, elemId]) => {
+    const jsType = type.replace(/&/g, '&amp;');
+    const typeQty = types[type] || 0;
+    const plusDisabled = atMax ? ' opacity-30 pointer-events-none' : '';
+    rows += `<div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600">${jsType}</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="${prefix}ChangeType('${addonId}','${jsType}',-1)" class="w-5 h-5 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-4 text-center text-xs font-bold" id="${prefix}_typeQty_${addonId}_${elemId}">${typeQty}</span>
+                      <button type="button" onclick="${prefix}ChangeType('${addonId}','${jsType}',1)" id="${prefix}_typePlus_${addonId}_${elemId}" class="w-5 h-5 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center${plusDisabled}">+</button>
+                    </div>
+                  </div>`;
+  });
+  return `<div id="${prefix}_typePicker_${addonId}" class="mt-2 pt-2 border-t border-gray-200${hiddenClass}">
+                <div class="flex items-center justify-between mb-1.5">
+                  <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
+                  <div id="${prefix}_typeCounter_${addonId}" class="text-xs font-bold text-indigo-600">${total} / ${currentQty} allocated</div>
+                </div>
+                <div class="space-y-1">${rows}</div>
+              </div>`;
+}
+
+function adminUpdateTypePickerUI(prefix, addonId, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!addonState[stateKey]) addonState[stateKey] = {};
+  const addonQty = addonState.addons?.[addonId] || 0;
+  const total = Object.values(addonState[stateKey]).reduce((s, v) => s + v, 0);
+  const atMax = total >= addonQty;
+  Object.entries(getAddonTypeMap(addonId)).forEach(([type, elemId]) => {
+    const qtyEl = document.getElementById(`${prefix}_typeQty_${addonId}_${elemId}`);
+    if (qtyEl) qtyEl.textContent = addonState[stateKey][type] || 0;
+    const plusEl = document.getElementById(`${prefix}_typePlus_${addonId}_${elemId}`);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
+  });
+  const counter = document.getElementById(`${prefix}_typeCounter_${addonId}`);
+  if (counter) counter.textContent = `${total} / ${addonQty} allocated`;
+}
+
+function adminTrimTypeState(addonId, newQty, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!stateKey) return;
+  if (newQty === 0) { addonState[stateKey] = {}; return; }
+  if (!addonState[stateKey]) return;
+  let excess = Object.values(addonState[stateKey]).reduce((s, v) => s + v, 0) - newQty;
+  const keys = Object.keys(addonState[stateKey]);
+  for (let i = keys.length - 1; i >= 0 && excess > 0; i--) {
+    const cut = Math.min(addonState[stateKey][keys[i]], excess);
+    addonState[stateKey][keys[i]] -= cut;
+    excess -= cut;
+    if (addonState[stateKey][keys[i]] === 0) delete addonState[stateKey][keys[i]];
+  }
+}
+
+function getAddonLabelWithTypes(id, addonState) {
+  const a = AB_ADDON_PRICES[id];
+  const stateKey = getAddonTypeStateKey(id);
+  if (!stateKey || !addonState[stateKey] || !Object.keys(addonState[stateKey]).length) return a.label;
+  const parts = Object.entries(addonState[stateKey]).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+  if (id === 'drinks_soda')  return `Soft Drink (${parts.join(', ')})`;
+  if (id === 'drinks_juice') return `Juice Jug (${parts.join(', ')})`;
+  if (id === 'pizza_11')     return `11-inch Pizza (${parts.join(', ')})`;
+  return a.label;
+}
+
+function abUpdateTypePickerUI(addonId) { adminUpdateTypePickerUI('ab', addonId, abState); }
+function ebUpdateTypePickerUI(addonId) { adminUpdateTypePickerUI('eb', addonId, editBookingState); }
+
+function abChangeType(addonId, type, delta) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!abState[stateKey]) abState[stateKey] = {};
+  const addonQty = abState.addons?.[addonId] || 0;
+  const total = Object.values(abState[stateKey]).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= addonQty) return;
+  const next = Math.max(0, (abState[stateKey][type] || 0) + delta);
+  if (next === 0) delete abState[stateKey][type]; else abState[stateKey][type] = next;
+  abUpdateTypePickerUI(addonId);
+  abUpdateOrderSummary();
+}
+
+function ebChangeType(addonId, type, delta) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!editBookingState[stateKey]) editBookingState[stateKey] = {};
+  const addonQty = editBookingState.addons?.[addonId] || 0;
+  const total = Object.values(editBookingState[stateKey]).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= addonQty) return;
+  const next = Math.max(0, (editBookingState[stateKey][type] || 0) + delta);
+  if (next === 0) delete editBookingState[stateKey][type]; else editBookingState[stateKey][type] = next;
+  ebUpdateTypePickerUI(addonId);
+  ebUpdateOrderSummary();
+}
+
+// ── Add-booking addon list ────────────────────────────────────────────────────
+
 function abRenderAddonsList() {
   const container = document.getElementById('ab_addonsList');
   if (!container) return;
   let html = '';
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    const qty = abState.addons[id] || 0;
+    const typePicker = TYPE_PICKER_IDS.has(id) ? buildAdminTypePickerHtml('ab', id, qty, abState) : '';
     html += `
-      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="abChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
-          <span class="w-5 text-center text-xs font-bold" id="ab_addon_${id}">0</span>
-          <button onclick="abChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
-        </div>
+      <div class="bg-white ab-card rounded-lg p-2.5 border border-gray-100">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+            <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="abChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+            <span class="w-5 text-center text-xs font-bold" id="ab_addon_${id}">${qty}</span>
+            <button onclick="abChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+          </div>
+        </div>${typePicker}
       </div>`;
   });
   container.innerHTML = html;
@@ -1623,6 +1751,12 @@ function abChangeAddon(id, delta) {
   const next = Math.max(0, current + delta);
   abState.addons[id] = next;
   document.getElementById('ab_addon_' + id).textContent = next;
+  if (TYPE_PICKER_IDS.has(id)) {
+    const picker = document.getElementById('ab_typePicker_' + id);
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    adminTrimTypeState(id, next, abState);
+    abUpdateTypePickerUI(id);
+  }
   abUpdateOrderSummary();
 }
 
@@ -1643,7 +1777,7 @@ function abUpdateOrderSummary() {
 
   const addonLines = Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${getAddonLabelWithTypes(id, abState)} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
     .join('');
 
   summaryEl.innerHTML = `
@@ -1707,7 +1841,7 @@ async function submitAddBooking() {
   const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
   const addonLines = Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, abState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
   const addonsSummary = addonLines.join(', ');
   const addonsAmount = abGetAddonTotal();
   const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
@@ -1755,6 +1889,9 @@ let editBookingState = {
   booking: null,
   guests: 10,
   addons: {},
+  sodaTypes: {},
+  juiceTypes: {},
+  pizzaTypes: {},
   roomMin: 1,
   roomMax: 24,
 };
@@ -1777,7 +1914,7 @@ function parseAddonsSummary(summary) {
   const addons = {};
   if (!summary) return addons;
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
-    const match = summary.match(new RegExp(escapeRegex(a.label) + '\\s*×(\\d+)', 'i'));
+    const match = summary.match(new RegExp(escapeRegex(a.label) + '[^×]*×(\\d+)', 'i'));
     if (match) addons[id] = parseInt(match[1]);
   });
   return addons;
@@ -1791,6 +1928,9 @@ function openEditBookingModal(bookingId) {
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
+  editBookingState.sodaTypes = {};
+  editBookingState.juiceTypes = {};
+  editBookingState.pizzaTypes = {};
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -1860,17 +2000,20 @@ function ebRenderAddonsList() {
   let html = '';
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
     const qty = editBookingState.addons[id] || 0;
+    const typePicker = TYPE_PICKER_IDS.has(id) ? buildAdminTypePickerHtml('eb', id, qty, editBookingState) : '';
     html += `
-      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="ebChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
-          <span class="w-5 text-center text-xs font-bold" id="eb_addon_${id}">${qty}</span>
-          <button onclick="ebChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
-        </div>
+      <div class="bg-white ab-card rounded-lg p-2.5 border border-gray-100">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+            <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="ebChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+            <span class="w-5 text-center text-xs font-bold" id="eb_addon_${id}">${qty}</span>
+            <button onclick="ebChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+          </div>
+        </div>${typePicker}
       </div>`;
   });
   container.innerHTML = html;
@@ -1881,6 +2024,12 @@ function ebChangeAddon(id, delta) {
   const next = Math.max(0, current + delta);
   editBookingState.addons[id] = next;
   document.getElementById('eb_addon_' + id).textContent = next;
+  if (TYPE_PICKER_IDS.has(id)) {
+    const picker = document.getElementById('eb_typePicker_' + id);
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    adminTrimTypeState(id, next, editBookingState);
+    ebUpdateTypePickerUI(id);
+  }
   ebUpdateOrderSummary();
 }
 
@@ -1901,7 +2050,7 @@ function ebUpdateOrderSummary() {
 
   const addonLines = Object.entries(editBookingState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${getAddonLabelWithTypes(id, editBookingState)} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
     .join('');
 
   document.getElementById('eb_orderSummary').innerHTML = `
@@ -1965,7 +2114,7 @@ async function submitEditBooking() {
   const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
   const addonLines = Object.entries(editBookingState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, editBookingState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
   const addonsSummary = addonLines.join(', ');
 
   btn.disabled = true;
