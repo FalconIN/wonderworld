@@ -413,14 +413,49 @@
               <div id="pizzaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
                 <div class="flex items-center justify-between mb-2">
                   <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
-                  <div id="pizzaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                  <div id="pizzaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <button type="button" onclick="togglePizzaType('Ham &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Ham &amp; Cheese</button>
-                  <button type="button" onclick="togglePizzaType('Salami &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Salami &amp; Cheese</button>
-                  <button type="button" onclick="togglePizzaType('Chorizo &amp; Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Chorizo &amp; Cheese</button>
-                  <button type="button" onclick="togglePizzaType('Plain Cheese')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Plain Cheese</button>
-                  <button type="button" onclick="togglePizzaType('Vege Pizza')" class="pizza-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Vege Pizza</button>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Ham &amp; Cheese</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changePizzaType('Ham &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="pizzaQty_HamCheese">0</span>
+                      <button type="button" onclick="changePizzaType('Ham &amp; Cheese', 1)" id="pizzaPlus_HamCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Salami &amp; Cheese</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changePizzaType('Salami &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="pizzaQty_SalamiCheese">0</span>
+                      <button type="button" onclick="changePizzaType('Salami &amp; Cheese', 1)" id="pizzaPlus_SalamiCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Chorizo &amp; Cheese</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changePizzaType('Chorizo &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="pizzaQty_ChorizoCheese">0</span>
+                      <button type="button" onclick="changePizzaType('Chorizo &amp; Cheese', 1)" id="pizzaPlus_ChorizoCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Plain Cheese</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changePizzaType('Plain Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="pizzaQty_PlainCheese">0</span>
+                      <button type="button" onclick="changePizzaType('Plain Cheese', 1)" id="pizzaPlus_PlainCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Vege Pizza</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changePizzaType('Vege Pizza', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="pizzaQty_VegePizza">0</span>
+                      <button type="button" onclick="changePizzaType('Vege Pizza', 1)" id="pizzaPlus_VegePizza" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -636,11 +671,25 @@
               <div id="juiceTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
                 <div class="flex items-center justify-between mb-2">
                   <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
-                  <div id="juiceTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 selected</div>
+                  <div id="juiceTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <button type="button" onclick="toggleJuiceType('Orange Juice')" class="juice-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Orange Juice</button>
-                  <button type="button" onclick="toggleJuiceType('Apple Juice')" class="juice-type-btn px-3 py-1.5 rounded-full text-xs font-bold border-2 border-gray-200 text-gray-600 hover:border-indigo-400 transition-all">Apple Juice</button>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Orange Juice</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeJuiceType('Orange Juice', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="juiceQty_OrangeJuice">0</span>
+                      <button type="button" onclick="changeJuiceType('Orange Juice', 1)" id="juicePlus_OrangeJuice" class="juice-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Apple Juice</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="changeJuiceType('Apple Juice', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-5 text-center text-xs font-bold" id="juiceQty_AppleJuice">0</span>
+                      <button type="button" onclick="changeJuiceType('Apple Juice', 1)" id="juicePlus_AppleJuice" class="juice-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -770,7 +819,7 @@
 <!-- Scripts — order matters -->
 <script src="firebase.js"></script>
 <script src="auth.js"></script>
-<script src="booking.js?v=8"></script>
+<script src="booking.js?v=9"></script>
 <script src="payment.js"></script>
 <script src="app.js?v=7"></script>
 </body>

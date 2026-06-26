@@ -463,11 +463,17 @@ function changeAddon(id, delta) {
     const picker = document.getElementById('juiceTypePicker');
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
-      state.juiceTypes = [];
-    } else {
-      const maxTypes = Math.min(next, 2);
-      if (state.juiceTypes && state.juiceTypes.length > maxTypes) {
-        state.juiceTypes = state.juiceTypes.slice(0, maxTypes);
+      state.juiceTypes = {};
+    } else if (state.juiceTypes) {
+      // Trim allocated total down to new qty
+      let total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.juiceTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.juiceTypes[types[i]], excess);
+        state.juiceTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.juiceTypes[types[i]] === 0) delete state.juiceTypes[types[i]];
       }
     }
     updateJuicePickerUI();
@@ -477,11 +483,17 @@ function changeAddon(id, delta) {
     const picker = document.getElementById('pizzaTypePicker');
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
-      state.pizzaTypes = [];
-    } else {
-      const maxTypes = Math.min(next, 5);
-      if (state.pizzaTypes && state.pizzaTypes.length > maxTypes) {
-        state.pizzaTypes = state.pizzaTypes.slice(0, maxTypes);
+      state.pizzaTypes = {};
+    } else if (state.pizzaTypes) {
+      // Trim allocated total down to new qty
+      let total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.pizzaTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.pizzaTypes[types[i]], excess);
+        state.pizzaTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.pizzaTypes[types[i]] === 0) delete state.pizzaTypes[types[i]];
       }
     }
     updatePizzaPickerUI();
@@ -530,75 +542,67 @@ function toggleSodaType(type) {
 }
 
 function updateJuicePickerUI() {
-  if (!state.juiceTypes) state.juiceTypes = [];
+  if (!state.juiceTypes) state.juiceTypes = {};
   const qty = state.addons?.drinks_juice || 0;
-  const maxTypes = Math.min(qty, 2);
-  const selected = state.juiceTypes;
-  const atMax = selected.length >= maxTypes;
-
-  document.querySelectorAll('.juice-type-btn').forEach(btn => {
-    const isSelected = selected.includes(btn.textContent.trim());
-    btn.classList.toggle('border-indigo-500', isSelected);
-    btn.classList.toggle('bg-indigo-50', isSelected);
-    btn.classList.toggle('text-indigo-700', isSelected);
-    btn.classList.toggle('border-gray-200', !isSelected);
-    btn.classList.toggle('text-gray-600', !isSelected);
-    btn.classList.toggle('opacity-30', atMax && !isSelected);
-    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
+  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('juiceQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.juiceTypes[type] || 0;
+    const plusEl = document.getElementById('juicePlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
   });
-
   const counter = document.getElementById('juiceTypeCounter');
-  if (counter) counter.textContent = `${selected.length} / ${maxTypes} selected`;
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
 }
 
-function toggleJuiceType(type) {
-  if (!state.juiceTypes) state.juiceTypes = [];
+function changeJuiceType(type, delta) {
+  if (!state.juiceTypes) state.juiceTypes = {};
   const qty = state.addons?.drinks_juice || 0;
-  const maxTypes = Math.min(qty, 2);
-  const idx = state.juiceTypes.indexOf(type);
-  if (idx === -1) {
-    if (state.juiceTypes.length >= maxTypes) return;
-    state.juiceTypes.push(type);
-  } else {
-    state.juiceTypes.splice(idx, 1);
-  }
+  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.juiceTypes[type] || 0) + delta);
+  if (next === 0) delete state.juiceTypes[type]; else state.juiceTypes[type] = next;
   updateJuicePickerUI();
   renderOrderSummary();
 }
 
 function updatePizzaPickerUI() {
-  if (!state.pizzaTypes) state.pizzaTypes = [];
+  if (!state.pizzaTypes) state.pizzaTypes = {};
   const qty = state.addons?.pizza_11 || 0;
-  const maxTypes = Math.min(qty, 5);
-  const selected = state.pizzaTypes;
-  const atMax = selected.length >= maxTypes;
-
-  document.querySelectorAll('.pizza-type-btn').forEach(btn => {
-    const isSelected = selected.includes(btn.textContent.trim());
-    btn.classList.toggle('border-indigo-500', isSelected);
-    btn.classList.toggle('bg-indigo-50', isSelected);
-    btn.classList.toggle('text-indigo-700', isSelected);
-    btn.classList.toggle('border-gray-200', !isSelected);
-    btn.classList.toggle('text-gray-600', !isSelected);
-    btn.classList.toggle('opacity-30', atMax && !isSelected);
-    btn.classList.toggle('pointer-events-none', atMax && !isSelected);
+  const total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = {
+    'Ham & Cheese': 'HamCheese',
+    'Salami & Cheese': 'SalamiCheese',
+    'Chorizo & Cheese': 'ChorizoCheese',
+    'Plain Cheese': 'PlainCheese',
+    'Vege Pizza': 'VegePizza',
+  };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('pizzaQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.pizzaTypes[type] || 0;
+    const plusEl = document.getElementById('pizzaPlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
   });
-
   const counter = document.getElementById('pizzaTypeCounter');
-  if (counter) counter.textContent = `${selected.length} / ${maxTypes} selected`;
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
 }
 
-function togglePizzaType(type) {
-  if (!state.pizzaTypes) state.pizzaTypes = [];
+function changePizzaType(type, delta) {
+  if (!state.pizzaTypes) state.pizzaTypes = {};
   const qty = state.addons?.pizza_11 || 0;
-  const maxTypes = Math.min(qty, 5);
-  const idx = state.pizzaTypes.indexOf(type);
-  if (idx === -1) {
-    if (state.pizzaTypes.length >= maxTypes) return;
-    state.pizzaTypes.push(type);
-  } else {
-    state.pizzaTypes.splice(idx, 1);
-  }
+  const total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.pizzaTypes[type] || 0) + delta);
+  if (next === 0) delete state.pizzaTypes[type]; else state.pizzaTypes[type] = next;
   updatePizzaPickerUI();
   renderOrderSummary();
 }
@@ -633,11 +637,13 @@ function getAddonSummaryLines() {
       if (id === 'drinks_soda' && state.sodaTypes && state.sodaTypes.length > 0) {
         label = 'Soft Drink (' + state.sodaTypes.join(', ') + ')';
       }
-      if (id === 'drinks_juice' && state.juiceTypes && state.juiceTypes.length > 0) {
-        label = 'Juice Jug (' + state.juiceTypes.join(', ') + ')';
+      if (id === 'drinks_juice' && state.juiceTypes && Object.keys(state.juiceTypes).length > 0) {
+        const parts = Object.entries(state.juiceTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = 'Juice Jug (' + parts.join(', ') + ')';
       }
-      if (id === 'pizza_11' && state.pizzaTypes && state.pizzaTypes.length > 0) {
-        label = '11-inch Pizza (' + state.pizzaTypes.join(', ') + ')';
+      if (id === 'pizza_11' && state.pizzaTypes && Object.keys(state.pizzaTypes).length > 0) {
+        const parts = Object.entries(state.pizzaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = '11-inch Pizza (' + parts.join(', ') + ')';
       }
       return { label, qty, price: a.price, subtotal: a.price * qty };
     });
