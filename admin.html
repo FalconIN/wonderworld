@@ -229,7 +229,13 @@
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
         <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-wrap gap-3">
           <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Bookings</h2>
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 flex-wrap">
+            <button onclick="document.getElementById('importFileInput').click()" class="text-xs text-indigo-500 hover:text-indigo-600 font-semibold border border-indigo-200 hover:border-indigo-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📥 Import from Excel
+            </button>
+            <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📊 Export to Excel
+            </button>
             <button onclick="clearCancelledBookings()" class="text-xs text-red-500 hover:text-red-600 font-semibold border border-red-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
               🗑️ Clear Cancelled
             </button>
@@ -287,11 +293,11 @@
           <table class="admin-table" id="customers-table">
             <thead>
               <tr>
-                <th>Name</th><th>Email</th><th>Number</th><th>Price Paid</th><th>Admin</th>
+                <th>Name</th><th>Email</th><th>Number</th><th>Bookings</th><th>Price Paid</th><th>Admin</th>
               </tr>
             </thead>
             <tbody id="customers-tbody">
-              <tr><td colspan="5" class="text-center text-gray-400 py-8">Loading...</td></tr>
+              <tr><td colspan="6" class="text-center text-gray-400 py-8">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -307,7 +313,10 @@
             <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">🗓️ Today's Run Sheet</h2>
             <p class="text-gray-400 text-sm" id="today-date-label"></p>
           </div>
-          <button onclick="loadToday()" class="btn-secondary py-2 px-4 text-sm">↻ Refresh</button>
+          <div class="flex gap-2">
+            <button onclick="printRunSheet()" class="btn-secondary py-2 px-4 text-sm">🖨️ Print</button>
+            <button onclick="loadToday()" class="btn-secondary py-2 px-4 text-sm">↻ Refresh</button>
+          </div>
         </div>
         <div id="today-runsheet">Loading...</div>
       </div>
@@ -523,13 +532,15 @@
             <select class="field" id="eb_status">
               <option value="confirmed">Confirmed</option>
               <option value="pending">Pending</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div>
             <label class="lbl">Amount Paid ($)</label>
-            <input class="field" id="eb_amountPaid" type="number" min="0" step="0.01" placeholder="0.00" />
+            <input class="field" id="eb_amountPaid" type="number" min="0" step="0.01" placeholder="0.00" oninput="ebUpdateBalanceDue()" />
           </div>
         </div>
+        <div id="eb_balanceDue" class="hidden bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold"></div>
       </div>
 
       <!-- Order summary -->
@@ -560,9 +571,17 @@
   html.dark .admin-nav-btn { color: #9CA3AF; }
   html.dark .admin-nav-btn:hover { background: rgba(255,255,255,.05); color: white; }
   html.dark .admin-nav-btn.active { background: rgba(79,70,229,.2); color: #A5B4FC; }
+
+  @media print {
+    #adminSidebar, .bg-white.border-b, button, input, select { display: none !important; }
+    #tab-today { display: block !important; padding: 0 !important; }
+    #tab-overview, #tab-bookings, #tab-payments, #tab-customers { display: none !important; }
+    .bg-white, .dark\:bg-gray-900 { box-shadow: none !important; }
+    body { background: white !important; }
+  }
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=16"></script>
+<script src="admin.js?v=19"></script>
 </body>
 </html>

@@ -67,7 +67,11 @@ let slotSubscription = null;
 // ---------------------------------------------------------------------------
 function adjustGuests(delta) {
   state.guests = Math.max(1, Math.min(24, state.guests + delta));
-  document.getElementById('guestCount').textContent = state.guests;
+  const el = document.getElementById('guestCount');
+  el.textContent = state.guests;
+  el.classList.remove('count-bounce');
+  void el.offsetWidth;
+  el.classList.add('count-bounce');
   renderRooms();
 }
 
@@ -104,10 +108,16 @@ function buildRoomCard(room, dimmed) {
   const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
   const selClass = selected ? 'room-card selected' : 'room-card';
 
+  const checkBadge = selected ? `
+    <div class="room-check-badge absolute top-3 right-3 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center shadow-md">
+      <svg viewBox="0 0 12 12" width="11" height="11" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>` : '';
+
   return `
     <div class="${selClass} ${dimClass} p-4" onclick="selectRoom('${room.id}')">
+      ${checkBadge}
       <div class="flex items-start gap-3">
-        <div class="w-11 h-11 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white">${room.emoji}</div>
+        <div class="w-11 h-11 ${c.badge} rounded-xl flex items-center justify-center text-2xl flex-shrink-0 text-white shadow-sm">${room.emoji}</div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap mb-0.5">
             <span class="font-display font-bold text-base leading-tight">${room.name}</span>
@@ -116,7 +126,7 @@ function buildRoomCard(room, dimmed) {
           <div class="text-xs text-gray-400 leading-snug">${room.minGuests}–${room.maxGuests} kids · ${room.tagLine}</div>
           <div class="flex items-center justify-between mt-1.5 flex-wrap gap-1">
             <div class="${c.text} font-display font-bold text-sm">$${room.basePricePerChild}/child</div>
-            ${selected ? '<div class="text-indigo-500 text-xs font-semibold">✓ Selected</div>' : ''}
+            ${selected ? '<div class="text-blue-500 text-xs font-semibold flex items-center gap-1">✓ Selected</div>' : ''}
           </div>
         </div>
       </div>
@@ -203,9 +213,22 @@ function renderSlotsHtml(slots, unavailableSlots) {
     if (unavail)  cls += ' unavailable';
     if (selected) cls += ' selected';
     if (unavail) {
-      html += `<div class="${cls}"><div class="font-semibold">${slot}</div><div class="text-xs opacity-60">– ${ends?.one || ''}</div><div class="text-xs text-gray-400 mt-0.5">Full</div></div>`;
+      html += `
+        <div class="${cls}">
+          <div class="font-display font-bold text-base">${slot}</div>
+          <div class="text-xs opacity-60 mt-0.5">– ${ends?.one || ''}</div>
+          <div class="mt-1.5 text-xs font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 inline-block">Full</div>
+        </div>`;
     } else {
-      html += `<div class="${cls}" onclick="selectTime('${slot}', this)"><div class="font-semibold">${slot}</div><div class="text-xs opacity-75">– ${ends?.one || ''}</div></div>`;
+      const checkIcon = selected
+        ? `<div class="mt-1.5"><svg viewBox="0 0 14 14" width="16" height="16" fill="none" class="mx-auto"><path d="M2 7l4 4 6-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`
+        : '';
+      html += `
+        <div class="${cls}" onclick="selectTime('${slot}', this)">
+          <div class="font-display font-bold text-base">${slot}</div>
+          <div class="text-xs opacity-70 mt-0.5">– ${ends?.one || ''}</div>
+          ${checkIcon}
+        </div>`;
     }
   });
   grid.innerHTML = html;
@@ -341,6 +364,7 @@ async function finaliseBooking() {
   try {
     // Save confirmed booking
     const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
+    state.bookingId = bookingId;
 
     // Trigger Edge Functions: email + SMS
     const addonLines = getAddonSummaryLines();
@@ -367,7 +391,7 @@ async function finaliseBooking() {
     goToStep(6);
     launchConfetti();
   } catch (err) {
-    showFieldError('Something went wrong: ' + err.message + '. Please contact us at hello@wonderworldwestgate.co.nz');
+    showFieldError('Something went wrong: ' + err.message + '. Please contact us at Bookings@wonderworldwestgate.co.nz');
   } finally {
     setFinaliseLoading(false);
   }
@@ -399,8 +423,7 @@ function buildConfirmationCard() {
 // Add-on prices
 // ---------------------------------------------------------------------------
 const ADDON_PRICES = {
-  pizza_ham:       { label: 'Ham & Cheese Pizza',       price: 25 },
-  pizza_veg:       { label: 'Vegetarian Pizza',         price: 25 },
+  pizza_11:        { label: '11-inch Pizza',            price: 25 },
   platter_chicken: { label: 'Fried Chicken Platter',    price: 39 },
   platter_seafood: { label: 'Seafood Platter',          price: 49 },
   adult_sandwich:  { label: 'Adult Sandwich Platter',   price: 60 },
@@ -408,7 +431,10 @@ const ADDON_PRICES = {
   sushi_24:        { label: 'Sushi Platter (24 pcs)',   price: 30 },
   sushi_salmon:    { label: 'Salmon Supreme Platter',   price: 28.90 },
   sushi_ocean:     { label: 'Ocean Deluxe Set',         price: 39.90 },
-
+  sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
+  drinks_soda:     { label: 'Soft Drink', price: 10 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)', price: 27 },
 };
 
 function changeAddon(id, delta) {
@@ -418,7 +444,163 @@ function changeAddon(id, delta) {
   state.addons[id] = next;
   const el = document.getElementById('addon_' + id);
   if (el) el.textContent = next;
+
+  if (id === 'drinks_soda') {
+    const picker = document.getElementById('sodaTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.sodaTypes = {};
+    } else if (state.sodaTypes) {
+      let total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.sodaTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.sodaTypes[types[i]], excess);
+        state.sodaTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.sodaTypes[types[i]] === 0) delete state.sodaTypes[types[i]];
+      }
+    }
+    updateSodaPickerUI();
+  }
+
+  if (id === 'drinks_juice') {
+    const picker = document.getElementById('juiceTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.juiceTypes = {};
+    } else if (state.juiceTypes) {
+      // Trim allocated total down to new qty
+      let total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.juiceTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.juiceTypes[types[i]], excess);
+        state.juiceTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.juiceTypes[types[i]] === 0) delete state.juiceTypes[types[i]];
+      }
+    }
+    updateJuicePickerUI();
+  }
+
+  if (id === 'pizza_11') {
+    const picker = document.getElementById('pizzaTypePicker');
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    if (next === 0) {
+      state.pizzaTypes = {};
+    } else if (state.pizzaTypes) {
+      // Trim allocated total down to new qty
+      let total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+      let excess = total - next;
+      const types = Object.keys(state.pizzaTypes);
+      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
+        const cut = Math.min(state.pizzaTypes[types[i]], excess);
+        state.pizzaTypes[types[i]] -= cut;
+        excess -= cut;
+        if (state.pizzaTypes[types[i]] === 0) delete state.pizzaTypes[types[i]];
+      }
+    }
+    updatePizzaPickerUI();
+  }
+
   updateAddonSubtotal();
+  renderOrderSummary();
+}
+
+function updateSodaPickerUI() {
+  if (!state.sodaTypes) state.sodaTypes = {};
+  const qty = state.addons?.drinks_soda || 0;
+  const total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('sodaQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.sodaTypes[type] || 0;
+    const plusEl = document.getElementById('sodaPlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
+  });
+  const counter = document.getElementById('sodaTypeCounter');
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
+}
+
+function changeSodaType(type, delta) {
+  if (!state.sodaTypes) state.sodaTypes = {};
+  const qty = state.addons?.drinks_soda || 0;
+  const total = Object.values(state.sodaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.sodaTypes[type] || 0) + delta);
+  if (next === 0) delete state.sodaTypes[type]; else state.sodaTypes[type] = next;
+  updateSodaPickerUI();
+  renderOrderSummary();
+}
+
+function updateJuicePickerUI() {
+  if (!state.juiceTypes) state.juiceTypes = {};
+  const qty = state.addons?.drinks_juice || 0;
+  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('juiceQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.juiceTypes[type] || 0;
+    const plusEl = document.getElementById('juicePlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
+  });
+  const counter = document.getElementById('juiceTypeCounter');
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
+}
+
+function changeJuiceType(type, delta) {
+  if (!state.juiceTypes) state.juiceTypes = {};
+  const qty = state.addons?.drinks_juice || 0;
+  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.juiceTypes[type] || 0) + delta);
+  if (next === 0) delete state.juiceTypes[type]; else state.juiceTypes[type] = next;
+  updateJuicePickerUI();
+  renderOrderSummary();
+}
+
+function updatePizzaPickerUI() {
+  if (!state.pizzaTypes) state.pizzaTypes = {};
+  const qty = state.addons?.pizza_11 || 0;
+  const total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = {
+    'Ham & Cheese': 'HamCheese',
+    'Salami & Cheese': 'SalamiCheese',
+    'Chorizo & Cheese': 'ChorizoCheese',
+    'Plain Cheese': 'PlainCheese',
+    'Vege Pizza': 'VegePizza',
+  };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('pizzaQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.pizzaTypes[type] || 0;
+    const plusEl = document.getElementById('pizzaPlus_' + id);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
+  });
+  const counter = document.getElementById('pizzaTypeCounter');
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
+}
+
+function changePizzaType(type, delta) {
+  if (!state.pizzaTypes) state.pizzaTypes = {};
+  const qty = state.addons?.pizza_11 || 0;
+  const total = Object.values(state.pizzaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (state.pizzaTypes[type] || 0) + delta);
+  if (next === 0) delete state.pizzaTypes[type]; else state.pizzaTypes[type] = next;
+  updatePizzaPickerUI();
   renderOrderSummary();
 }
 
@@ -448,7 +630,20 @@ function getAddonSummaryLines() {
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => {
       const a = ADDON_PRICES[id];
-      return { label: a.label, qty, price: a.price, subtotal: a.price * qty };
+      let label = a.label;
+      if (id === 'drinks_soda' && state.sodaTypes && Object.keys(state.sodaTypes).length > 0) {
+        const parts = Object.entries(state.sodaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = 'Soft Drink (' + parts.join(', ') + ')';
+      }
+      if (id === 'drinks_juice' && state.juiceTypes && Object.keys(state.juiceTypes).length > 0) {
+        const parts = Object.entries(state.juiceTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = 'Juice Jug (' + parts.join(', ') + ')';
+      }
+      if (id === 'pizza_11' && state.pizzaTypes && Object.keys(state.pizzaTypes).length > 0) {
+        const parts = Object.entries(state.pizzaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = '11-inch Pizza (' + parts.join(', ') + ')';
+      }
+      return { label, qty, price: a.price, subtotal: a.price * qty };
     });
 }
 function renderOrderSummary() {

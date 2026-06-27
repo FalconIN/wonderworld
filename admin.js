@@ -13,6 +13,15 @@ let allBookings   = [];
 let allPayments   = [];
 let allCustomers  = [];
 
+const NZ_TZ = 'Pacific/Auckland';
+function nzDateStr(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: NZ_TZ }).format(d);
+}
+function nzGetDay(d = new Date()) {
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: NZ_TZ, weekday: 'short' }).format(d);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(s);
+}
+
 // ---------------------------------------------------------------------------
 // Init: check admin access via Firebase Auth
 // ---------------------------------------------------------------------------
@@ -335,11 +344,11 @@ function parseImportRow(row, colMap, index) {
 
   const errors = [];
   if (!firstName) errors.push('Missing first name');
-  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) errors.push('Invalid/missing email');
+  if (email && !/^[^@]+@[^@]+\.[^@]+$/.test(email)) errors.push('Invalid email address');
   if (!matchedRoom) errors.push(`Room "${roomText}" not recognized`);
   if (!date) errors.push(`Date "${dateRaw}" could not be parsed`);
   if (!guests || guests < 1) errors.push('Missing/invalid guest count');
-  if (!['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'].includes(time)) errors.push(`Time "${get('time')}" not a valid slot`);
+  if (!time) errors.push('Missing time');
 
   return {
     index, firstName, lastName, email, phone, roomText, matchedRoom,
@@ -378,7 +387,7 @@ function renderImportPreview(headerRow, colMap) {
 
   const errEl = document.getElementById('importErrors');
   const detectedFields = Object.keys(colMap);
-  const requiredFields = ['firstName', 'email', 'room', 'guests', 'date', 'time'];
+  const requiredFields = ['firstName', 'room', 'guests', 'date', 'time'];
   const missingRequired = requiredFields.filter(f => !detectedFields.includes(f));
   if (missingRequired.length > 0) {
     errEl.style.display = 'block';
@@ -464,7 +473,7 @@ async function exportBookingsToExcel() {
   };
 
   const exportRows = rows.map(b => {
-    const bookedOn = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-NZ') : '';
+    const bookedOn = b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-NZ', { timeZone: NZ_TZ }) : '';
     const roomName = b.roomName || '';
     return {
       'Date Booked':  bookedOn,
@@ -501,7 +510,7 @@ async function exportBookingsToExcel() {
 
   const filename = useRange
     ? `bookings_${from}_to_${to}.xlsx`
-    : `bookings_all_${new Date().toISOString().split('T')[0]}.xlsx`;
+    : `bookings_all_${nzDateStr()}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 
@@ -646,7 +655,7 @@ async function renderBookingsDotChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }),
+            title: (items) => new Date(items[0].raw.x).toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', month: 'short', day: 'numeric' }),
             label: (ctx) => { const n = ctx.raw.y || 0; return `${n} room${n === 1 ? '' : 's'} booked`; },
           },
         },
@@ -725,12 +734,14 @@ async function loadMonthRevenue() {
     const last = parseFloat(data.lastMonth || 0);
     const current = parseFloat(data.thisMonth || 0);
     const vsEl = document.getElementById('stat-month-vs');
-    if (last > 0) {
-      const pct = ((current - last) / last * 100).toFixed(0);
-      vsEl.textContent = (pct >= 0 ? '▲' : '▼') + Math.abs(pct) + '% vs last month';
-      vsEl.className = 'text-xs font-semibold ml-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-400');
-    } else {
-      vsEl.textContent = '';
+    if (vsEl) {
+      if (last > 0) {
+        const pct = ((current - last) / last * 100).toFixed(0);
+        vsEl.textContent = (pct >= 0 ? '▲' : '▼') + Math.abs(pct) + '% vs last month';
+        vsEl.className = 'text-xs font-semibold ml-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-400');
+      } else {
+        vsEl.textContent = '';
+      }
     }
     // Pending count note on upcoming stat card
     if (data.pendingCount > 0) {
@@ -807,10 +818,10 @@ async function loadWeekendCapacity() {
     for (let i = 0; i < 42; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
-      const dow = d.getDay();
+      const dow = nzGetDay(d);
       if (dow === 0 || dow === 6) {
-        const iso = d.toISOString().slice(0, 10);
-        days.push({ iso, label: d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
+        const iso = nzDateStr(d);
+        days.push({ iso, label: d.toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
       }
     }
 
@@ -839,9 +850,13 @@ async function loadWeekendCapacity() {
 // ---------------------------------------------------------------------------
 // Today tab
 // ---------------------------------------------------------------------------
+function printRunSheet() {
+  window.print();
+}
+
 async function loadToday() {
   const dateLabel = document.getElementById('today-date-label');
-  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (dateLabel) dateLabel.textContent = new Date().toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   await Promise.all([renderTodayRunSheet(), renderAllergyAlerts(), renderBalancesDue()]);
 }
@@ -1081,11 +1096,16 @@ async function viewBooking(bookingId) {
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
         <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
       </div>` : ''}
-      <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ')}</div>
-      ${booking.status !== 'cancelled' ? `
-      <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="btn-primary w-full py-3 mt-2" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
-        Cancel This Booking
-      </button>` : ''}
+      <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</div>
+      <div class="flex gap-3 mt-2">
+        <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+          ✉️ Resend Confirmation
+        </button>
+        ${booking.status !== 'cancelled' ? `
+        <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
+          Cancel Booking
+        </button>` : ''}
+      </div>
     </div>`;
 
   document.getElementById('bookingDetailModal').style.display = 'flex';
@@ -1093,6 +1113,16 @@ async function viewBooking(bookingId) {
 
 function closeBookingModal() {
   document.getElementById('bookingDetailModal').style.display = 'none';
+}
+
+async function resendConfirmationEmail(bookingId, bookingRef) {
+  if (!confirm(`Resend the confirmation email for booking ${bookingRef}?`)) return;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, {}, 'POST');
+    alert('✅ Confirmation email resent.');
+  } catch (err) {
+    alert('Failed to resend: ' + err.message);
+  }
 }
 
 async function cancelBooking(bookingId, bookingRef) {
@@ -1191,7 +1221,7 @@ function renderPaymentsTable(payments) {
       <td><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
       <td class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
       <td><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
-      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ')}</td>
+      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
       <td>
         ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
@@ -1219,7 +1249,7 @@ async function refundPayment(paymentId, stripePaymentIntentId, amount) {
 // ---------------------------------------------------------------------------
 async function loadCustomers() {
   const tbody = document.getElementById('customers-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   try {
     allCustomers = await callAPI('admin/customers?limit=200', null, 'GET');
@@ -1232,7 +1262,7 @@ function renderCustomersTable(customers) {
   if (!tbody) return;
 
   if (!customers || customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
     return;
   }
 
@@ -1251,10 +1281,12 @@ function renderCustomersTable(customers) {
     } else {
       adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
     }
+    const bookingCount = nonCancelled.length;
     return `<tr>
       <td class="font-semibold text-sm">${name}</td>
       <td class="text-sm">${c.email || '—'}</td>
       <td class="text-sm">${c.phone || '—'}</td>
+      <td class="text-sm">${bookingCount} ${bookingCount === 1 ? 'party' : 'parties'}</td>
       <td class="font-semibold">$${totalSpent.toFixed(2)}</td>
       <td>${adminCell}</td>
     </tr>`;
@@ -1282,23 +1314,23 @@ function handleSearch(query) {
   const q = query.toLowerCase();
   if (currentTab === 'bookings') {
     renderBookingsTable(allBookings.filter(b =>
-      (b.booking_ref || '').toLowerCase().includes(q) ||
-      (b.contact_email || '').toLowerCase().includes(q) ||
-      (b.party_rooms?.name || '').toLowerCase().includes(q)
+      (b.bookingRef || '').toLowerCase().includes(q) ||
+      (b.contactEmail || '').toLowerCase().includes(q) ||
+      (b.roomName || '').toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'customers') {
     renderCustomersTable(allCustomers.filter(c =>
       (c.email || '').toLowerCase().includes(q) ||
       (c.phone || '').toLowerCase().includes(q) ||
-      `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase().includes(q)
+      `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase().includes(q)
     ));
   }
   if (currentTab === 'payments') {
     renderPaymentsTable(allPayments.filter(p =>
-      (p.bookings?.booking_ref || '').toLowerCase().includes(q) ||
-      (p.bookings?.contact_email || '').toLowerCase().includes(q) ||
-      (p.cardholder_name || '').toLowerCase().includes(q)
+      (p.bookingRef || '').toLowerCase().includes(q) ||
+      (p.contactEmail || '').toLowerCase().includes(q) ||
+      (p.cardholderName || '').toLowerCase().includes(q)
     ));
   }
 }
@@ -1346,13 +1378,6 @@ async function adminSignOut() {
 // ---------------------------------------------------------------------------
 // Add Booking Modal
 // ---------------------------------------------------------------------------
-const ROOM_SLUGS = {
-  big: 'big',
-  sunshine: 'sunshine',
-  dream: 'dream',
-  forest: 'forest',
-};
-
 // Mirrors the customer-facing ROOMS array in booking.js
 const AB_ROOMS = [
   { id: 'big',      name: 'The Big Room',      emoji: '🌟', minGuests: 12, maxGuests: 24, pricePerChild: 39 },
@@ -1371,15 +1396,18 @@ const AB_SLOT_END_TIMES = {
 
 // Mirrors the customer-facing ADDON_PRICES in booking.js
 const AB_ADDON_PRICES = {
-  pizza_ham:       { label: 'Ham & Cheese Pizza',     price: 25 },
-  pizza_veg:       { label: 'Vegetarian Pizza',       price: 25 },
-  platter_chicken: { label: 'Fried Chicken Platter',  price: 39 },
-  platter_seafood: { label: 'Seafood Platter',        price: 49 },
-  adult_sandwich:  { label: 'Adult Sandwich Platter', price: 60 },
-  sushi_40:        { label: 'Sushi Platter (40 pcs)', price: 60 },
-  sushi_24:        { label: 'Sushi Platter (24 pcs)', price: 30 },
-  sushi_salmon:    { label: 'Salmon Supreme Platter', price: 28.90 },
-  sushi_ocean:     { label: 'Ocean Deluxe Set',       price: 39.90 },
+  pizza_11:        { label: '11-inch Pizza',                  price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',           price: 39 },
+  platter_seafood: { label: 'Seafood Platter',                 price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter',          price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)',          price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)',          price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter',          price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',                price: 39.90 },
+  sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',     price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28 pcs)',   price: 42.90 },
+  drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
+  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)',        price: 27 },
 };
 
 // Local state for the manual booking modal
@@ -1390,12 +1418,15 @@ let abState = {
   selectedDate: null,
   selectedTime: null,
   addons: {},
+  sodaTypes: {},
+  juiceTypes: {},
+  pizzaTypes: {},
 };
 
 function openAddBookingModal() {
-  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {} };
+  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, juiceTypes: {}, pizzaTypes: {} };
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = nzDateStr();
   document.getElementById('ab_date').min = today;
   document.getElementById('ab_date').value = '';
   document.getElementById('ab_guests').value = 10;
@@ -1488,17 +1519,16 @@ async function abSelectRoom(roomId) {
       abState.guests = Math.min(Math.max(abState.guests, room.minGuests), room.maxGuests);
       guestEl.value = abState.guests;
       document.getElementById('ab_foodTarget').textContent = abState.guests;
-      document.getElementById('ab_nuggetCount').textContent = '0';
-      document.getElementById('ab_burgerCount').textContent = '0';
+      document.getElementById('ab_nuggetCount').value = '0';
+      document.getElementById('ab_burgerCount').value = '0';
       document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
     }
   }
 
   abRenderRoomCards();
 
-  const slug = ROOM_SLUGS[roomId];
   try {
-    const roomRow = await callAPI(`rooms/by-slug/${slug}`, null, 'GET');
+    const roomRow = await callAPI(`rooms/by-slug/${roomId}`, null, 'GET');
     abState.selectedRoomDbId = roomRow?.id || null;
   } catch {
     abState.selectedRoomDbId = null;
@@ -1570,22 +1600,147 @@ function abOnFoodInput() {
   abUpdateOrderSummary();
 }
 
+// ── Shared type-picker helpers (used by both ab_ and eb_ forms) ──────────────
+
+const TYPE_PICKER_IDS = new Set(['drinks_soda', 'drinks_juice', 'pizza_11']);
+
+function getAddonTypeMap(addonId) {
+  if (addonId === 'drinks_soda')  return { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  if (addonId === 'drinks_juice') return { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
+  if (addonId === 'pizza_11')     return { 'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese', 'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza' };
+  return {};
+}
+
+function getAddonTypeStateKey(addonId) {
+  if (addonId === 'drinks_soda')  return 'sodaTypes';
+  if (addonId === 'drinks_juice') return 'juiceTypes';
+  if (addonId === 'pizza_11')     return 'pizzaTypes';
+  return null;
+}
+
+function buildAdminTypePickerHtml(prefix, addonId, currentQty, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  const types = addonState[stateKey] || {};
+  const total = Object.values(types).reduce((s, v) => s + v, 0);
+  const atMax = total >= currentQty;
+  const hiddenClass = currentQty === 0 ? ' hidden' : '';
+  let rows = '';
+  Object.entries(getAddonTypeMap(addonId)).forEach(([type, elemId]) => {
+    const jsType = type.replace(/&/g, '&amp;');
+    const typeQty = types[type] || 0;
+    const plusDisabled = atMax ? ' opacity-30 pointer-events-none' : '';
+    rows += `<div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600">${jsType}</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="${prefix}ChangeType('${addonId}','${jsType}',-1)" class="w-5 h-5 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                      <span class="w-4 text-center text-xs font-bold" id="${prefix}_typeQty_${addonId}_${elemId}">${typeQty}</span>
+                      <button type="button" onclick="${prefix}ChangeType('${addonId}','${jsType}',1)" id="${prefix}_typePlus_${addonId}_${elemId}" class="w-5 h-5 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center${plusDisabled}">+</button>
+                    </div>
+                  </div>`;
+  });
+  return `<div id="${prefix}_typePicker_${addonId}" class="mt-2 pt-2 border-t border-gray-200${hiddenClass}">
+                <div class="flex items-center justify-between mb-1.5">
+                  <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
+                  <div id="${prefix}_typeCounter_${addonId}" class="text-xs font-bold text-indigo-600">${total} / ${currentQty} allocated</div>
+                </div>
+                <div class="space-y-1">${rows}</div>
+              </div>`;
+}
+
+function adminUpdateTypePickerUI(prefix, addonId, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!addonState[stateKey]) addonState[stateKey] = {};
+  const addonQty = addonState.addons?.[addonId] || 0;
+  const total = Object.values(addonState[stateKey]).reduce((s, v) => s + v, 0);
+  const atMax = total >= addonQty;
+  Object.entries(getAddonTypeMap(addonId)).forEach(([type, elemId]) => {
+    const qtyEl = document.getElementById(`${prefix}_typeQty_${addonId}_${elemId}`);
+    if (qtyEl) qtyEl.textContent = addonState[stateKey][type] || 0;
+    const plusEl = document.getElementById(`${prefix}_typePlus_${addonId}_${elemId}`);
+    if (plusEl) {
+      plusEl.classList.toggle('opacity-30', atMax);
+      plusEl.classList.toggle('pointer-events-none', atMax);
+    }
+  });
+  const counter = document.getElementById(`${prefix}_typeCounter_${addonId}`);
+  if (counter) counter.textContent = `${total} / ${addonQty} allocated`;
+}
+
+function adminTrimTypeState(addonId, newQty, addonState) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!stateKey) return;
+  if (newQty === 0) { addonState[stateKey] = {}; return; }
+  if (!addonState[stateKey]) return;
+  let excess = Object.values(addonState[stateKey]).reduce((s, v) => s + v, 0) - newQty;
+  const keys = Object.keys(addonState[stateKey]);
+  for (let i = keys.length - 1; i >= 0 && excess > 0; i--) {
+    const cut = Math.min(addonState[stateKey][keys[i]], excess);
+    addonState[stateKey][keys[i]] -= cut;
+    excess -= cut;
+    if (addonState[stateKey][keys[i]] === 0) delete addonState[stateKey][keys[i]];
+  }
+}
+
+function getAddonLabelWithTypes(id, addonState) {
+  const a = AB_ADDON_PRICES[id];
+  const stateKey = getAddonTypeStateKey(id);
+  if (!stateKey || !addonState[stateKey] || !Object.keys(addonState[stateKey]).length) return a.label;
+  const parts = Object.entries(addonState[stateKey]).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+  if (id === 'drinks_soda')  return `Soft Drink (${parts.join(', ')})`;
+  if (id === 'drinks_juice') return `Juice Jug (${parts.join(', ')})`;
+  if (id === 'pizza_11')     return `11-inch Pizza (${parts.join(', ')})`;
+  return a.label;
+}
+
+function abUpdateTypePickerUI(addonId) { adminUpdateTypePickerUI('ab', addonId, abState); }
+function ebUpdateTypePickerUI(addonId) { adminUpdateTypePickerUI('eb', addonId, editBookingState); }
+
+function abChangeType(addonId, type, delta) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!abState[stateKey]) abState[stateKey] = {};
+  const addonQty = abState.addons?.[addonId] || 0;
+  const total = Object.values(abState[stateKey]).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= addonQty) return;
+  const next = Math.max(0, (abState[stateKey][type] || 0) + delta);
+  if (next === 0) delete abState[stateKey][type]; else abState[stateKey][type] = next;
+  abUpdateTypePickerUI(addonId);
+  abUpdateOrderSummary();
+}
+
+function ebChangeType(addonId, type, delta) {
+  const stateKey = getAddonTypeStateKey(addonId);
+  if (!editBookingState[stateKey]) editBookingState[stateKey] = {};
+  const addonQty = editBookingState.addons?.[addonId] || 0;
+  const total = Object.values(editBookingState[stateKey]).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= addonQty) return;
+  const next = Math.max(0, (editBookingState[stateKey][type] || 0) + delta);
+  if (next === 0) delete editBookingState[stateKey][type]; else editBookingState[stateKey][type] = next;
+  ebUpdateTypePickerUI(addonId);
+  ebUpdateOrderSummary();
+}
+
+// ── Add-booking addon list ────────────────────────────────────────────────────
+
 function abRenderAddonsList() {
   const container = document.getElementById('ab_addonsList');
   if (!container) return;
   let html = '';
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    const qty = abState.addons[id] || 0;
+    const typePicker = TYPE_PICKER_IDS.has(id) ? buildAdminTypePickerHtml('ab', id, qty, abState) : '';
     html += `
-      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="abChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
-          <span class="w-5 text-center text-xs font-bold" id="ab_addon_${id}">0</span>
-          <button onclick="abChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
-        </div>
+      <div class="bg-white ab-card rounded-lg p-2.5 border border-gray-100">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+            <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="abChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+            <span class="w-5 text-center text-xs font-bold" id="ab_addon_${id}">${qty}</span>
+            <button onclick="abChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+          </div>
+        </div>${typePicker}
       </div>`;
   });
   container.innerHTML = html;
@@ -1596,6 +1751,12 @@ function abChangeAddon(id, delta) {
   const next = Math.max(0, current + delta);
   abState.addons[id] = next;
   document.getElementById('ab_addon_' + id).textContent = next;
+  if (TYPE_PICKER_IDS.has(id)) {
+    const picker = document.getElementById('ab_typePicker_' + id);
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    adminTrimTypeState(id, next, abState);
+    abUpdateTypePickerUI(id);
+  }
   abUpdateOrderSummary();
 }
 
@@ -1616,7 +1777,7 @@ function abUpdateOrderSummary() {
 
   const addonLines = Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${getAddonLabelWithTypes(id, abState)} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
     .join('');
 
   summaryEl.innerHTML = `
@@ -1680,7 +1841,7 @@ async function submitAddBooking() {
   const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
   const addonLines = Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, abState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
   const addonsSummary = addonLines.join(', ');
   const addonsAmount = abGetAddonTotal();
   const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
@@ -1728,6 +1889,9 @@ let editBookingState = {
   booking: null,
   guests: 10,
   addons: {},
+  sodaTypes: {},
+  juiceTypes: {},
+  pizzaTypes: {},
   roomMin: 1,
   roomMax: 24,
 };
@@ -1750,7 +1914,7 @@ function parseAddonsSummary(summary) {
   const addons = {};
   if (!summary) return addons;
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
-    const match = summary.match(new RegExp(escapeRegex(a.label) + '\\s*×(\\d+)', 'i'));
+    const match = summary.match(new RegExp(escapeRegex(a.label) + '[^×]*×(\\d+)', 'i'));
     if (match) addons[id] = parseInt(match[1]);
   });
   return addons;
@@ -1764,6 +1928,9 @@ function openEditBookingModal(bookingId) {
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
+  editBookingState.sodaTypes = {};
+  editBookingState.juiceTypes = {};
+  editBookingState.pizzaTypes = {};
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -1833,17 +2000,20 @@ function ebRenderAddonsList() {
   let html = '';
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
     const qty = editBookingState.addons[id] || 0;
+    const typePicker = TYPE_PICKER_IDS.has(id) ? buildAdminTypePickerHtml('eb', id, qty, editBookingState) : '';
     html += `
-      <div class="flex items-center justify-between bg-white ab-card rounded-lg p-2.5 border border-gray-100">
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-semibold text-gray-700">${a.label}</div>
-          <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
-        </div>
-        <div class="flex items-center gap-1">
-          <button onclick="ebChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
-          <span class="w-5 text-center text-xs font-bold" id="eb_addon_${id}">${qty}</span>
-          <button onclick="ebChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
-        </div>
+      <div class="bg-white ab-card rounded-lg p-2.5 border border-gray-100">
+        <div class="flex items-center justify-between">
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-semibold text-gray-700">${a.label}</div>
+            <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2 py-0.5">$${a.price.toFixed(2)}</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="ebChangeAddon('${id}', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">−</button>
+            <span class="w-5 text-center text-xs font-bold" id="eb_addon_${id}">${qty}</span>
+            <button onclick="ebChangeAddon('${id}', 1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400">+</button>
+          </div>
+        </div>${typePicker}
       </div>`;
   });
   container.innerHTML = html;
@@ -1854,6 +2024,12 @@ function ebChangeAddon(id, delta) {
   const next = Math.max(0, current + delta);
   editBookingState.addons[id] = next;
   document.getElementById('eb_addon_' + id).textContent = next;
+  if (TYPE_PICKER_IDS.has(id)) {
+    const picker = document.getElementById('eb_typePicker_' + id);
+    if (picker) picker.classList.toggle('hidden', next === 0);
+    adminTrimTypeState(id, next, editBookingState);
+    ebUpdateTypePickerUI(id);
+  }
   ebUpdateOrderSummary();
 }
 
@@ -1874,7 +2050,7 @@ function ebUpdateOrderSummary() {
 
   const addonLines = Object.entries(editBookingState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${AB_ADDON_PRICES[id].label} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
+    .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${getAddonLabelWithTypes(id, editBookingState)} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
     .join('');
 
   document.getElementById('eb_orderSummary').innerHTML = `
@@ -1884,6 +2060,28 @@ function ebUpdateOrderSummary() {
     <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
       <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
     </div>`;
+
+  ebUpdateBalanceDue();
+}
+
+function ebGetCalculatedTotal() {
+  const booking = editBookingState.booking;
+  if (!booking) return 0;
+  const ratePerChild = (booking.baseAmount && booking.guestCount)
+    ? parseFloat(booking.baseAmount) / booking.guestCount : 39;
+  return (ratePerChild * editBookingState.guests) + ebGetAddonTotal();
+}
+
+function ebUpdateBalanceDue() {
+  const total = ebGetCalculatedTotal();
+  const paid = parseFloat(document.getElementById('eb_amountPaid').value);
+  const el = document.getElementById('eb_balanceDue');
+  if (el && !isNaN(paid) && paid < total - 0.005) {
+    el.textContent = `⚠️ Balance due on the day: $${(total - paid).toFixed(2)} NZD`;
+    el.classList.remove('hidden');
+  } else if (el) {
+    el.classList.add('hidden');
+  }
 }
 
 async function submitEditBooking() {
@@ -1916,7 +2114,7 @@ async function submitEditBooking() {
   const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
   const addonLines = Object.entries(editBookingState.addons)
     .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => `${AB_ADDON_PRICES[id].label} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, editBookingState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
   const addonsSummary = addonLines.join(', ');
 
   btn.disabled = true;
