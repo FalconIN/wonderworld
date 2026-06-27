@@ -230,9 +230,11 @@ router.get('/users/bookings', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
               b.party_time as "partyTime", b.guest_count as "guestCount",
-              b.food_choice as "foodChoice", b.total_amount as "totalAmount",
-              b.status, b.created_at as "createdAt",
-              r.name as "roomName", r.emoji as "roomEmoji"
+              b.food_choice as "foodChoice", b.addons_summary as "addonsSummary",
+              b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
+              b.total_amount as "totalAmount", b.status, b.created_at as "createdAt",
+              r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
+              r.max_guests as "roomMaxGuests", r.base_price_per_child as "pricePerChild"
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
        WHERE b.user_id = $1
@@ -242,6 +244,135 @@ router.get('/users/bookings', requireAuth, async (req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/bookings/:id — get full booking details for edit modal
+router.get('/bookings/:id', requireAuth, async (req, res) => {
+  const uid = req.user.uid;
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
+              b.party_time as "partyTime", b.guest_count as "guestCount",
+              b.food_choice as "foodChoice", b.addons_summary as "addonsSummary",
+              b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
+              b.total_amount as "totalAmount", b.status, b.contact_email as "contactEmail",
+              b.stripe_payment_intent_id as "stripePaymentIntentId",
+              r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
+              r.max_guests as "roomMaxGuests", r.base_price_per_child as "pricePerChild"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       WHERE b.id = $1 AND b.user_id = $2`,
+      [req.params.id, uid]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Booking not found.' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/bookings/:id/edit — apply edit after successful payment
+router.post('/bookings/:id/edit', requireAuth, async (req, res) => {
+  const uid = req.user.uid;
+  const bookingId = req.params.id;
+  const {
+    newGuestCount, newFoodChoice, newAddonsSummary, newAddonsAmount,
+    deltaAmount, paymentIntentId, changeType,
+  } = req.body;
+
+  const TIME_MAP = { '9:30 AM': '09:30', '11:30 AM': '11:30', '1:30 PM': '13:30', '3:30 PM': '15:30' };
+
+  let booking;
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.*, r.base_price_per_child as "pricePerChild", r.max_guests as "roomMaxGuests",
+              r.min_guests as "roomMinGuests"
+       FROM bookings b JOIN party_rooms r ON r.id = b.party_room_id
+       WHERE b.id = $1 AND b.user_id = $2 AND b.status = 'confirmed'`,
+      [bookingId, uid]
+    );
+    booking = rows[0];
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+  if (!booking) return res.status(404).json({ error: 'Booking not found or cannot be edited.' });
+
+  // Server-side 48hr/24hr check
+  const t = TIME_MAP[booking.party_time] || '12:00';
+  const partyDt = new Date(`${booking.party_date}T${t}:00`);
+  const hoursUntil = (partyDt - new Date()) / 3600000;
+  if (hoursUntil < 24) {
+    return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
+  }
+
+  // Validate guest count
+  if (parseInt(newGuestCount, 10) < booking.guest_count) {
+    return res.status(400).json({ error: 'Guest count cannot be reduced.' });
+  }
+  if (parseInt(newGuestCount, 10) > booking.roomMaxGuests) {
+    return res.status(400).json({ error: `Guest count cannot exceed ${booking.roomMaxGuests}.` });
+  }
+
+  // Verify payment if there is a charge
+  const delta = parseFloat(deltaAmount) || 0;
+  if (delta > 0) {
+    if (!paymentIntentId) return res.status(400).json({ error: 'Payment required for this edit.' });
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (pi.status !== 'succeeded') return res.status(400).json({ error: 'Payment has not succeeded.' });
+      const expectedCents = Math.round(delta * 100);
+      if (Math.abs(pi.amount - expectedCents) > 2) {
+        return res.status(400).json({ error: 'Payment amount mismatch.' });
+      }
+    } catch (err) {
+      return res.status(400).json({ error: 'Could not verify payment: ' + err.message });
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const newTotal = parseFloat(booking.total_amount) + delta;
+    const prevAddons = booking.addons_summary ? booking.addons_summary.trim() : '';
+    const newAddons = newAddonsSummary ? newAddonsSummary.trim() : '';
+    const combinedAddons = [prevAddons, newAddons].filter(Boolean).join(', ');
+    const newTotalAddons = parseFloat(booking.addons_amount || 0) + parseFloat(newAddonsAmount || 0);
+
+    await client.query(
+      `UPDATE bookings SET
+         guest_count = $1, food_choice = COALESCE($2, food_choice),
+         addons_summary = $3, addons_amount = $4, total_amount = $5, updated_at = now()
+       WHERE id = $6`,
+      [newGuestCount, newFoodChoice || null, combinedAddons || null,
+       newTotalAddons, newTotal, bookingId]
+    );
+
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, new_guest_count,
+          new_food_choice, new_addons_summary, payment_intent_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [bookingId, uid, changeType || 'both', delta, newGuestCount,
+       newFoodChoice || null, newAddonsSummary || null, paymentIntentId || null]
+    );
+
+    if (delta > 0 && paymentIntentId) {
+      await client.query(
+        `INSERT INTO payments (booking_id, user_id, stripe_payment_intent_id, amount, currency, status)
+         VALUES ($1, $2, $3, $4, 'nzd', 'succeeded')`,
+        [bookingId, uid, paymentIntentId, delta]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

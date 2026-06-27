@@ -668,6 +668,7 @@
                   <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
                   <div id="pizzaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
+                <div id="pizzaTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a type of pizza before continuing.</div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-700">Ham &amp; Cheese</span>
@@ -896,6 +897,7 @@
                   <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
                   <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
+                <div id="sodaTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a flavour for all your soft drink(s) before continuing.</div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-700">Coke</span>
@@ -954,6 +956,7 @@
                   <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
                   <div id="juiceTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
                 </div>
+                <div id="juiceTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a flavour of juice before continuing.</div>
                 <div class="space-y-1.5">
                   <div class="flex items-center justify-between">
                     <span class="text-xs font-semibold text-gray-700">Orange Juice</span>
@@ -1108,6 +1111,16 @@
             <p class="text-gray-500 mb-6">Get ready for an amazing party. We've sent your receipt and digital entry passes — check your email and phone!</p>
           </div>
           <div id="bookingSummaryCard" class="bg-gradient-to-br from-indigo-light to-teal-light rounded-2xl p-6 text-left mb-6 stagger-3"></div>
+          <!-- Edit Booking policy banner — hidden by default, shown via JS when party is >48hrs away -->
+          <div id="editBookingBanner" class="hidden bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 text-left mb-4 stagger-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-amber-800 text-sm mb-1">✏️ Need to make changes?</div>
+                <p class="text-xs text-amber-700">You can edit your booking up to 48 hours before your party. Changes within 24 hours of your party cannot be accepted.</p>
+              </div>
+              <button onclick="openEditBookingFromStep6()" class="flex-shrink-0 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl px-3 py-2 transition-colors whitespace-nowrap">Edit Booking</button>
+            </div>
+          </div>
           <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-4 stagger-4">
             <strong>📅 What happens next?</strong> Our events team will call you within 24 hours to finalise room decorations, confirm food quantities, and answer any questions.
           </div>
@@ -1190,11 +1203,25 @@
 })();
 </script>
 
+<!-- ── Edit Booking Modal ─────────────────────────────────────── -->
+<div id="editBookingOverlay" class="modal-overlay" style="display:none" onclick="handleEditOverlayClick(event)">
+  <div id="editBookingBox" class="modal-box" style="max-width:640px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-0 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10 -mx-1 px-1">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">✏️</span>
+        <span class="font-display font-bold text-lg text-gray-900">Edit Booking</span>
+      </div>
+      <button onclick="closeEditBooking()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 text-xl transition-colors">×</button>
+    </div>
+    <div id="editBookingContent" class="pt-4"></div>
+  </div>
+</div>
+
 <!-- Scripts — order matters -->
 <script src="firebase.js"></script>
 <script src="auth.js"></script>
 <script src="booking.js?v=11"></script>
 <script src="payment.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

@@ -364,6 +364,7 @@ async function finaliseBooking() {
   try {
     // Save confirmed booking
     const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
+    state.bookingId = bookingId;
 
     // Trigger Edge Functions: email + SMS
     const addonLines = getAddonSummaryLines();

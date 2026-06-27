@@ -171,3 +171,19 @@ CREATE TABLE IF NOT EXISTS public.sms_logs (
   status     text        NOT NULL DEFAULT 'sent',
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- ── 8. BOOKING_EDITS ────────────────────────────────────────
+-- Run to apply: psql -U wonderworld -d wonderworld -c "$(tail -n 12 schema.sql)"
+CREATE TABLE IF NOT EXISTS public.booking_edits (
+  id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+  changed_by         text          NOT NULL REFERENCES public.users(id),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both')),
+  delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
+  new_guest_count    integer,
+  new_food_choice    text,
+  new_addons_summary text,
+  payment_intent_id  text,
+  created_at         timestamptz   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_booking_edits_booking ON public.booking_edits (booking_id);
