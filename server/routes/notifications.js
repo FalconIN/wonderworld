@@ -3,6 +3,17 @@ const router  = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const pool    = require('../db');
 
+// Converts whatever partyDate arrives as (JS Date object serialised to ISO string,
+// or a plain "YYYY-MM-DD" string) into a clean "3 July 2026" display string.
+// We build the Date from year/month/day parts to avoid any UTC-offset shifts.
+function fmtDate(raw) {
+  const ymd = String(raw).slice(0, 10); // "2026-07-03" from either format
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-NZ', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
+
 // POST /api/notifications/booking-confirmation
 // Sends confirmation email via Resend and SMS via Twilio
 router.post('/booking-confirmation', requireAuth, async (req, res) => {
@@ -38,7 +49,7 @@ router.post('/booking-confirmation', requireAuth, async (req, res) => {
             <div style="font-size:22px;font-weight:700;color:#4F46E5;margin-bottom:20px">${bookingRef}</div>
             <table style="width:100%;font-size:14px;border-collapse:collapse">
               <tr><td style="padding:6px 0;color:#6B7280;width:40%">Room</td><td style="font-weight:600">${roomName}</td></tr>
-              <tr><td style="padding:6px 0;color:#6B7280">Date &amp; Time</td><td style="font-weight:600">${partyDate} at ${partyTime}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">Date &amp; Time</td><td style="font-weight:600">${fmtDate(partyDate)} at ${partyTime}</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Guests</td><td style="font-weight:600">${guestCount} kids</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Food</td><td style="font-weight:600">${foodChoice || '—'}</td></tr>
               ${addonsSummary ? `<tr><td style="padding:6px 0;color:#6B7280">Add-ons</td><td style="font-weight:600">${addonsSummary}</td></tr>` : ''}
@@ -83,7 +94,7 @@ router.post('/booking-confirmation', requireAuth, async (req, res) => {
     const msg = await client.messages.create({
       from: process.env.TWILIO_PHONE_NUMBER,
       to:   nzPhone,
-      body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${partyDate} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}. See you soon!`,
+      body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${fmtDate(partyDate)} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}. See you soon!`,
     });
 
     results.sms = 'sent';
@@ -137,7 +148,7 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
             <div style="font-size:22px;font-weight:700;color:#F97316;margin-bottom:20px">${bookingRef}</div>
             <table style="width:100%;font-size:14px;border-collapse:collapse">
               <tr><td style="padding:6px 0;color:#6B7280;width:40%">Room</td><td style="font-weight:600">${roomName}</td></tr>
-              <tr><td style="padding:6px 0;color:#6B7280">Date &amp; Time</td><td style="font-weight:600">${partyDate} at ${partyTime}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">Date &amp; Time</td><td style="font-weight:600">${fmtDate(partyDate)} at ${partyTime}</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Guests (updated)</td><td style="font-weight:600">${newGuestCount} kids</td></tr>
               ${newFoodChoice ? `<tr><td style="padding:6px 0;color:#6B7280">Food (updated)</td><td style="font-weight:600">${newFoodChoice}</td></tr>` : ''}
               ${addonLine}
@@ -174,7 +185,7 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
       await client.messages.create({
         from: process.env.TWILIO_PHONE_NUMBER,
         to:   nzPhone,
-        body: `Wonder World Westgate: Hi ${firstName}! Your booking ${bookingRef} has been updated ✏️. ${newGuestCount} kids on ${partyDate} @ ${partyTime}. New total: $${parseFloat(newTotalAmount).toFixed(2)} NZD.`,
+        body: `Wonder World Westgate: Hi ${firstName}! Your booking ${bookingRef} has been updated ✏️. ${newGuestCount} kids on ${fmtDate(partyDate)} @ ${partyTime}. New total: $${parseFloat(newTotalAmount).toFixed(2)} NZD.`,
       });
       results.sms = 'sent';
     } catch (err) {
