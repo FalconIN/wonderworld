@@ -493,6 +493,7 @@ const FAQ_DATA = [
   { q: "What's the cancellation or rescheduling policy?", a: "Free cancellation or rescheduling up to 7 days before your party date. Within 7 days, a 50% fee applies. No-shows on the day are non-refundable. Contact us early and we'll always do our best to help." },
   { q: "Are parents and adults allowed to stay?", a: "Yes! Parents and caregivers are welcome to stay for the entire party. We have comfortable seating areas and complimentary tea and coffee for adults while the kids have the time of their lives." },
   { q: "Do you cater for dietary requirements and allergies?", a: "Definitely. We offer gluten-free, dairy-free, and nut-free options. Please note all dietary requirements during booking and our kitchen team will ensure every child is safely catered for." },
+  { q: "Do children need grip socks?", a: "Yes — grip or non-slip socks are required for all children on the play equipment, for safety and hygiene reasons. No bare feet or regular shoes are permitted in the playground. Grip socks are available for purchase at our front desk if you forget to bring a pair." },
 ];
 
 function renderFAQ() {
@@ -637,8 +638,9 @@ async function viewMyBookings() {
   }
 
   const hoursUntil = b => {
+    const d = (b.partyDate || '').slice(0, 10); // handles both 'YYYY-MM-DD' and ISO timestamps
     const t = {'9:30 AM':'09:30','11:30 AM':'11:30','1:30 PM':'13:30','3:30 PM':'15:30'}[b.partyTime] || '12:00';
-    return (new Date(`${b.partyDate}T${t}:00`) - new Date()) / 3600000;
+    return (new Date(`${d}T${t}:00`) - new Date()) / 3600000;
   };
 
   const bookingCards = bookings.length === 0
@@ -661,7 +663,7 @@ async function viewMyBookings() {
               <span class="badge ${b.status === 'confirmed' ? 'badge-green' : b.status === 'cancelled' ? 'badge-red' : 'badge-yellow'}">${b.status}</span>
             </div>
             <div class="grid grid-cols-2 gap-1 text-sm text-gray-600">
-              <div>📅 ${b.partyDate} @ ${b.partyTime}</div>
+              <div>📅 ${(b.partyDate||'').slice(0,10)} @ ${b.partyTime}</div>
               <div>👦 ${b.guestCount} kids</div>
               <div>🍕 ${escapeHtml(b.foodChoice) || '—'}</div>
               <div>💰 $${parseFloat(b.totalAmount).toFixed(2)} NZD</div>
@@ -710,8 +712,9 @@ const editState = {
 };
 
 function getPartyDatetime(partyDate, partyTime) {
+  const d = (partyDate || '').slice(0, 10);
   const t24 = {'9:30 AM':'09:30','11:30 AM':'11:30','1:30 PM':'13:30','3:30 PM':'15:30'}[partyTime] || '12:00';
-  return new Date(`${partyDate}T${t24}:00`);
+  return new Date(`${d}T${t24}:00`);
 }
 
 function getHoursUntilParty(partyDate, partyTime) {
