@@ -50,11 +50,13 @@ app.use(cors({ origin: process.env.SITE_URL || '*' }));
 const bookingsRouter      = require('./routes/bookings');
 const adminRouter         = require('./routes/admin');
 const notificationsRouter = require('./routes/notifications');
+const googleRatingRouter  = require('./routes/googleRating');
 
 app.use('/api', bookingsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/google-rating', googleRatingRouter);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));

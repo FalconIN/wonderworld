@@ -539,12 +539,39 @@ function toggleDirections() {
 }
 
 // ---------------------------------------------------------------------------
+// Live Google rating
+// ---------------------------------------------------------------------------
+async function updateGoogleRating() {
+  try {
+    const res = await fetch('/api/google-rating');
+    if (!res.ok) return;
+    const { rating } = await res.json();
+    if (!rating) return;
+
+    const r = parseFloat(rating).toFixed(1);
+
+    // Hero badge
+    const heroEl = document.getElementById('heroGoogleRating');
+    if (heroEl) heroEl.textContent = r;
+
+    // Stats strip — update data-count so the count-up animation uses the live value.
+    // If the animation already ran (textContent !== '0'), update the text directly too.
+    const statEl = document.querySelector('.stat-val[data-suffix="★"]');
+    if (statEl) {
+      statEl.dataset.count = r;
+      if (statEl.textContent !== '0') statEl.textContent = r + '★';
+    }
+  } catch { /* silently keep the hardcoded fallback */ }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   renderHours();
   renderFAQ();
   renderRooms();
+  updateGoogleRating();
 
   const dateInput = document.getElementById('partyDate');
   if (dateInput) {
