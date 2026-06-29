@@ -196,4 +196,81 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
   res.json({ ok: true, results });
 });
 
+// POST /api/notifications/booking-rescheduled
+router.post('/booking-rescheduled', requireAuth, async (req, res) => {
+  const {
+    bookingId, bookingRef, email, phone,
+    firstName, roomName, partyDate, oldTime, newTime,
+  } = req.body;
+
+  const results = { email: null, sms: null };
+
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const { data, error } = await resend.emails.send({
+      from:    'Wonder World Westgate <bookings@wonderworldwestgate.co.nz>',
+      to:      email,
+      subject: `🕐 Party Time Updated — Ref: ${bookingRef}`,
+      html: `
+        <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#111827">
+          <div style="background:linear-gradient(135deg,#1E3A8A,#2563EB);border-radius:20px;padding:32px;text-align:center;margin-bottom:28px">
+            <div style="font-size:40px;margin-bottom:8px">🕐</div>
+            <h1 style="color:white;font-size:24px;font-weight:700;margin:0 0 4px">Party Time Updated!</h1>
+            <p style="color:rgba(255,255,255,0.85);margin:0;font-size:14px">Wonder World Westgate</p>
+          </div>
+
+          <p style="font-size:15px;margin-bottom:20px">Hi <strong>${firstName}</strong>! We've rescheduled your party to a new time slot. Everything else stays the same — here's what changed:</p>
+
+          <div style="background:#F9FAFB;border-radius:16px;padding:24px;margin-bottom:20px">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9CA3AF;margin-bottom:6px">Booking Reference</div>
+            <div style="font-size:22px;font-weight:700;color:#1E3A8A;margin-bottom:20px">${bookingRef}</div>
+            <table style="width:100%;font-size:14px;border-collapse:collapse">
+              <tr><td style="padding:6px 0;color:#6B7280;width:40%">Room</td><td style="font-weight:600">${roomName}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">Date</td><td style="font-weight:600">${fmtDate(partyDate)}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">Previous time</td><td style="font-weight:600;text-decoration:line-through;color:#9CA3AF">${oldTime}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">New time</td><td style="font-weight:700;color:#1E3A8A;font-size:16px">${newTime}</td></tr>
+            </table>
+          </div>
+
+          <p style="font-size:13px;color:#6B7280">Questions? Email us at <a href="mailto:hello@wonderworldwestgate.co.nz" style="color:#1E3A8A">hello@wonderworldwestgate.co.nz</a></p>
+          <p style="font-size:13px;color:#9CA3AF;margin-top:24px">See you soon! 🎠<br><strong>Wonder World Westgate Team</strong></p>
+        </div>
+      `,
+    });
+
+    if (error) throw new Error(error.message);
+    results.email = 'sent';
+
+    if (bookingId) {
+      await pool.query(
+        'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status) VALUES ($1, $2, $3, $4, $5)',
+        [bookingId, 'booking_rescheduled', email, data?.id || null, 'sent']
+      );
+    }
+  } catch (err) {
+    console.error('Reschedule email failed:', err.message);
+    results.email = 'failed: ' + err.message;
+  }
+
+  if (phone) {
+    try {
+      const twilio = require('twilio');
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const nzPhone = phone.startsWith('+') ? phone : '+64' + phone.replace(/^0/, '');
+      await client.messages.create({
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to:   nzPhone,
+        body: `Wonder World Westgate: Hi ${firstName}! Your party time has been updated. Ref: ${bookingRef} — ${roomName} on ${fmtDate(partyDate)} is now at ${newTime}. See you soon!`,
+      });
+      results.sms = 'sent';
+    } catch (err) {
+      results.sms = 'failed: ' + err.message;
+    }
+  }
+
+  res.json({ ok: true, results });
+});
+
 module.exports = router;

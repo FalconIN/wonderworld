@@ -180,7 +180,7 @@ async function loadOverviewBookingsList(fromDate, toDate) {
         <span class="text-2xl">${b.roomEmoji || '🎉'}</span>
         <div>
           <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${roomDisplayName(b.roomName)} · ${b.guestCount} kids</div>
-          <div class="text-xs text-gray-400">${b.partyDate} @ ${b.partyTime} · ${b.contactEmail || ''}</div>
+          <div class="text-xs text-gray-400">${(b.partyDate||'').slice(0,10)} @ ${b.partyTime} · ${b.contactEmail || ''}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -1000,7 +1000,7 @@ async function loadBookings() {
   try {
     allBookings = await callAPI(endpoint, null, 'GET');
   } catch (err) { console.error(err); return; }
-  renderBookingsTable(allBookings);
+  renderBookingsTable(getBookingsSorted(allBookings));
 }
 
 function renderBookingsTable(bookings) {
@@ -1066,7 +1066,7 @@ async function viewBooking(bookingId) {
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <div class="text-xs text-gray-400 mb-1 uppercase font-semibold">Date & Time</div>
-          <div class="font-semibold">${booking.partyDate} @ ${booking.partyTime}</div>
+          <div class="font-semibold">${(booking.partyDate||'').slice(0,10)} @ ${booking.partyTime}</div>
         </div>
       </div>
 
@@ -1097,6 +1097,12 @@ async function viewBooking(bookingId) {
         <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</div>
+      ${booking.status === 'confirmed' ? `
+      <div class="mt-2">
+        <button onclick="openRescheduleModal('${booking.id}')" class="btn-secondary w-full py-3 text-sm">
+          Reschedule Time
+        </button>
+      </div>` : ''}
       <div class="flex gap-3 mt-2">
         <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
           ✉️ Resend Confirmation
@@ -1113,6 +1119,101 @@ async function viewBooking(bookingId) {
 
 function closeBookingModal() {
   document.getElementById('bookingDetailModal').style.display = 'none';
+}
+
+async function openRescheduleModal(bookingId) {
+  const modal = document.getElementById('rescheduleModal');
+  const content = document.getElementById('rescheduleContent');
+  content.innerHTML = '<p class="text-center text-gray-400 py-6">Loading available slots…</p>';
+  modal.style.display = 'flex';
+
+  let data;
+  try {
+    data = await callAPI(`admin/bookings/${bookingId}/reschedule-slots`, null, 'GET');
+  } catch (err) {
+    content.innerHTML = `<p class="text-red-500 text-sm">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  const { currentTime, partyDate, slots } = data;
+  const availableSlots = slots.filter(s => s.available);
+
+  const dateStr = (() => {
+    const [y, m, d] = (partyDate || '').slice(0, 10).split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  })();
+
+  if (availableSlots.length === 0) {
+    content.innerHTML = `
+      <p class="text-sm text-gray-600 mb-3">Current time: <strong>${escapeHtml(currentTime)}</strong> on ${escapeHtml(dateStr)}</p>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+        No other time slots are available on this date. Rescheduling is not possible.
+      </div>
+      <button onclick="closeRescheduleModal()" class="btn-secondary w-full mt-4 py-3 text-sm">Close</button>`;
+    return;
+  }
+
+  const slotBtns = slots.map(s => {
+    if (s.isCurrent) {
+      return `<div class="px-4 py-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold text-sm text-center">
+        ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(current)</span>
+      </div>`;
+    }
+    if (s.isTaken) {
+      return `<div class="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 font-semibold text-sm text-center cursor-not-allowed">
+        ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(taken)</span>
+      </div>`;
+    }
+    return `<button onclick="confirmReschedule('${bookingId}', '${escapeHtml(s.time)}')"
+      class="px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-brand-orange hover:bg-orange-50 font-semibold text-sm text-center transition-all w-full">
+      ${escapeHtml(s.time)}
+    </button>`;
+  }).join('');
+
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 mb-4">Select a new time for <strong>${escapeHtml(dateStr)}</strong>.<br>
+    The date cannot be changed.</p>
+    <div class="grid grid-cols-2 gap-3 mb-4">${slotBtns}</div>
+    <p class="text-xs text-gray-400">Selecting a new time will immediately release the current slot and send a notification email to the customer.</p>`;
+}
+
+async function confirmReschedule(bookingId, newTime) {
+  const content = document.getElementById('rescheduleContent');
+  if (!confirm(`Reschedule this booking to ${newTime}?\n\nA notification email will be sent to the customer.`)) return;
+
+  content.innerHTML = '<p class="text-center text-gray-400 py-6">Rescheduling…</p>';
+
+  try {
+    const result = await callAPI(`admin/bookings/${bookingId}/reschedule`, { newTime }, 'POST');
+
+    try {
+      await callAPI('notifications/booking-rescheduled', {
+        bookingId,
+        bookingRef:   result.bookingRef,
+        email:        result.contactEmail,
+        phone:        result.contactPhone,
+        firstName:    result.firstName,
+        roomName:     result.roomName,
+        partyDate:    result.partyDate,
+        oldTime:      result.oldTime,
+        newTime:      result.newTime,
+      });
+    } catch (notifErr) {
+      console.warn('Reschedule notification failed:', notifErr.message);
+    }
+
+    closeRescheduleModal();
+    closeBookingModal();
+    alert(`✅ Booking rescheduled to ${newTime}. Customer has been notified.`);
+    await loadBookings();
+  } catch (err) {
+    content.innerHTML = `<p class="text-red-500 text-sm mb-3">${escapeHtml(err.message)}</p>
+      <button onclick="closeRescheduleModal()" class="btn-secondary w-full py-3 text-sm">Close</button>`;
+  }
+}
+
+function closeRescheduleModal() {
+  document.getElementById('rescheduleModal').style.display = 'none';
 }
 
 async function resendConfirmationEmail(bookingId, bookingRef) {
@@ -1310,14 +1411,31 @@ async function toggleAdmin(userId, email, currentlyAdmin) {
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
+function getBookingsSorted(bookings) {
+  const order = document.getElementById('bookingsSortOrder')?.value || 'party_date_asc';
+  return [...bookings].sort((a, b) => {
+    if (order === 'party_date_asc')  return (a.partyDate || '') < (b.partyDate || '') ? -1 : 1;
+    if (order === 'party_date_desc') return (a.partyDate || '') > (b.partyDate || '') ? -1 : 1;
+    if (order === 'created_desc')    return (a.createdAt || '') > (b.createdAt || '') ? -1 : 1;
+    if (order === 'created_asc')     return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1;
+    return 0;
+  });
+}
+
+function applyBookingsSort() {
+  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+  handleSearch(q);
+}
+
 function handleSearch(query) {
   const q = query.toLowerCase();
   if (currentTab === 'bookings') {
-    renderBookingsTable(allBookings.filter(b =>
+    const filtered = allBookings.filter(b =>
       (b.bookingRef || '').toLowerCase().includes(q) ||
       (b.contactEmail || '').toLowerCase().includes(q) ||
       (b.roomName || '').toLowerCase().includes(q)
-    ));
+    );
+    renderBookingsTable(getBookingsSorted(filtered));
   }
   if (currentTab === 'customers') {
     renderCustomersTable(allCustomers.filter(c =>
@@ -1829,6 +1947,7 @@ async function submitAddBooking() {
   const burgers = parseInt(document.getElementById('ab_burgerCount').value) || 0;
 
   // Validate
+  if (!firstName) { errEl.textContent = 'First name is required.'; errEl.classList.remove('hidden'); document.getElementById('ab_firstName').focus(); return; }
   if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
   if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
   if (!time)   { errEl.textContent = 'Please select a time slot.'; errEl.classList.remove('hidden'); return; }
@@ -1836,6 +1955,38 @@ async function submitAddBooking() {
     errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
     errEl.classList.remove('hidden');
     return;
+  }
+
+  // Pizza / soda / juice type validation
+  const pizzaQty = abState.addons['pizza_11'] || 0;
+  if (pizzaQty > 0) {
+    const picked = Object.values(abState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < pizzaQty) {
+      errEl.textContent = `Please choose a type for all ${pizzaQty} pizza(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('ab_typePicker_pizza_11')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+  }
+  const sodaQty = abState.addons['drinks_soda'] || 0;
+  if (sodaQty > 0) {
+    const picked = Object.values(abState.sodaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < sodaQty) {
+      errEl.textContent = `Please choose a flavour for all ${sodaQty} soft drink(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('ab_typePicker_drinks_soda')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+  }
+  const juiceQty = abState.addons['drinks_juice'] || 0;
+  if (juiceQty > 0) {
+    const picked = Object.values(abState.juiceTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < juiceQty) {
+      errEl.textContent = `Please choose a flavour for all ${juiceQty} juice jug(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('ab_typePicker_drinks_juice')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
   }
 
   const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
@@ -1913,11 +2064,49 @@ function escapeRegex(str) {
 function parseAddonsSummary(summary) {
   const addons = {};
   if (!summary) return addons;
+
+  // Typed items have variant names embedded in the label, so match on the base prefix only
+  const flexMatchers = {
+    drinks_soda:  /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
+    drinks_juice: /Juice Jug(?:\s*\([^)]*\))?\s*×(\d+)/i,
+    pizza_11:     /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
+  };
+  Object.entries(flexMatchers).forEach(([id, pattern]) => {
+    const m = summary.match(pattern);
+    if (m) addons[id] = parseInt(m[1]);
+  });
+
+  // All other items use the standard label match
   Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
+    if (addons[id] !== undefined) return;
     const match = summary.match(new RegExp(escapeRegex(a.label) + '[^×]*×(\\d+)', 'i'));
     if (match) addons[id] = parseInt(match[1]);
   });
+
   return addons;
+}
+
+function parseTypesFromSummary(summary, addonId) {
+  if (!summary) return {};
+  const basePatterns = {
+    drinks_soda:  /Soft Drink\s*\(([^)]+)\)/i,
+    drinks_juice: /Juice Jug\s*\(([^)]+)\)/i,
+    pizza_11:     /11-inch Pizza\s*\(([^)]+)\)/i,
+  };
+  const pattern = basePatterns[addonId];
+  if (!pattern) return {};
+  const outer = summary.match(pattern);
+  if (!outer) return {};
+  const typeNames = Object.keys(getAddonTypeMap(addonId));
+  const types = {};
+  outer[1].split(',').forEach(part => {
+    const trimmed = part.trim();
+    const xMatch = trimmed.match(/^(.+?)\s+x(\d+)$/i);
+    const name = xMatch ? xMatch[1].trim() : trimmed;
+    const qty  = xMatch ? parseInt(xMatch[2]) : 1;
+    if (typeNames.includes(name) && qty > 0) types[name] = qty;
+  });
+  return types;
 }
 
 function openEditBookingModal(bookingId) {
@@ -1928,9 +2117,9 @@ function openEditBookingModal(bookingId) {
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
-  editBookingState.sodaTypes = {};
-  editBookingState.juiceTypes = {};
-  editBookingState.pizzaTypes = {};
+  editBookingState.pizzaTypes = parseTypesFromSummary(booking.addonsSummary, 'pizza_11');
+  editBookingState.sodaTypes  = parseTypesFromSummary(booking.addonsSummary, 'drinks_soda');
+  editBookingState.juiceTypes = parseTypesFromSummary(booking.addonsSummary, 'drinks_juice');
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -2103,6 +2292,37 @@ async function submitEditBooking() {
     errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
     errEl.classList.remove('hidden');
     return;
+  }
+
+  const pizzaQty = editBookingState.addons['pizza_11'] || 0;
+  if (pizzaQty > 0) {
+    const picked = Object.values(editBookingState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < pizzaQty) {
+      errEl.textContent = `Please choose a type for all ${pizzaQty} pizza(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('eb_typePicker_pizza_11')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+  }
+  const sodaQty = editBookingState.addons['drinks_soda'] || 0;
+  if (sodaQty > 0) {
+    const picked = Object.values(editBookingState.sodaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < sodaQty) {
+      errEl.textContent = `Please choose a flavour for all ${sodaQty} soft drink(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('eb_typePicker_drinks_soda')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+  }
+  const juiceQty = editBookingState.addons['drinks_juice'] || 0;
+  if (juiceQty > 0) {
+    const picked = Object.values(editBookingState.juiceTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < juiceQty) {
+      errEl.textContent = `Please choose a flavour for all ${juiceQty} juice jug(s) before saving.`;
+      errEl.classList.remove('hidden');
+      document.getElementById('eb_typePicker_drinks_juice')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
   }
 
   const ratePerChild = (editBookingState.booking.baseAmount && editBookingState.booking.guestCount)

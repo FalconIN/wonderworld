@@ -812,4 +812,142 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
   }
 });
 
+// GET /api/admin/bookings/:id/reschedule-slots
+router.get('/bookings/:id/reschedule-slots', async (req, res) => {
+  try {
+    const { rows: [booking] } = await pool.query(
+      `SELECT b.party_date, b.party_time, b.party_room_id,
+              bt.id as timeslot_id
+       FROM bookings b
+       LEFT JOIN booking_timeslots bt
+         ON bt.party_room_id = b.party_room_id
+        AND bt.slot_date = b.party_date
+        AND bt.slot_time = b.party_time
+        AND bt.status = 'confirmed'
+        AND bt.booking_id = b.id
+       WHERE b.id = $1 AND b.status = 'confirmed'`,
+      [req.params.id]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    await pool.query(
+      `DELETE FROM booking_timeslots WHERE status = 'held' AND hold_expires_at < now()`
+    );
+
+    const { rows: takenRows } = await pool.query(
+      `SELECT slot_time FROM booking_timeslots
+       WHERE party_room_id = $1 AND slot_date = $2
+         AND status IN ('confirmed', 'held')
+         AND ($3::uuid IS NULL OR id != $3::uuid)`,
+      [booking.party_room_id, booking.party_date, booking.timeslot_id || null]
+    );
+
+    const takenSlots = takenRows.map(r => r.slot_time);
+    const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+
+    const slots = ALL_SLOTS.map(time => ({
+      time,
+      isCurrent:  time === booking.party_time,
+      isTaken:    takenSlots.includes(time),
+      available: !takenSlots.includes(time) && time !== booking.party_time,
+    }));
+
+    res.json({ currentTime: booking.party_time, partyDate: booking.party_date, slots });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/bookings/:id/reschedule
+router.post('/bookings/:id/reschedule', async (req, res) => {
+  const { newTime } = req.body;
+  const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+
+  if (!ALL_SLOTS.includes(newTime)) {
+    return res.status(400).json({ error: 'Invalid time slot.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [booking] } = await client.query(
+      `SELECT b.id, b.booking_ref, b.party_date, b.party_time, b.party_room_id,
+              b.contact_email, b.contact_phone,
+              bt.id as timeslot_id,
+              u.first_name, r.name as room_name
+       FROM bookings b
+       LEFT JOIN booking_timeslots bt
+         ON bt.party_room_id = b.party_room_id
+        AND bt.slot_date = b.party_date
+        AND bt.slot_time = b.party_time
+        AND bt.status = 'confirmed'
+        AND bt.booking_id = b.id
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.id = $1 AND b.status = 'confirmed'`,
+      [req.params.id]
+    );
+
+    if (!booking) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking not found or not confirmed.' });
+    }
+    if (booking.party_time === newTime) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'That is already the current time slot.' });
+    }
+
+    const { rows: taken } = await client.query(
+      `SELECT id FROM booking_timeslots
+       WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
+         AND status IN ('confirmed', 'held')`,
+      [booking.party_room_id, booking.party_date, newTime]
+    );
+    if (taken.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'That time slot is already taken.' });
+    }
+
+    const oldTime = booking.party_time;
+
+    if (booking.timeslot_id) {
+      await client.query(
+        `UPDATE booking_timeslots SET status = 'released', booking_id = NULL WHERE id = $1`,
+        [booking.timeslot_id]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
+       VALUES ($1, $2, $3, 'confirmed', $4)`,
+      [booking.party_room_id, booking.party_date, newTime, booking.id]
+    );
+
+    await client.query(
+      `UPDATE bookings SET party_time = $1, updated_at = now() WHERE id = $2`,
+      [newTime, booking.id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      ok: true,
+      oldTime,
+      newTime,
+      bookingRef:   booking.booking_ref,
+      contactEmail: booking.contact_email,
+      contactPhone: booking.contact_phone,
+      firstName:    booking.first_name,
+      roomName:     booking.room_name,
+      partyDate:    booking.party_date,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
