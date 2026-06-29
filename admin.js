@@ -13,6 +13,15 @@ let allBookings   = [];
 let allPayments   = [];
 let allCustomers  = [];
 
+// Bookings sub-tab state — Upcoming is the default, Past defaults to latest-first sort
+let bookingsSubTab = 'upcoming';
+let upcomingBookings = [];
+let pastBookings = [];
+const bookingsTabState = {
+  upcoming: { search: '', statusFilter: '', sortOrder: 'party_date_asc' },
+  past:     { search: '', statusFilter: '', sortOrder: 'party_date_desc' },
+};
+
 const NZ_TZ = 'Pacific/Auckland';
 function nzDateStr(d = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: NZ_TZ }).format(d);
@@ -111,6 +120,19 @@ function showTab(tab) {
       today: 'Search...',
     };
     searchEl.placeholder = placeholders[tab] || 'Search...';
+  }
+
+  // When switching to bookings, always start on the Upcoming sub-tab
+  if (tab === 'bookings') {
+    bookingsSubTab = 'upcoming';
+    document.getElementById('bst-upcoming')?.classList.add('active');
+    document.getElementById('bst-past')?.classList.remove('active');
+    const sortEl = document.getElementById('bookingsSortOrder');
+    if (sortEl) sortEl.value = bookingsTabState.upcoming.sortOrder;
+    const statusEl = document.getElementById('bookingStatusFilter');
+    if (statusEl) statusEl.value = bookingsTabState.upcoming.statusFilter;
+    const bsEl = document.getElementById('bookingsSearchInput');
+    if (bsEl) bsEl.value = bookingsTabState.upcoming.search;
   }
 
   // Load data
@@ -987,20 +1009,78 @@ async function renderBalancesDue() {
 }
 
 // ---------------------------------------------------------------------------
+// Bookings — sub-tab management
+// ---------------------------------------------------------------------------
+function switchBookingsSubTab(tab) {
+  // Persist current tab's control values before switching
+  const cur = bookingsTabState[bookingsSubTab];
+  cur.search = document.getElementById('bookingsSearchInput')?.value || '';
+  cur.statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
+  cur.sortOrder = document.getElementById('bookingsSortOrder')?.value || cur.sortOrder;
+
+  bookingsSubTab = tab;
+
+  // Restore the new tab's saved values
+  const next = bookingsTabState[tab];
+  const searchEl = document.getElementById('bookingsSearchInput');
+  if (searchEl) searchEl.value = next.search;
+  const statusEl = document.getElementById('bookingStatusFilter');
+  if (statusEl) statusEl.value = next.statusFilter;
+  const sortEl = document.getElementById('bookingsSortOrder');
+  if (sortEl) sortEl.value = next.sortOrder;
+
+  // Update pill styles
+  document.getElementById('bst-upcoming')?.classList.toggle('active', tab === 'upcoming');
+  document.getElementById('bst-past')?.classList.toggle('active', tab === 'past');
+
+  renderCurrentBookingsSubTab();
+}
+
+function renderCurrentBookingsSubTab() {
+  const q = (document.getElementById('bookingsSearchInput')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
+  const source = bookingsSubTab === 'upcoming' ? upcomingBookings : pastBookings;
+
+  const filtered = source.filter(b => {
+    const matchesSearch = !q ||
+      (b.bookingRef || '').toLowerCase().includes(q) ||
+      (b.contactEmail || '').toLowerCase().includes(q) ||
+      (b.roomName || '').toLowerCase().includes(q) ||
+      `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase().includes(q);
+    const matchesStatus = !statusFilter || b.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  renderBookingsTable(getBookingsSorted(filtered));
+}
+
+// ---------------------------------------------------------------------------
 // Bookings
 // ---------------------------------------------------------------------------
 async function loadBookings() {
-  const statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
   const tbody = document.getElementById('bookings-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
-  let endpoint = 'admin/bookings?limit=200';
-  if (statusFilter) endpoint += `&status=${statusFilter}`;
-
   try {
-    allBookings = await callAPI(endpoint, null, 'GET');
+    allBookings = await callAPI('admin/bookings?limit=500', null, 'GET');
   } catch (err) { console.error(err); return; }
-  renderBookingsTable(getBookingsSorted(allBookings));
+
+  // Split by today's date in NZ timezone
+  const today = nzDateStr();
+  upcomingBookings = allBookings.filter(b => (b.partyDate || '').slice(0, 10) >= today);
+  pastBookings     = allBookings.filter(b => (b.partyDate || '').slice(0, 10) <  today);
+
+  // Update count badges
+  const upEl = document.getElementById('upcoming-badge');
+  const paEl = document.getElementById('past-badge');
+  if (upEl) upEl.textContent = upcomingBookings.length;
+  if (paEl) paEl.textContent = pastBookings.length;
+
+  renderCurrentBookingsSubTab();
+}
+
+function handleBookingsSearch(query) {
+  renderCurrentBookingsSubTab();
 }
 
 function renderBookingsTable(bookings) {
@@ -1423,19 +1503,16 @@ function getBookingsSorted(bookings) {
 }
 
 function applyBookingsSort() {
-  const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
-  handleSearch(q);
+  renderCurrentBookingsSubTab();
 }
 
 function handleSearch(query) {
   const q = query.toLowerCase();
   if (currentTab === 'bookings') {
-    const filtered = allBookings.filter(b =>
-      (b.bookingRef || '').toLowerCase().includes(q) ||
-      (b.contactEmail || '').toLowerCase().includes(q) ||
-      (b.roomName || '').toLowerCase().includes(q)
-    );
-    renderBookingsTable(getBookingsSorted(filtered));
+    // Route global search bar to the bookings panel search input so both stay in sync
+    const bsEl = document.getElementById('bookingsSearchInput');
+    if (bsEl) bsEl.value = query;
+    renderCurrentBookingsSubTab();
   }
   if (currentTab === 'customers') {
     renderCustomersTable(allCustomers.filter(c =>

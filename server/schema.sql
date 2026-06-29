@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   changed_by         text          NOT NULL REFERENCES public.users(id),
-  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both')),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule')),
   delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
   new_guest_count    integer,
   new_food_choice    text,
@@ -186,4 +186,6 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   payment_intent_id  text,
   created_at         timestamptz   NOT NULL DEFAULT now()
 );
+-- Migration: ALTER TABLE public.booking_edits DROP CONSTRAINT booking_edits_change_type_check;
+-- Migration: ALTER TABLE public.booking_edits ADD CONSTRAINT booking_edits_change_type_check CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule'));
 CREATE INDEX IF NOT EXISTS idx_booking_edits_booking ON public.booking_edits (booking_id);

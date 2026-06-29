@@ -813,33 +813,35 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
 });
 
 // GET /api/admin/bookings/:id/reschedule-slots
+// No time restrictions for admins — they can reschedule any booking at any time.
 router.get('/bookings/:id/reschedule-slots', async (req, res) => {
   try {
     const { rows: [booking] } = await pool.query(
-      `SELECT b.party_date, b.party_time, b.party_room_id,
-              bt.id as timeslot_id
+      `SELECT b.party_date, b.party_time, b.party_room_id
        FROM bookings b
-       LEFT JOIN booking_timeslots bt
-         ON bt.party_room_id = b.party_room_id
-        AND bt.slot_date = b.party_date
-        AND bt.slot_time = b.party_time
-        AND bt.status = 'confirmed'
-        AND bt.booking_id = b.id
        WHERE b.id = $1 AND b.status = 'confirmed'`,
       [req.params.id]
     );
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
+    // Expire stale holds
     await pool.query(
       `DELETE FROM booking_timeslots WHERE status = 'held' AND hold_expires_at < now()`
     );
+
+    // Find the booking's own timeslot row (any status) so we can exclude it from "taken"
+    const { rows: ownSlots } = await pool.query(
+      `SELECT id FROM booking_timeslots WHERE booking_id = $1`,
+      [req.params.id]
+    );
+    const ownSlotId = ownSlots[0]?.id || null;
 
     const { rows: takenRows } = await pool.query(
       `SELECT slot_time FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2
          AND status IN ('confirmed', 'held')
          AND ($3::uuid IS NULL OR id != $3::uuid)`,
-      [booking.party_room_id, booking.party_date, booking.timeslot_id || null]
+      [booking.party_room_id, booking.party_date, ownSlotId]
     );
 
     const takenSlots = takenRows.map(r => r.slot_time);
@@ -848,7 +850,7 @@ router.get('/bookings/:id/reschedule-slots', async (req, res) => {
     const slots = ALL_SLOTS.map(time => ({
       time,
       isCurrent:  time === booking.party_time,
-      isTaken:    takenSlots.includes(time),
+      isTaken:    takenSlots.includes(time) && time !== booking.party_time,
       available: !takenSlots.includes(time) && time !== booking.party_time,
     }));
 
@@ -859,6 +861,7 @@ router.get('/bookings/:id/reschedule-slots', async (req, res) => {
 });
 
 // POST /api/admin/bookings/:id/reschedule
+// Admins have no time restriction — they can reschedule at any point.
 router.post('/bookings/:id/reschedule', async (req, res) => {
   const { newTime } = req.body;
   const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
@@ -873,16 +876,9 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
 
     const { rows: [booking] } = await client.query(
       `SELECT b.id, b.booking_ref, b.party_date, b.party_time, b.party_room_id,
-              b.contact_email, b.contact_phone,
-              bt.id as timeslot_id,
+              b.contact_email, b.contact_phone, b.user_id,
               u.first_name, r.name as room_name
        FROM bookings b
-       LEFT JOIN booking_timeslots bt
-         ON bt.party_room_id = b.party_room_id
-        AND bt.slot_date = b.party_date
-        AND bt.slot_time = b.party_time
-        AND bt.status = 'confirmed'
-        AND bt.booking_id = b.id
        JOIN party_rooms r ON r.id = b.party_room_id
        LEFT JOIN users u ON u.id = b.user_id
        WHERE b.id = $1 AND b.status = 'confirmed'`,
@@ -898,6 +894,7 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
       return res.status(400).json({ error: 'That is already the current time slot.' });
     }
 
+    // Check the target slot isn't already taken by another booking
     const { rows: taken } = await client.query(
       `SELECT id FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
@@ -911,13 +908,14 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
 
     const oldTime = booking.party_time;
 
-    if (booking.timeslot_id) {
-      await client.query(
-        `UPDATE booking_timeslots SET status = 'released', booking_id = NULL WHERE id = $1`,
-        [booking.timeslot_id]
-      );
-    }
+    // Release any existing timeslot row for this booking (regardless of status)
+    await client.query(
+      `UPDATE booking_timeslots SET status = 'released', booking_id = NULL
+       WHERE booking_id = $1`,
+      [booking.id]
+    );
 
+    // Lock the new slot
     await client.query(
       `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
        VALUES ($1, $2, $3, 'confirmed', $4)`,
@@ -930,6 +928,14 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Log the reschedule to booking_edits (best-effort, doesn't block the response)
+    pool.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, new_food_choice)
+       VALUES ($1, $2, 'reschedule', 0, $3)`,
+      [booking.id, req.user.uid, `${oldTime} → ${newTime}`]
+    ).catch(logErr => console.warn('booking_edits log failed (schema may need migration):', logErr.message));
 
     res.json({
       ok: true,
