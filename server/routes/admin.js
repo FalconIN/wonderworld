@@ -870,8 +870,9 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
     return res.status(400).json({ error: 'Invalid time slot.' });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     const { rows: [booking] } = await client.query(
@@ -915,10 +916,13 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
       [booking.id]
     );
 
-    // Lock the new slot
+    // Lock the new slot — upsert handles the case where a 'released' row already
+    // exists for this slot (e.g. a previous booking was rescheduled away from it)
     await client.query(
       `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
-       VALUES ($1, $2, $3, 'confirmed', $4)`,
+       VALUES ($1, $2, $3, 'confirmed', $4)
+       ON CONFLICT (party_room_id, slot_date, slot_time)
+       DO UPDATE SET status = 'confirmed', booking_id = EXCLUDED.booking_id`,
       [booking.party_room_id, booking.party_date, newTime, booking.id]
     );
 
@@ -949,10 +953,10 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
       partyDate:    booking.party_date,
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (client) await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: err.message });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
