@@ -338,19 +338,15 @@ router.get('/customers', async (req, res) => {
       [parseInt(limit)]
     );
     const { rows: bookings } = await pool.query(
-      `SELECT contact_email as email, total_amount as "totalAmount", status FROM bookings
-       WHERE contact_email IS NOT NULL AND contact_email != ''`
+      `SELECT user_id as "userId", total_amount as "totalAmount", status FROM bookings`
     );
-    const byEmail = {};
+    const byUserId = {};
     bookings.forEach(b => {
-      const k = b.email.toLowerCase();
-      if (!byEmail[k]) byEmail[k] = [];
-      byEmail[k].push(b);
+      if (!b.userId) return;
+      if (!byUserId[b.userId]) byUserId[b.userId] = [];
+      byUserId[b.userId].push(b);
     });
-    const result = users.map(u => ({
-      ...u,
-      bookings: u.email ? (byEmail[u.email.toLowerCase()] || []) : [],
-    }));
+    const result = users.map(u => ({ ...u, bookings: byUserId[u.id] || [] }));
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
