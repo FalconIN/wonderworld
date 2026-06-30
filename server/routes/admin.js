@@ -277,7 +277,7 @@ router.post('/customers/bulk-delete', async (req, res) => {
   }
   try {
     const { rowCount } = await pool.query(
-      `DELETE FROM users WHERE id = ANY($1::uuid[]) AND is_admin = false`,
+      `DELETE FROM users WHERE id = ANY($1::text[]) AND is_admin = false`,
       [ids]
     );
     res.json({ deleted: rowCount });
