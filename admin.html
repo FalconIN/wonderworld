@@ -310,18 +310,22 @@
     <!-- ── CUSTOMERS TAB ─────────────────────────────────── -->
     <div id="tab-customers" class="p-8" style="display:none">
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
-        <div class="p-5 border-b border-gray-100 dark:border-gray-800">
+        <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4">
           <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Customers</h2>
+          <button onclick="deleteSelectedCustomers()" id="delete-customers-btn" class="hidden text-xs text-red-500 hover:text-red-600 font-semibold border border-red-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
+            🗑️ Delete Selected
+          </button>
         </div>
         <div class="overflow-x-auto">
           <table class="admin-table" id="customers-table">
             <thead>
               <tr>
+                <th class="w-8"><input type="checkbox" id="customers-select-all" onchange="toggleSelectAllCustomers(this.checked)" title="Select all" class="cursor-pointer"></th>
                 <th>Name</th><th>Email</th><th>Number</th><th>Bookings</th><th>Price Paid</th><th>Admin</th>
               </tr>
             </thead>
             <tbody id="customers-tbody">
-              <tr><td colspan="6" class="text-center text-gray-400 py-8">Loading...</td></tr>
+              <tr><td colspan="7" class="text-center text-gray-400 py-8">Loading...</td></tr>
             </tbody>
           </table>
         </div>

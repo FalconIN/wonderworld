@@ -269,6 +269,23 @@ router.delete('/bookings/cancelled', async (req, res) => {
   }
 });
 
+// POST /api/admin/customers/bulk-delete — bulk delete non-admin users by ID array
+router.post('/customers/bulk-delete', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'No IDs provided' });
+  }
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM users WHERE id = ANY($1::uuid[]) AND is_admin = false`,
+      [ids]
+    );
+    res.json({ deleted: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/admin/payments?limit=
 router.get('/payments', async (req, res) => {
   const { limit = 200 } = req.query;
@@ -321,15 +338,19 @@ router.get('/customers', async (req, res) => {
       [parseInt(limit)]
     );
     const { rows: bookings } = await pool.query(
-      `SELECT contact_email as email, total_amount as "totalAmount", status FROM bookings`
+      `SELECT contact_email as email, total_amount as "totalAmount", status FROM bookings
+       WHERE contact_email IS NOT NULL AND contact_email != ''`
     );
     const byEmail = {};
     bookings.forEach(b => {
-      const k = (b.email || '').toLowerCase();
+      const k = b.email.toLowerCase();
       if (!byEmail[k]) byEmail[k] = [];
       byEmail[k].push(b);
     });
-    const result = users.map(u => ({ ...u, bookings: byEmail[(u.email || '').toLowerCase()] || [] }));
+    const result = users.map(u => ({
+      ...u,
+      bookings: u.email ? (byEmail[u.email.toLowerCase()] || []) : [],
+    }));
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

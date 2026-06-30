@@ -1430,7 +1430,7 @@ async function refundPayment(paymentId, stripePaymentIntentId, amount) {
 // ---------------------------------------------------------------------------
 async function loadCustomers() {
   const tbody = document.getElementById('customers-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   try {
     allCustomers = await callAPI('admin/customers?limit=200', null, 'GET');
@@ -1443,7 +1443,7 @@ function renderCustomersTable(customers) {
   if (!tbody) return;
 
   if (!customers || customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
     return;
   }
 
@@ -1463,7 +1463,11 @@ function renderCustomersTable(customers) {
       adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
     }
     const bookingCount = nonCancelled.length;
+    const checkboxCell = (isAdmin || isSelf)
+      ? '<td></td>'
+      : `<td><input type="checkbox" class="customer-checkbox cursor-pointer" data-id="${c.id}" onchange="updateDeleteBtn()"></td>`;
     return `<tr>
+      ${checkboxCell}
       <td class="font-semibold text-sm">${name}</td>
       <td class="text-sm">${c.email || '—'}</td>
       <td class="text-sm">${c.phone || '—'}</td>
@@ -1472,6 +1476,44 @@ function renderCustomersTable(customers) {
       <td>${adminCell}</td>
     </tr>`;
   }).join('');
+  updateDeleteBtn();
+}
+
+function updateDeleteBtn() {
+  const checked = document.querySelectorAll('.customer-checkbox:checked');
+  const btn = document.getElementById('delete-customers-btn');
+  if (!btn) return;
+  if (checked.length > 0) {
+    btn.classList.remove('hidden');
+    btn.textContent = `🗑️ Delete Selected (${checked.length})`;
+  } else {
+    btn.classList.add('hidden');
+  }
+  const selectAll = document.getElementById('customers-select-all');
+  if (selectAll) {
+    const all = document.querySelectorAll('.customer-checkbox');
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+    selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+  }
+}
+
+function toggleSelectAllCustomers(checked) {
+  document.querySelectorAll('.customer-checkbox').forEach(cb => { cb.checked = checked; });
+  updateDeleteBtn();
+}
+
+async function deleteSelectedCustomers() {
+  const checked = [...document.querySelectorAll('.customer-checkbox:checked')];
+  if (!checked.length) return;
+  const ids = checked.map(cb => cb.dataset.id);
+  if (!confirm(`Permanently delete ${ids.length} customer record${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  try {
+    const { deleted } = await callAPI('admin/customers/bulk-delete', { ids });
+    alert(`✅ Deleted ${deleted} customer${deleted === 1 ? '' : 's'}.`);
+    await loadCustomers();
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+  }
 }
 
 async function toggleAdmin(userId, email, currentlyAdmin) {
