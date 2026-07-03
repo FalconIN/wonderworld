@@ -886,7 +886,7 @@ function renderEditStep1(booking, savedCardInfo) {
       <div class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">🔒 Cannot be changed</div>
       <div class="grid grid-cols-2 gap-y-2 text-sm">
         <div class="text-gray-500">Room</div><div class="font-semibold">${escapeHtml(booking.roomEmoji || '')} ${escapeHtml(booking.roomName)}</div>
-        <div class="text-gray-500">Date</div><div class="font-semibold">${booking.partyDate}</div>
+        <div class="text-gray-500">Date</div><div class="font-semibold">${(booking.partyDate || '').slice(0, 10)}</div>
         <div class="text-gray-500">Time</div><div class="font-semibold">${booking.partyTime}</div>
         <div class="text-gray-500">Current guests</div><div class="font-semibold">${booking.guestCount} kids</div>
         <div class="text-gray-500">Current food</div><div class="font-semibold">${escapeHtml(booking.foodChoice) || '—'}</div>
