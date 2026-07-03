@@ -754,7 +754,33 @@ function openEditBookingFromStep6() {
   setTimeout(() => openEditBooking(state.bookingId), 200);
 }
 
+// The editBookingOverlay shell only ships in the static markup of index.html.
+// Other pages (rooms.html, prices.html, etc.) also load app.js and can trigger
+// this from "My Bookings", so build the shell on demand if it's missing —
+// mirrors how myBookingsOverlay is already created dynamically.
+function ensureEditBookingOverlay() {
+  if (document.getElementById('editBookingOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'editBookingOverlay';
+  overlay.className = 'modal-overlay';
+  overlay.style.display = 'none';
+  overlay.setAttribute('onclick', 'handleEditOverlayClick(event)');
+  overlay.innerHTML = `
+    <div id="editBookingBox" class="modal-box" style="max-width:640px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-0 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10 -mx-1 px-1">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">✏️</span>
+          <span class="font-display font-bold text-lg text-gray-900">Edit Booking</span>
+        </div>
+        <button onclick="closeEditBooking()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 text-xl transition-colors">×</button>
+      </div>
+      <div id="editBookingContent" class="pt-4"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
 async function openEditBooking(bookingId) {
+  ensureEditBookingOverlay();
   const overlay = document.getElementById('editBookingOverlay');
   if (!overlay) return;
   overlay.style.display = 'flex';
