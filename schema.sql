@@ -118,6 +118,7 @@ create table if not exists public.bookings (
   cancelled_at             timestamptz,
   refunded_at              timestamptz,
   notes                    text,                    -- internal admin notes
+  admin_notes              text,                    -- internal only, never shown to the customer
   created_at               timestamptz not null default now(),
   updated_at               timestamptz not null default now()
 );

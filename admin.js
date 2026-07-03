@@ -32,6 +32,161 @@ function nzGetDay(d = new Date()) {
 }
 
 // ---------------------------------------------------------------------------
+// Food Prep date range state
+// ---------------------------------------------------------------------------
+let foodPrepRange = { from: null, to: null };
+
+function getMondayOf(d) {
+  const dow = nzGetDay(d); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(d);
+  monday.setDate(monday.getDate() + diff);
+  return monday;
+}
+
+function initFoodPrepRangeIfNeeded() {
+  if (foodPrepRange.from && foodPrepRange.to) return;
+  const monday = getMondayOf(new Date());
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  foodPrepRange = { from: nzDateStr(monday), to: nzDateStr(sunday) };
+  const fromEl = document.getElementById('foodPrepFrom');
+  const toEl = document.getElementById('foodPrepTo');
+  if (fromEl) fromEl.value = foodPrepRange.from;
+  if (toEl) toEl.value = foodPrepRange.to;
+}
+
+function setFoodPrepQuickRange(kind) {
+  const today = new Date();
+  let from, to;
+  if (kind === 'thisWeek') {
+    from = getMondayOf(today);
+    to = new Date(from);
+    to.setDate(from.getDate() + 6);
+  } else if (kind === 'nextWeek') {
+    const thisMonday = getMondayOf(today);
+    from = new Date(thisMonday);
+    from.setDate(thisMonday.getDate() + 7);
+    to = new Date(from);
+    to.setDate(from.getDate() + 6);
+  } else { // next7
+    from = today;
+    to = new Date(today);
+    to.setDate(today.getDate() + 6);
+  }
+  foodPrepRange = { from: nzDateStr(from), to: nzDateStr(to) };
+  document.getElementById('foodPrepFrom').value = foodPrepRange.from;
+  document.getElementById('foodPrepTo').value = foodPrepRange.to;
+  loadFoodPrep();
+}
+
+function applyFoodPrepRange() {
+  const from = document.getElementById('foodPrepFrom').value;
+  const to = document.getElementById('foodPrepTo').value;
+  if (!from || !to) return;
+  if (from > to) {
+    alert('The "From" date must be before the "To" date.');
+    return;
+  }
+  foodPrepRange = { from, to };
+  loadFoodPrep();
+}
+
+function formatFoodPrepRangeLabel(fromISO, toISO) {
+  const from = new Date(fromISO + 'T12:00:00');
+  const to = new Date(toISO + 'T12:00:00');
+  const fromLabel = from.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+  const toLabel = to.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `Food Prep: ${fromLabel} – ${toLabel}`;
+}
+
+// Splits an addons_summary string on top-level commas only — commas nested
+// inside a variant breakdown like "Soft Drink (Coke, Sprite x2) ×3 ($30.00)"
+// must NOT split the line in two.
+function splitTopLevelCommas(str) {
+  const parts = [];
+  let depth = 0, current = '';
+  for (const ch of str) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+// Only these addons ever get a "(Type, Type x2)" variant breakdown appended
+// to their label (mirrors TYPE_PICKER_IDS) — other catalog labels can contain
+// their own literal parentheses (e.g. "Kids Party Platter (48pcs)") that must
+// NOT be mistaken for a variant breakdown.
+const FOOD_PREP_VARIANT_BASE_NAMES = new Set(['11-inch Pizza', 'Soft Drink', 'Juice Jug']);
+
+// Tallies one booking's addons_summary into a running totals map, splitting
+// typed variants (pizza/soda/juice) out into their own named entries so
+// "11-inch Pizza (Salami & Cheese ×2)" counts as 2 of that specific variant,
+// not 2 generic pizzas.
+function tallyAddonsSummary(addonsSummary, totals) {
+  if (!addonsSummary) return;
+  splitTopLevelCommas(addonsSummary).forEach(chunk => {
+    // The outer quantity always uses the unicode "×" sign right before the
+    // trailing "($price)"; inner variant counts use a plain ASCII "x".
+    const outerMatch = chunk.match(/×\s*(\d+)\s*\(\$/);
+    if (!outerMatch) return;
+    const outerQty = parseInt(outerMatch[1], 10);
+    const label = chunk.slice(0, outerMatch.index).trim();
+
+    const variantMatch = label.match(/^(.+?)\s*\(([^)]+)\)$/);
+    const baseName = variantMatch ? variantMatch[1].trim() : null;
+
+    if (variantMatch && FOOD_PREP_VARIANT_BASE_NAMES.has(baseName)) {
+      variantMatch[2].split(',').map(s => s.trim()).filter(Boolean).forEach(vp => {
+        const m = vp.match(/^(.+?)\s+x(\d+)$/i);
+        const variantName = m ? m[1].trim() : vp;
+        const variantQty = m ? parseInt(m[2], 10) : 1;
+        const key = `${baseName} — ${variantName}`;
+        totals[key] = (totals[key] || 0) + variantQty;
+      });
+    } else {
+      totals[label] = (totals[label] || 0) + outerQty;
+    }
+  });
+}
+
+// Parses a food_choice string like "6 Nuggets + 4 Mini Burgers + 2 Vege Burgers"
+// (also accepts "Vegie"/"Veggie" spelling and admin-created bookings which
+// omit vege burgers entirely). Returns malformed:true for null/empty/
+// unparseable strings so callers can flag them instead of silently treating
+// them as zero.
+function parseFoodChoiceFull(foodChoice) {
+  if (!foodChoice || !String(foodChoice).trim()) {
+    return { nuggets: 0, burgers: 0, veges: 0, total: 0, malformed: true };
+  }
+  let remaining = String(foodChoice);
+  let veges = 0, burgers = 0, nuggets = 0;
+
+  const vegeMatch = remaining.match(/(\d+)\s*Ve(?:gie|ggie|ge)\s*Burgers?/i);
+  if (vegeMatch) {
+    veges = parseInt(vegeMatch[1], 10);
+    remaining = remaining.slice(0, vegeMatch.index) + remaining.slice(vegeMatch.index + vegeMatch[0].length);
+  }
+  const burMatch = remaining.match(/(\d+)\s*(?:Mini\s*)?Burgers?/i);
+  if (burMatch) {
+    burgers = parseInt(burMatch[1], 10);
+    remaining = remaining.slice(0, burMatch.index) + remaining.slice(burMatch.index + burMatch[0].length);
+  }
+  const nugMatch = remaining.match(/(\d+)\s*Nuggets?/i);
+  if (nugMatch) nuggets = parseInt(nugMatch[1], 10);
+
+  const total = nuggets + burgers + veges;
+  return { nuggets, burgers, veges, total, malformed: total === 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Init: check admin access via Firebase Auth
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -166,6 +321,7 @@ async function loadOverview() {
   await renderRoomPopularityChart();
   loadMonthRevenue();
   loadBalancesDueCount();
+  initFoodPrepRangeIfNeeded();
   loadFoodPrep();
   loadWeekendCapacity();
 }
@@ -511,13 +667,14 @@ async function exportBookingsToExcel() {
       'Party Date':   b.partyDate || '',
       'Party Time':   b.partyTime || '',
       'Status':       b.status || '',
+      'Admin Notes':  b.adminNotes || '',
     };
   });
 
   const ws = XLSX.utils.json_to_sheet(exportRows);
   ws['!cols'] = [
     { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 12 }, { wch: 14 },
-    { wch: 10 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 },
+    { wch: 10 }, { wch: 16 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 30 },
   ];
 
   // Format Price Paid column as currency ($X.XX)
@@ -783,46 +940,83 @@ async function loadBalancesDueCount() {
 async function loadFoodPrep() {
   const el = document.getElementById('overview-food-prep');
   if (!el) return;
-  try {
-    const rows = await callAPI('admin/food-prep', null, 'GET');
-    if (!rows.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No parties in the next 7 days.</p>'; return; }
+  const { from, to } = foodPrepRange;
+  if (!from || !to) return;
 
-    // Tally totals
-    let nuggets = 0, burgers = 0;
-    const addonTotals = {};
+  const labelEl = document.getElementById('foodPrepRangeLabel');
+  if (labelEl) labelEl.textContent = formatFoodPrepRangeLabel(from, to);
+
+  el.innerHTML = 'Loading...';
+  try {
+    const rows = await callAPI(`admin/food-prep?from=${from}&to=${to}`, null, 'GET');
+    if (!rows.length) { el.innerHTML = '<p class="text-gray-400 text-sm">No parties in this date range.</p>'; return; }
+
+    let guestConfirmed = 0, guestPending = 0;
+    let confirmedParties = 0, pendingParties = 0;
+    let nugC = 0, nugP = 0, burC = 0, burP = 0, vegC = 0, vegP = 0;
+    let kidsFedTotal = 0;
+    const addonC = {}, addonP = {};
+    const missingRefs = [];
+
     rows.forEach(b => {
-      const fc = (b.foodChoice || '').toLowerCase();
-      const nugMatch = fc.match(/(\d+)\s*nugget/);
-      const burMatch = fc.match(/(\d+)\s*burger/);
-      if (nugMatch) nuggets += parseInt(nugMatch[1]);
-      if (burMatch) burgers += parseInt(burMatch[1]);
-      // Parse addons_summary: "Ham & Cheese Pizza ×1 ($25.00), ..."
-      if (b.addonsSummary) {
-        const parts = b.addonsSummary.split(',');
-        parts.forEach(part => {
-          const m = part.trim().match(/^(.+?)\s*×(\d+)/);
-          if (m) {
-            const name = m[1].trim();
-            const qty = parseInt(m[2]);
-            addonTotals[name] = (addonTotals[name] || 0) + qty;
-          }
-        });
+      const isConfirmed = b.status === 'confirmed';
+      if (isConfirmed) confirmedParties++; else pendingParties++;
+
+      const guests = parseInt(b.guestCount) || 0;
+      if (isConfirmed) guestConfirmed += guests; else guestPending += guests;
+
+      const parsed = parseFoodChoiceFull(b.foodChoice);
+      if (parsed.malformed) {
+        missingRefs.push(b.bookingRef || '—');
+      } else {
+        kidsFedTotal += parsed.total;
+        if (isConfirmed) { nugC += parsed.nuggets; burC += parsed.burgers; vegC += parsed.veges; }
+        else { nugP += parsed.nuggets; burP += parsed.burgers; vegP += parsed.veges; }
       }
+
+      tallyAddonsSummary(b.addonsSummary, isConfirmed ? addonC : addonP);
     });
+
+    const guestTotal = guestConfirmed + guestPending;
+    const partyTotal = confirmedParties + pendingParties;
+    const nugTotal = nugC + nugP, burTotal = burC + burP, vegTotal = vegC + vegP;
+
+    const breakdown = (c, p) => `<span class="text-xs text-gray-400 font-normal">(${c} confirmed, ${p} pending)</span>`;
+    const row = (icon, label, total, c, p, cls) => `
+      <div class="flex items-center justify-between ${cls} rounded-xl px-4 py-2.5 gap-3">
+        <span class="text-sm font-semibold">${icon} ${escapeHtml(label)}</span>
+        <span class="font-bold text-right whitespace-nowrap">${total} ${breakdown(c, p)}</span>
+      </div>`;
 
     let html = '<div class="space-y-2">';
-    if (nuggets > 0) html += `<div class="flex items-center justify-between bg-yellow-50 dark:bg-yellow-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">🍗 Chicken Nuggets</span><span class="font-bold text-yellow-700 dark:text-yellow-400">${nuggets} servings</span></div>`;
-    if (burgers > 0) html += `<div class="flex items-center justify-between bg-orange-50 dark:bg-orange-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">🍔 Mini Burgers</span><span class="font-bold text-orange-700 dark:text-orange-400">${burgers} servings</span></div>`;
-    Object.entries(addonTotals).forEach(([name, qty]) => {
-      html += `<div class="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 rounded-xl px-4 py-2.5"><span class="text-sm font-semibold">➕ ${escapeHtml(name)}</span><span class="font-bold text-indigo-700 dark:text-indigo-400">×${qty}</span></div>`;
+    html += `<div class="text-xs font-semibold text-gray-500 mb-1">🎉 ${partyTotal} part${partyTotal === 1 ? 'y' : 'ies'} ${breakdown(confirmedParties, pendingParties)}</div>`;
+    html += row('👧', 'Total Kids', guestTotal, guestConfirmed, guestPending, 'bg-indigo-50 dark:bg-indigo-900/20');
+    if (nugTotal > 0) html += row('🍗', 'Chicken Nuggets', nugTotal, nugC, nugP, 'bg-yellow-50 dark:bg-yellow-900/20');
+    if (burTotal > 0) html += row('🍔', 'Mini Burgers', burTotal, burC, burP, 'bg-orange-50 dark:bg-orange-900/20');
+    if (vegTotal > 0) html += row('🥦', 'Vege Burgers', vegTotal, vegC, vegP, 'bg-green-50 dark:bg-green-900/20');
+
+    const addonNames = Array.from(new Set([...Object.keys(addonC), ...Object.keys(addonP)])).sort();
+    addonNames.forEach(name => {
+      const c = addonC[name] || 0, p = addonP[name] || 0;
+      html += row('➕', name, c + p, c, p, 'bg-indigo-50 dark:bg-indigo-900/20');
     });
-    if (!nuggets && !burgers && !Object.keys(addonTotals).length) {
-      html += '<p class="text-gray-400 text-sm">No food choices recorded for upcoming parties.</p>';
+
+    if (!nugTotal && !burTotal && !vegTotal && !addonNames.length) {
+      html += '<p class="text-gray-400 text-sm">No food choices recorded for this range.</p>';
     }
-    html += `<div class="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">Across ${rows.length} party${rows.length === 1 ? '' : 'ies'} in the next 7 days</div>`;
+
+    if (missingRefs.length) {
+      html += `<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 text-xs text-red-700 dark:text-red-300 font-semibold">⚠️ ${missingRefs.length} booking${missingRefs.length === 1 ? '' : 's'} ${missingRefs.length === 1 ? 'has' : 'have'} missing food data — Ref: ${missingRefs.map(escapeHtml).join(', ')}</div>`;
+    }
+
+    if (kidsFedTotal !== guestTotal) {
+      html += `<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300 font-semibold">⚠️ Food totals don't match guest count — check bookings for missing food data</div>`;
+    }
+
+    html += `<div class="text-xs text-gray-400 mt-3 pt-2 border-t border-gray-100 dark:border-gray-800">Grand total across ${partyTotal} part${partyTotal === 1 ? 'y' : 'ies'} in the selected range</div>`;
     html += '</div>';
     el.innerHTML = html;
-  } catch (err) { el.innerHTML = '<p class="text-red-400 text-sm">Failed to load.</p>'; }
+  } catch (err) { el.innerHTML = `<p class="text-red-400 text-sm">Failed to load: ${escapeHtml(err.message)}</p>`; }
 }
 
 async function loadWeekendCapacity() {
@@ -831,7 +1025,7 @@ async function loadWeekendCapacity() {
   try {
     const rows = await callAPI('admin/weekend-capacity', null, 'GET');
     const byDate = {};
-    rows.forEach(r => { byDate[r.date.slice(0, 10)] = parseInt(r.booked); });
+    rows.forEach(r => { byDate[r.date.slice(0, 10)] = { confirmed: parseInt(r.confirmed) || 0, pending: parseInt(r.pending) || 0 }; });
 
     // Build next 6 weekends
     const TOTAL_SLOTS = 16; // 4 rooms × 4 time slots
@@ -843,7 +1037,14 @@ async function loadWeekendCapacity() {
       const dow = nzGetDay(d);
       if (dow === 0 || dow === 6) {
         const iso = nzDateStr(d);
-        days.push({ iso, label: d.toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', day: 'numeric', month: 'short' }), booked: byDate[iso] || 0 });
+        const counts = byDate[iso] || { confirmed: 0, pending: 0 };
+        days.push({
+          iso,
+          label: d.toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'short', day: 'numeric', month: 'short' }),
+          confirmed: counts.confirmed,
+          pending: counts.pending,
+          booked: counts.confirmed + counts.pending,
+        });
       }
     }
 
@@ -857,7 +1058,7 @@ async function loadWeekendCapacity() {
         <div>
           <div class="flex items-center justify-between text-xs mb-1">
             <span class="font-semibold text-gray-700 dark:text-gray-300">${d.label}</span>
-            <span class="text-gray-500">${d.booked}/${TOTAL_SLOTS} slots${pct >= 100 ? ' 🔴 Full' : ''}</span>
+            <span class="text-gray-500">${d.booked}/${TOTAL_SLOTS} slots${pct >= 100 ? ' 🔴 Full' : ''} <span class="text-gray-400">(${d.confirmed} confirmed, ${d.pending} pending)</span></span>
           </div>
           <div class="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
             <div class="h-full ${barColor} rounded-full transition-all" style="width:${Math.min(pct,100)}%"></div>
@@ -1098,7 +1299,7 @@ function renderBookingsTable(bookings) {
         <div class="text-sm font-semibold">${formatDate(b.partyDate)} · ${b.partyTime}</div>
         <div class="text-xs text-gray-400">Booked ${formatDate(b.createdAt)}</div>
       </td>
-      <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span></td>
+      <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span>${b.adminNotes ? ' <span title="Has admin notes">📝</span>' : ''}</td>
       <td>
         <div class="text-sm font-semibold">${escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—'}</div>
         <div class="text-xs text-gray-400">${escapeHtml(b.contactEmail || '')}</div>
@@ -1175,6 +1376,11 @@ async function viewBooking(bookingId) {
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
         <div class="text-sm text-gray-600">${escapeHtml(booking.allergyNotes)}</div>
+      </div>` : ''}
+      ${booking.adminNotes ? `
+      <div class="bg-gray-100 border border-gray-200 rounded-xl p-4">
+        <div class="text-xs text-gray-500 mb-1 uppercase font-semibold">📝 Admin Notes — internal only</div>
+        <div class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(booking.adminNotes)}</div>
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</div>
       ${booking.status === 'confirmed' ? `
@@ -1668,6 +1874,7 @@ function openAddBookingModal() {
   document.getElementById('ab_date').value = '';
   document.getElementById('ab_guests').value = 10;
   document.getElementById('ab_notes').value = '';
+  document.getElementById('ab_adminNotes').value = '';
   document.getElementById('ab_nuggetCount').value = '0';
   document.getElementById('ab_burgerCount').value = '0';
   document.getElementById('ab_foodSplitTotal').textContent = '0 / 10 selected';
@@ -2060,6 +2267,7 @@ async function submitAddBooking() {
   const time      = abState.selectedTime;
   const guests    = abState.guests;
   const notes  = document.getElementById('ab_notes').value.trim();
+  const adminNotes = document.getElementById('ab_adminNotes').value.trim();
   const status = document.getElementById('ab_status').value;
 
   const nuggets = parseInt(document.getElementById('ab_nuggetCount').value) || 0;
@@ -2133,7 +2341,7 @@ async function submitAddBooking() {
       roomId: abState.selectedRoomDbId, roomName: room.name,
       date, time, guests, foodChoice, notes,
       addonsSummary, addonsAmount, baseAmount, totalAmount,
-      amountPaid, status,
+      amountPaid, status, adminNotes,
     });
 
     closeAddBookingModal();
@@ -2259,6 +2467,7 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_burgerCount').textContent = burgers;
   document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers} / ${editBookingState.guests} selected`;
   document.getElementById('eb_notes').value = booking.allergyNotes || '';
+  document.getElementById('eb_adminNotes').value = booking.adminNotes || '';
   document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
   document.getElementById('eb_amountPaid').value = parseFloat(booking.amountPaid || 0).toFixed(2);
   document.getElementById('editBookingError').classList.add('hidden');
@@ -2402,6 +2611,7 @@ async function submitEditBooking() {
   const nuggets   = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
   const burgers   = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
   const notes     = document.getElementById('eb_notes').value.trim();
+  const adminNotes = document.getElementById('eb_adminNotes').value.trim();
   const firstName = document.getElementById('eb_firstName').value.trim();
   const lastName  = document.getElementById('eb_lastName').value.trim();
   const email     = document.getElementById('eb_email').value.trim().toLowerCase();
@@ -2476,6 +2686,7 @@ async function submitEditBooking() {
       totalAmount,
       bookingStatus,
       amountPaid,
+      adminNotes,
     }, 'PATCH');
 
     closeEditBookingModal();

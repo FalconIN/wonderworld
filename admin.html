@@ -152,13 +152,26 @@
       <!-- Food prep + weekend capacity -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
-          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🍽️ Food Prep — Next 7 Days</h2>
-          <p class="text-gray-400 text-sm mb-4">Total food needed across all upcoming parties</p>
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🍽️ Food Prep</h2>
+          <p class="text-gray-400 text-sm mb-1" id="foodPrepRangeLabel">Total food needed across all parties in range</p>
+          <div class="flex flex-wrap items-end gap-2 mb-4 mt-3">
+            <div>
+              <label class="lbl text-xs">From</label>
+              <input class="field py-1.5 text-sm" id="foodPrepFrom" type="date" onchange="applyFoodPrepRange()" />
+            </div>
+            <div>
+              <label class="lbl text-xs">To</label>
+              <input class="field py-1.5 text-sm" id="foodPrepTo" type="date" onchange="applyFoodPrepRange()" />
+            </div>
+            <button onclick="setFoodPrepQuickRange('thisWeek')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">This Week</button>
+            <button onclick="setFoodPrepQuickRange('nextWeek')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">Next Week</button>
+            <button onclick="setFoodPrepQuickRange('next7')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">Next 7 Days</button>
+          </div>
           <div id="overview-food-prep">Loading...</div>
         </div>
         <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
           <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">📅 Weekend Capacity</h2>
-          <p class="text-gray-400 text-sm mb-4">Slot fill rate for the next 6 weekends (16 slots per day)</p>
+          <p class="text-gray-400 text-sm mb-4">Slot fill rate for the next 6 weekends (16 slots/day) — confirmed + pending</p>
           <div id="overview-weekend-capacity">Loading...</div>
         </div>
       </div>
@@ -454,6 +467,13 @@
         <div id="ab_addonsList" class="space-y-2"></div>
       </div>
 
+      <!-- Admin notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Admin Notes</div>
+        <div class="text-xs text-gray-400">Internal only — not visible to customer</div>
+        <textarea class="field" id="ab_adminNotes" rows="2" placeholder="Internal notes for staff only..."></textarea>
+      </div>
+
       <!-- Order summary -->
       <div class="bg-indigo-light rounded-2xl p-4">
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
@@ -562,6 +582,13 @@
         <textarea class="field" id="eb_notes" rows="2" placeholder="Any allergies or special requests..."></textarea>
       </div>
 
+      <!-- Admin notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Admin Notes</div>
+        <div class="text-xs text-gray-400">Internal only — not visible to customer</div>
+        <textarea class="field" id="eb_adminNotes" rows="2" placeholder="Internal notes for staff only..."></textarea>
+      </div>
+
       <!-- Payment -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💳 Payment</div>
@@ -628,6 +655,6 @@
 </style>
 
 <script src="firebase.js"></script>
-<script src="admin.js?v=23"></script>
+<script src="admin.js?v=24"></script>
 </body>
 </html>

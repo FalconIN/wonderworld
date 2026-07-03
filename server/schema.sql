@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   cancelled_at             timestamptz,
   refunded_at              timestamptz,
   notes                    text,
+  admin_notes              text,                    -- internal only, never shown to the customer
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );

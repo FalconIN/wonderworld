@@ -79,6 +79,7 @@ router.get('/bookings', async (req, res) => {
                     b.contact_phone as "contactPhone",
                     b.addons_summary as "addonsSummary",
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
+                    b.admin_notes as "adminNotes",
                     b.created_at as "createdAt",
                     r.name as "roomName", r.emoji as "roomEmoji",
                     u.first_name as "firstName", u.last_name as "lastName",
@@ -109,6 +110,7 @@ router.get('/bookings/export', async (req, res) => {
                     b.food_choice as "foodChoice", b.addons_summary as "addonsSummary",
                     b.total_amount as "totalAmount", b.status,
                     b.contact_email as "contactEmail", b.created_at as "createdAt",
+                    b.admin_notes as "adminNotes",
                     r.name as "roomName",
                     u.first_name as "firstName", u.last_name as "lastName"
              FROM bookings b
@@ -174,7 +176,7 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
 
 // PATCH /api/admin/bookings/:id — edit customer details, food, add-ons, guest count, notes, payment
 router.patch('/bookings/:id', async (req, res) => {
-  const { firstName, lastName, email, phone, guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount, bookingStatus, amountPaid } = req.body;
+  const { firstName, lastName, email, phone, guestCount, foodChoice, allergyNotes, addonsSummary, addonsAmount, baseAmount, totalAmount, bookingStatus, amountPaid, adminNotes } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -183,7 +185,7 @@ router.patch('/bookings/:id', async (req, res) => {
     const newStatus = allowedStatuses.includes(bookingStatus) ? bookingStatus : null;
 
     const baseParams = [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0,
-       baseAmount, totalAmount, email || '', phone || null];
+       baseAmount, totalAmount, email || '', phone || null, adminNotes || ''];
     const statusClause = newStatus ? `status = $${baseParams.length + 1},` : '';
     if (newStatus) baseParams.push(newStatus);
     baseParams.push(req.params.id);
@@ -194,6 +196,7 @@ router.patch('/bookings/:id', async (req, res) => {
        SET guest_count = $1, food_choice = $2, allergy_notes = $3,
            addons_summary = $4, addons_amount = $5, base_amount = $6,
            total_amount = $7, contact_email = $8, contact_phone = $9,
+           admin_notes = $10,
            ${statusClause} updated_at = now()
        WHERE id = $${idIdx}
        RETURNING user_id`,
@@ -488,7 +491,7 @@ router.post('/bookings/manual', async (req, res) => {
     firstName, lastName, email, phone,
     roomId, roomName, date, time, guests,
     foodChoice, notes, addonsSummary, addonsAmount, baseAmount, totalAmount,
-    amountPaid, status = 'confirmed',
+    amountPaid, status = 'confirmed', adminNotes,
   } = req.body;
 
   const client = await pool.connect();
@@ -533,12 +536,12 @@ router.post('/bookings/manual', async (req, res) => {
     const { rows: [booking] } = await client.query(
       `INSERT INTO bookings (user_id, party_room_id, booking_ref, party_date, party_time,
           guest_count, food_choice, allergy_notes, addons_summary, base_amount, addons_amount,
-          total_amount, status, contact_email, contact_phone)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          total_amount, status, contact_email, contact_phone, admin_notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING id`,
       [userId, roomId, bookingRef, date, time, guests, foodChoice, notes || '',
        addonsSummary || '', baseAmount, addonsAmount || 0, totalAmount,
-       status, email || '', phone || null]
+       status, email || '', phone || null, adminNotes || '']
     );
 
     if (slot[0]) {
@@ -667,12 +670,15 @@ router.get('/balances-due', async (req, res) => {
 });
 
 // GET /api/admin/weekend-capacity — next 6 weekends (42 days) booked slots per day
+// Counts confirmed + pending (cancelled bookings freed their slot and never count).
 router.get('/weekend-capacity', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT b.party_date as "date", COUNT(*) as "booked"
+      `SELECT b.party_date as "date",
+              COUNT(*) FILTER (WHERE b.status = 'confirmed') as "confirmed",
+              COUNT(*) FILTER (WHERE b.status = 'pending') as "pending"
        FROM bookings b
-       WHERE b.status = 'confirmed'
+       WHERE b.status IN ('confirmed', 'pending')
          AND EXTRACT(DOW FROM b.party_date) IN (0, 6)
          AND b.party_date >= CURRENT_DATE
          AND b.party_date < CURRENT_DATE + INTERVAL '42 days'
@@ -685,20 +691,34 @@ router.get('/weekend-capacity', async (req, res) => {
   }
 });
 
-// GET /api/admin/food-prep — next 7 days bookings for food totals
+// GET /api/admin/food-prep?from=YYYY-MM-DD&to=YYYY-MM-DD — bookings in range for food totals
+// Counts confirmed + pending (cancelled bookings never count).
 router.get('/food-prep', async (req, res) => {
   try {
+    let { from, to } = req.query;
+    if (!from || !to) {
+      // Defensive default: current week (Mon-Sun) if the caller omits the range.
+      const now = new Date();
+      const dow = now.getUTCDay(); // 0=Sun..6=Sat
+      const diffToMonday = dow === 0 ? -6 : 1 - dow;
+      const monday = new Date(now);
+      monday.setUTCDate(now.getUTCDate() + diffToMonday);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      from = monday.toISOString().slice(0, 10);
+      to = sunday.toISOString().slice(0, 10);
+    }
     const { rows } = await pool.query(
-      `SELECT b.party_date as "date", b.party_time as "partyTime",
+      `SELECT b.booking_ref as "bookingRef", b.party_date as "date", b.party_time as "partyTime",
               b.food_choice as "foodChoice", b.guest_count as "guestCount",
-              b.addons_summary as "addonsSummary",
+              b.addons_summary as "addonsSummary", b.status,
               r.name as "roomName", r.emoji as "roomEmoji"
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
-       WHERE b.status = 'confirmed'
-         AND b.party_date >= CURRENT_DATE
-         AND b.party_date <= CURRENT_DATE + INTERVAL '7 days'
-       ORDER BY b.party_date ASC, b.party_time ASC`
+       WHERE b.status IN ('confirmed', 'pending')
+         AND b.party_date >= $1 AND b.party_date <= $2
+       ORDER BY b.party_date ASC, b.party_time ASC`,
+      [from, to]
     );
     res.json(rows);
   } catch (err) {
