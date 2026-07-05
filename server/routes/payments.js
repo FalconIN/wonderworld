@@ -3,9 +3,30 @@ const router  = express.Router();
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const pool    = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { paymentLimiter } = require('../middleware/rateLimit');
+
+// Returns a valid Stripe customer id for this user, healing the stored id if
+// it's stale (e.g. left over from Stripe test mode — customer ids don't carry
+// over between test and live mode, so a switch to live keys orphans every
+// previously-stored id).
+async function resolveStripeCustomer(uid, email) {
+  const { rows: [user] } = await pool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [uid]);
+  if (user?.stripe_customer_id) {
+    try {
+      const existing = await stripe.customers.retrieve(user.stripe_customer_id);
+      if (!existing.deleted) return existing.id;
+    } catch (e) {
+      // Stale/invalid id — fall through and create a fresh one below.
+    }
+  }
+  if (!email) return null;
+  const customer = await stripe.customers.create({ email, metadata: { firebase_uid: uid } });
+  await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customer.id, uid]);
+  return customer.id;
+}
 
 // POST /api/payments/create-intent
-router.post('/create-intent', requireAuth, async (req, res) => {
+router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
   const { roomId, roomSlug, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
   const uid = req.user.uid;
   try {
@@ -23,19 +44,7 @@ router.post('/create-intent', requireAuth, async (req, res) => {
     let customerId = null;
     if (customerEmail && uid) {
       try {
-        const { rows: [user] } = await pool.query(
-          'SELECT stripe_customer_id FROM users WHERE id = $1', [uid]
-        );
-        if (user?.stripe_customer_id) {
-          customerId = user.stripe_customer_id;
-        } else {
-          const customer = await stripe.customers.create({
-            email: customerEmail,
-            metadata: { firebase_uid: uid },
-          });
-          customerId = customer.id;
-          await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, uid]);
-        }
+        customerId = await resolveStripeCustomer(uid, customerEmail);
       } catch (e) {
         // Non-fatal — proceed without customer
       }
@@ -80,7 +89,7 @@ router.get('/saved-card', requireAuth, async (req, res) => {
 });
 
 // POST /api/payments/create-edit-intent — PaymentIntent for the delta amount only
-router.post('/create-edit-intent', requireAuth, async (req, res) => {
+router.post('/create-edit-intent', requireAuth, paymentLimiter, async (req, res) => {
   const { deltaAmount, bookingId, currency = 'nzd', metadata = {} } = req.body;
   const uid = req.user.uid;
 
@@ -94,8 +103,12 @@ router.post('/create-edit-intent', requireAuth, async (req, res) => {
     );
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-    const { rows: [user] } = await pool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [uid]);
-    const customerId = user?.stripe_customer_id || null;
+    let customerId = null;
+    try {
+      customerId = await resolveStripeCustomer(uid, booking.contact_email);
+    } catch (e) {
+      // Non-fatal — proceed without customer
+    }
 
     const amount = Math.round(parseFloat(deltaAmount) * 100);
     const intent = await stripe.paymentIntents.create({
@@ -114,17 +127,18 @@ router.post('/create-edit-intent', requireAuth, async (req, res) => {
 });
 
 // POST /api/payments/charge-saved-card — charge the customer's saved payment method off-session
-router.post('/charge-saved-card', requireAuth, async (req, res) => {
+router.post('/charge-saved-card', requireAuth, paymentLimiter, async (req, res) => {
   const { deltaAmount, bookingId, metadata = {} } = req.body;
   const uid = req.user.uid;
 
   if (!deltaAmount || deltaAmount <= 0) return res.status(400).json({ error: 'Invalid amount.' });
 
   try {
-    const { rows: [user] } = await pool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [uid]);
+    const { rows: [user] } = await pool.query('SELECT stripe_customer_id, email FROM users WHERE id = $1', [uid]);
     if (!user?.stripe_customer_id) return res.status(404).json({ error: 'No saved card on file.' });
 
-    const pms = await stripe.paymentMethods.list({ customer: user.stripe_customer_id, type: 'card', limit: 1 });
+    const customerId = await resolveStripeCustomer(uid, user.email);
+    const pms = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 1 });
     if (!pms.data.length) return res.status(404).json({ error: 'No saved card on file.' });
 
     const pmId = pms.data[0].id;
@@ -133,7 +147,7 @@ router.post('/charge-saved-card', requireAuth, async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount,
       currency: 'nzd',
-      customer: user.stripe_customer_id,
+      customer: customerId,
       payment_method: pmId,
       off_session: true,
       confirm: true,
@@ -166,22 +180,29 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     return res.status(400).json({ error: err.message });
   }
 
-  if (event.type === 'payment_intent.succeeded') {
-    const pi = event.data.object;
-    await pool.query(
-      `UPDATE payments SET status = 'succeeded', updated_at = now()
-       WHERE stripe_payment_intent_id = $1`,
-      [pi.id]
-    ).catch(console.error);
-  }
+  try {
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object;
+      await pool.query(
+        `UPDATE payments SET status = 'succeeded', updated_at = now()
+         WHERE stripe_payment_intent_id = $1`,
+        [pi.id]
+      );
+    }
 
-  if (event.type === 'charge.refunded') {
-    const charge = event.data.object;
-    await pool.query(
-      `UPDATE payments SET status = 'refunded', refunded_at = now(), updated_at = now()
-       WHERE stripe_payment_intent_id = $1`,
-      [charge.payment_intent]
-    ).catch(console.error);
+    if (event.type === 'charge.refunded') {
+      const charge = event.data.object;
+      await pool.query(
+        `UPDATE payments SET status = 'refunded', refunded_at = now(), updated_at = now()
+         WHERE stripe_payment_intent_id = $1`,
+        [charge.payment_intent]
+      );
+    }
+  } catch (err) {
+    // Return non-2xx so Stripe retries this webhook on its own backoff schedule
+    // instead of the DB write being silently lost.
+    console.error(`Webhook DB update failed for ${event.type} (${event.id}):`, err);
+    return res.status(500).json({ error: 'Failed to record webhook event.' });
   }
 
   res.json({ received: true });

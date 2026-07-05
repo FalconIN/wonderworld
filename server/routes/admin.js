@@ -3,6 +3,7 @@ const router  = express.Router();
 const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAdmin } = require('../middleware/auth');
+const { fetchAndStoreReviews } = require('../services/googleReviewsSync');
 
 // All routes require admin
 router.use(requireAdmin);
@@ -41,7 +42,7 @@ router.get('/bookings-list', async (req, res) => {
   try {
     let q, params;
     if (from && to) {
-      q = `SELECT b.booking_ref as "bookingRef", b.party_date as "partyDate",
+      q = `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
                   b.party_time as "partyTime", b.guest_count as "guestCount",
                   b.status, b.contact_email as "contactEmail",
                   r.name as "roomName", r.emoji as "roomEmoji"
@@ -50,7 +51,7 @@ router.get('/bookings-list', async (req, res) => {
            ORDER BY b.party_date ASC`;
       params = [from, to];
     } else {
-      q = `SELECT b.booking_ref as "bookingRef", b.party_date as "partyDate",
+      q = `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
                   b.party_time as "partyTime", b.guest_count as "guestCount",
                   b.status, b.contact_email as "contactEmail",
                   r.name as "roomName", r.emoji as "roomEmoji"
@@ -124,6 +125,41 @@ router.get('/bookings/export', async (req, res) => {
     q += ` ORDER BY b.party_date ASC`;
     const { rows } = await pool.query(q, params);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/bookings/:id
+router.get('/bookings/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
+              b.party_time as "partyTime", b.guest_count as "guestCount",
+              b.food_choice as "foodChoice", b.total_amount as "totalAmount",
+              b.status, b.allergy_notes as "allergyNotes",
+              b.party_room_id as "partyRoomId", b.user_id as "userId",
+              b.contact_email as "contactEmail",
+              b.contact_phone as "contactPhone",
+              b.addons_summary as "addonsSummary",
+              b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
+              b.admin_notes as "adminNotes",
+              b.created_at as "createdAt",
+              r.name as "roomName", r.emoji as "roomEmoji",
+              u.first_name as "firstName", u.last_name as "lastName",
+              COALESCE(pay.amount_paid, 0) as "amountPaid"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       LEFT JOIN (
+         SELECT booking_id, SUM(amount) FILTER (WHERE status = 'succeeded') as amount_paid
+         FROM payments GROUP BY booking_id
+       ) pay ON pay.booking_id = b.id
+       WHERE b.id = $1`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -994,6 +1030,42 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     if (client) client.release();
+  }
+});
+
+// GET /api/admin/reviews — all fetched reviews, including hidden
+router.get('/reviews', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, author_name as "authorName", rating, text, time,
+              profile_photo_url as "profilePhotoUrl", visible, created_at as "createdAt"
+       FROM google_reviews
+       ORDER BY time DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/admin/reviews/:id — show/hide a review on the public carousel
+router.patch('/reviews/:id', async (req, res) => {
+  const { visible } = req.body;
+  try {
+    await pool.query('UPDATE google_reviews SET visible = $1 WHERE id = $2', [!!visible, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/reviews/fetch-now — manually trigger a Google reviews re-fetch
+router.post('/reviews/fetch-now', async (req, res) => {
+  try {
+    const result = await fetchAndStoreReviews();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

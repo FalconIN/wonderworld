@@ -8,6 +8,17 @@ const fs       = require('fs');
 const app  = express();
 const ROOT = path.join(__dirname, '..');
 
+// Single reverse proxy hop (nginx) in front of us — needed so req.ip / rate
+// limiting see the real client IP from X-Forwarded-For instead of nginx's.
+app.set('trust proxy', 1);
+
+process.on('uncaughtException', err => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', err => {
+  console.error('Unhandled rejection:', err);
+});
+
 // ---------------------------------------------------------------------------
 // Client-safe config — read from process.env at request time, never hardcoded
 // ---------------------------------------------------------------------------
@@ -47,16 +58,32 @@ app.use(express.json());
 app.use(cors({ origin: process.env.SITE_URL || '*' }));
 
 // API routes
-const bookingsRouter      = require('./routes/bookings');
-const adminRouter         = require('./routes/admin');
-const notificationsRouter = require('./routes/notifications');
-const googleRatingRouter  = require('./routes/googleRating');
+const bookingsRouter         = require('./routes/bookings');
+const adminRouter            = require('./routes/admin');
+const notificationsRouter    = require('./routes/notifications');
+const liveNotificationsRouter = require('./routes/liveNotifications');
+const googleRatingRouter     = require('./routes/googleRating');
+const reviewsRouter          = require('./routes/reviews');
 
 app.use('/api', bookingsRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/notifications', liveNotificationsRouter);
 app.use('/api/google-rating', googleRatingRouter);
+app.use('/api/reviews', reviewsRouter);
+
+// ---------------------------------------------------------------------------
+// Scheduled jobs
+// ---------------------------------------------------------------------------
+const cron = require('node-cron');
+const { fetchAndStoreReviews } = require('./services/googleReviewsSync');
+
+cron.schedule('0 3 * * *', () => {
+  fetchAndStoreReviews().catch(err => console.error('Google reviews sync failed:', err.message));
+});
+// Run once at boot too, so the table isn't empty until 3am
+fetchAndStoreReviews().catch(err => console.error('Initial Google reviews sync failed:', err.message));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
@@ -77,9 +104,21 @@ app.get(['/faq', '/faq.html'],       serveHtml('faq.html'));
 app.get(['/hours', '/hours.html'],   serveHtml('hours.html'));
 app.get(['/rules', '/rules.html'],   serveHtml('rules.html'));
 app.get(['/contact', '/contact.html'], serveHtml('contact.html'));
+app.get(['/privacy', '/privacy.html'], serveHtml('privacy.html'));
 
 // All other static assets (JS, CSS, images, fonts, etc.)
 app.use(express.static(ROOT));
+
+// Global error handler — catches anything a route passed to next(err) or threw
+// synchronously that wasn't already caught by its own try/catch.
+app.use((err, req, res, next) => {
+  console.error('Unhandled route error:', err);
+  if (res.headersSent) return next(err);
+  // body-parser and other middleware set err.status/statusCode for client errors
+  // (e.g. malformed JSON) — respect that instead of always logging as a 500.
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status < 500 ? err.message : 'Internal server error' });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

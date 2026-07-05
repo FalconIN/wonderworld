@@ -3,6 +3,8 @@ const router  = express.Router();
 const { requireAuth } = require('../middleware/auth');
 const pool    = require('../db');
 
+const TWILIO_CONFIGURED = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+
 // Converts whatever partyDate arrives as (JS Date object serialised to ISO string,
 // or a plain "YYYY-MM-DD" string) into a clean "3 July 2026" display string.
 // We build the Date from year/month/day parts to avoid any UTC-offset shifts.
@@ -85,29 +87,33 @@ router.post('/booking-confirmation', requireAuth, async (req, res) => {
     results.email = 'failed: ' + err.message;
   }
 
-  // ── SMS via Twilio ───────────────────────────────────────
-  try {
-    const twilio = require('twilio');
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  // ── SMS via Twilio (not yet configured — phone number is contact-only for now) ──
+  if (!TWILIO_CONFIGURED) {
+    results.sms = 'skipped: Twilio not configured';
+  } else {
+    try {
+      const twilio = require('twilio');
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-    const nzPhone = phone.startsWith('+') ? phone : '+64' + phone.replace(/^0/, '');
-    const msg = await client.messages.create({
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to:   nzPhone,
-      body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${fmtDate(partyDate)} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}. See you soon!`,
-    });
+      const nzPhone = phone.startsWith('+') ? phone : '+64' + phone.replace(/^0/, '');
+      const msg = await client.messages.create({
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to:   nzPhone,
+        body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${fmtDate(partyDate)} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}. See you soon!`,
+      });
 
-    results.sms = 'sent';
+      results.sms = 'sent';
 
-    if (bookingId) {
-      await pool.query(
-        'INSERT INTO sms_logs (booking_id, sms_type, recipient, twilio_sid, status) VALUES ($1, $2, $3, $4, $5)',
-        [bookingId, 'booking_confirmation', nzPhone, msg.sid, 'sent']
-      );
+      if (bookingId) {
+        await pool.query(
+          'INSERT INTO sms_logs (booking_id, sms_type, recipient, twilio_sid, status) VALUES ($1, $2, $3, $4, $5)',
+          [bookingId, 'booking_confirmation', nzPhone, msg.sid, 'sent']
+        );
+      }
+    } catch (err) {
+      console.error('SMS send failed:', err.message);
+      results.sms = 'failed: ' + err.message;
     }
-  } catch (err) {
-    console.error('SMS send failed:', err.message);
-    results.sms = 'failed: ' + err.message;
   }
 
   res.json({ ok: true, results });
@@ -177,7 +183,9 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
     results.email = 'failed: ' + err.message;
   }
 
-  if (phone) {
+  if (phone && !TWILIO_CONFIGURED) {
+    results.sms = 'skipped: Twilio not configured';
+  } else if (phone) {
     try {
       const twilio = require('twilio');
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -254,7 +262,9 @@ router.post('/booking-rescheduled', requireAuth, async (req, res) => {
     results.email = 'failed: ' + err.message;
   }
 
-  if (phone) {
+  if (phone && !TWILIO_CONFIGURED) {
+    results.sms = 'skipped: Twilio not configured';
+  } else if (phone) {
     try {
       const twilio = require('twilio');
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);

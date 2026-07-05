@@ -18,18 +18,21 @@ const ROOMS = [
     tagLine: 'Yellow · Warm & Cheerful',
     minGuests: 8, maxGuests: 15, basePricePerChild: 39,
     description: 'Bright, sunny, and full of energy. Perfect for medium-sized parties with a cheerful vibe.',
+    image: 'images/rooms/sunshine.jpg',
   },
   {
     id: 'dream', name: 'Dream Room', emoji: '🌙', color: 'purple',
     tagLine: 'Purple · Magical & Dreamy',
     minGuests: 8, maxGuests: 15, basePricePerChild: 39,
     description: 'Soft lighting, dreamy decor, and a magical atmosphere kids will talk about for weeks.',
+    image: 'images/rooms/dream.jpg',
   },
   {
     id: 'forest', name: 'Wonder Forest Room', emoji: '🌿', color: 'green',
     tagLine: 'Green · Nature Adventure',
     minGuests: 8, maxGuests: 15, basePricePerChild: 39,
     description: 'An immersive forest theme with climbing elements and nature-inspired details throughout.',
+    image: 'images/rooms/forest.jpg',
   },
   {
     id: 'big', name: 'The Big Room', emoji: '🌟', color: 'indigo',
@@ -38,6 +41,7 @@ const ROOMS = [
     basePricePerChild: 39, weekdayTotal: 39, weekendTotal: 49,
     description: 'Our flagship space — private stage, expanded play zone, and everything to make an unforgettable impression.',
     badge: 'BEST VALUE',
+    image: 'images/rooms/big.jpg',
   },
 ];
 
@@ -113,6 +117,11 @@ function buildRoomCard(room, dimmed) {
       <svg viewBox="0 0 12 12" width="11" height="11" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>` : '';
 
+  const thumb = room.image ? `
+    <img src="${room.image}" alt="${room.name} party room" loading="lazy"
+      class="w-16 h-16 rounded-xl object-cover flex-shrink-0 cursor-zoom-in" style="object-position:center 35%;"
+      onclick="event.stopPropagation(); openRoomPhoto('${room.image}', '${room.name.replace(/'/g, "\\'")}')" />` : '';
+
   return `
     <div class="${selClass} ${dimClass} p-4" onclick="selectRoom('${room.id}')">
       ${checkBadge}
@@ -129,6 +138,7 @@ function buildRoomCard(room, dimmed) {
             ${selected ? '<div class="text-blue-500 text-xs font-semibold flex items-center gap-1">✓ Selected</div>' : ''}
           </div>
         </div>
+        ${thumb}
       </div>
     </div>`;
 }
@@ -140,6 +150,29 @@ function selectRoom(id) {
   nextBtn.disabled = false;
   nextBtn.style.opacity = '1';
 }
+
+// ---------------------------------------------------------------------------
+// Room photo lightbox
+// ---------------------------------------------------------------------------
+function openRoomPhoto(src, title) {
+  const modal = document.getElementById('roomPhotoOverlay');
+  const img = document.getElementById('roomPhotoImg');
+  const cap = document.getElementById('roomPhotoCaption');
+  if (!modal || !img) return;
+  img.src = src;
+  img.alt = title + ' party room';
+  if (cap) cap.textContent = title;
+  modal.style.display = 'flex';
+}
+
+function closeRoomPhoto() {
+  const modal = document.getElementById('roomPhotoOverlay');
+  if (modal) modal.style.display = 'none';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeRoomPhoto();
+});
 
 // ---------------------------------------------------------------------------
 // Date/time: fetch real availability from Supabase

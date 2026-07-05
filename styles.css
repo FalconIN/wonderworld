@@ -539,6 +539,28 @@ nav.scrolled {
   color: #1E3A8A;
 }
 
+/* ── Live booking toast ──────────────────────────────────────── */
+.booking-toast {
+  position: fixed;
+  left: 1.5rem;
+  bottom: 1.5rem;
+  background: #1E3A8A;
+  color: white;
+  padding: 0.9rem 1.25rem;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px rgba(30,58,138,0.35);
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  max-width: 320px;
+  z-index: 250;
+  transform: translateX(-130%);
+  opacity: 0;
+  transition: transform 0.35s ease, bottom 0.35s ease, opacity 0.35s ease;
+}
+.booking-toast.show { transform: translateX(0); opacity: 1; }
+.booking-toast.hide { transform: translateX(-130%); opacity: 0; }
+
 /* ── Aurora blobs (hero background) ─────────────────────────── */
 .aurora-wrap { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .aurora-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.22; will-change: transform; }

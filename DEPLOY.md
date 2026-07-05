@@ -1,83 +1,60 @@
 # Wonder World Westgate — Deployment Guide
 
-Complete setup from zero to live. Estimated time: ~2 hours.
+Self-hosted setup: Node/Express + local PostgreSQL, run via PM2 behind nginx.
+(This replaces an earlier Supabase + Vercel + Edge Functions design — that
+architecture is no longer used.)
 
 ---
 
 ## Prerequisites
 
-Install these before starting:
+On the server:
 
 ```bash
-npm install -g vercel
-npm install -g supabase
+sudo apt install -y postgresql nginx nodejs npm
+sudo npm install -g pm2
 ```
 
-You'll also need accounts at:
-- [supabase.com](https://supabase.com) (free tier is fine)
+Accounts you'll need:
+- A Firebase project (Authentication enabled) — [console.firebase.google.com](https://console.firebase.google.com)
 - [stripe.com](https://stripe.com) (NZ business account)
 - [resend.com](https://resend.com) (free tier: 3,000 emails/month)
 - [twilio.com](https://twilio.com) (pay-as-you-go, ~$0.08/SMS)
-- [vercel.com](https://vercel.com) (free tier is fine)
+- A domain with DNS pointed at this server
 
 ---
 
-## Step 1 — Supabase Project Setup
+## Step 1 — Database Setup
 
-### 1.1 Create project
+### 1.1 Create the database and user
 
-1. Go to [app.supabase.com](https://app.supabase.com) → New project
-2. Name: `wonderworld-westgate`
-3. Region: **Southeast Asia (Singapore)** — closest to NZ
-4. Generate a strong database password and save it somewhere safe
-5. Wait ~2 minutes for provisioning
+```bash
+sudo -u postgres psql -c "CREATE USER wonderworld WITH PASSWORD 'your_strong_password_here';"
+sudo -u postgres psql -c "CREATE DATABASE wonderworld OWNER wonderworld;"
+```
 
-### 1.2 Run database schema
+### 1.2 Run the schema
 
-1. In Supabase Dashboard → **SQL Editor** → New query
-2. Paste the contents of `supabase/schema.sql`
-3. Click **Run** — you should see "Success. No rows returned"
+```bash
+psql -U wonderworld -d wonderworld -f server/schema.sql
+```
 
-### 1.3 Run RLS policies
-
-1. New query in SQL Editor
-2. Paste the contents of `supabase/policies.sql`
-3. Click **Run**
-
-### 1.4 Get your API keys
-
-Go to **Settings → API** and copy:
-- `Project URL` → this is your `SUPABASE_URL`
-- `anon public` key → this is your `SUPABASE_ANON_KEY`
-- `service_role` key → this is your `SUPABASE_SERVICE_ROLE_KEY` (keep secret)
+`server/schema.sql` is the canonical schema — `schema.sql` and
+`schema-postgres.sql` at the repo root are kept as exact mirrors of it for
+convenience. Always edit `server/schema.sql` first, then copy any change into
+the other two so all three stay in sync (there's no migration tool).
 
 ---
 
-## Step 2 — Google OAuth Setup
+## Step 2 — Firebase Auth Setup
 
-### 2.1 Google Cloud Console
+1. [console.firebase.google.com](https://console.firebase.google.com) → Create project
+2. **Authentication → Sign-in method** → enable Email/Password and Google
+3. **Project Settings → General → Your apps** → add a Web app, copy the client config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) — these go in `.env` as `FIREBASE_*`
+4. **Project Settings → Service Accounts → Generate new private key** — this JSON gives you `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` for the server-side Admin SDK
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Create a new project (or use existing): `Wonder World Westgate`
-3. Navigate to **Branding** — fill in app name, support email, authorized domain
-4. Navigate to **Audience** — set to External
-5. Navigate to **Data Access** — add scopes: `email`, `profile`, `openid`
-6. Navigate to **Clients → Create OAuth Client**
-   - Application type: **Web application**
-   - Name: `Wonder World Web`
-   - Authorised redirect URIs — add both:
-     ```
-     https://your-project-ref.supabase.co/auth/v1/callback
-     http://localhost:54321/auth/v1/callback
-     ```
-7. Copy the **Client ID** and **Client Secret**
-
-### 2.2 Enable in Supabase
-
-1. Supabase Dashboard → **Authentication → Providers → Google**
-2. Toggle **Enable**
-3. Paste your Client ID and Client Secret
-4. Click **Save**
+Admin accounts and customer accounts share the same `users` table — an admin
+is just a row with `is_admin = true` (see Step 7).
 
 ---
 
@@ -86,22 +63,24 @@ Go to **Settings → API** and copy:
 ### 3.1 Get API keys
 
 1. [dashboard.stripe.com](https://dashboard.stripe.com) → Developers → API keys
-2. Copy **Publishable key** (`pk_live_...`) → `STRIPE_PUBLIC_KEY`
-3. Copy **Secret key** (`sk_live_...`) → `STRIPE_SECRET_KEY`
+2. Copy **Publishable key** → `STRIPE_PUBLIC_KEY`
+3. Copy **Secret key** → `STRIPE_SECRET_KEY`
 
-> Use `pk_test_` / `sk_test_` keys during testing. Switch to live keys for production.
+> Use `pk_test_...` / `sk_test_...` while testing. Switch to `pk_live_...` /
+> `sk_live_...` only when you're ready to accept real payments.
 
 ### 3.2 Create webhook
 
 1. Stripe Dashboard → Developers → **Webhooks → Add endpoint**
-2. Endpoint URL: `https://your-project-ref.supabase.co/functions/v1/stripe-webhook`
+2. Endpoint URL: `https://yourdomain.co.nz/api/stripe/webhook`
 3. Events to listen to:
    - `payment_intent.succeeded`
-   - `payment_intent.payment_failed`
    - `charge.refunded`
-   - `customer.created`
-4. Click **Add endpoint**
-5. Copy the **Signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`
+4. Copy the **Signing secret** (`whsec_...`) → `STRIPE_WEBHOOK_SECRET`
+
+The webhook is handled directly in `server/routes/payments.js` (no separate
+Edge Function) — it verifies the Stripe signature and updates the `payments`
+table.
 
 ---
 
@@ -109,9 +88,8 @@ Go to **Settings → API** and copy:
 
 1. Go to [resend.com](https://resend.com) → API Keys → Create API Key
 2. Copy the key → `RESEND_API_KEY`
-3. Go to **Domains → Add Domain** → enter `wonderworldwestgate.co.nz`
-4. Add the DNS records shown to your domain registrar (usually takes <1 hour to verify)
-5. Once verified, you can send from `bookings@wonderworldwestgate.co.nz`
+3. **Domains → Add Domain** → enter your domain, add the DNS records shown (usually verifies within an hour)
+4. Once verified, you can send from `bookings@yourdomain.co.nz`
 
 ---
 
@@ -119,119 +97,68 @@ Go to **Settings → API** and copy:
 
 1. Go to [console.twilio.com](https://console.twilio.com)
 2. Copy **Account SID** and **Auth Token** from the dashboard
-3. Go to **Phone Numbers → Buy a number**
-   - Country: New Zealand
-   - Capabilities: SMS ✅
-   - Buy a number (~$3 NZD/month)
+3. **Phone Numbers → Buy a number** — Country: New Zealand, Capabilities: SMS
 4. Copy the number in E.164 format (e.g. `+6498765432`) → `TWILIO_PHONE_NUMBER`
 
 ---
 
-## Step 6 — Deploy Edge Functions
+## Step 6 — Configure and Start the App
 
-Make sure you're logged in to Supabase CLI:
-
-```bash
-supabase login
-supabase link --project-ref your-project-ref
-```
-
-Set secrets (these go into the Edge Function environment, never into frontend):
+### 6.1 Environment variables
 
 ```bash
-supabase secrets set \
-  SUPABASE_SERVICE_ROLE_KEY=your_service_role_key \
-  STRIPE_SECRET_KEY=sk_live_... \
-  STRIPE_WEBHOOK_SECRET=whsec_... \
-  RESEND_API_KEY=re_... \
-  TWILIO_ACCOUNT_SID=AC... \
-  TWILIO_AUTH_TOKEN=... \
-  TWILIO_PHONE_NUMBER=+64...
+cp .env.example .env
 ```
 
-Deploy all four functions:
+Fill in every value in `.env` — see `.env.example` for the full list
+(Postgres creds, Firebase, Stripe, Resend, Twilio, and optionally
+`GOOGLE_PLACES_API_KEY` / `GOOGLE_PLACE_ID` for the live Google reviews sync,
+which degrades gracefully if left unset).
+
+### 6.2 Install dependencies and start with PM2
 
 ```bash
-supabase functions deploy create-payment-intent
-supabase functions deploy send-booking-confirmation
-supabase functions deploy stripe-webhook
-supabase functions deploy refund-payment
+cd server && npm install
+cd .. && pm2 start ecosystem.config.js
+pm2 save
 ```
 
-Verify they're live:
+`ecosystem.config.js` runs the app as a single fork-mode process named
+`wonderworld` on port 3000, with `autorestart: true`. Any change to files
+under `server/` requires `pm2 restart wonderworld` to take effect — there's
+no watch/reload in production.
+
+### 6.3 nginx + SSL
+
+The live nginx config lives at `/etc/nginx/sites-available/wonderworld`
+(symlinked from `sites-enabled/`) — it is **not** deployed automatically from
+the `nginx.conf` copy in this repo. After editing the repo copy:
 
 ```bash
-supabase functions list
+sudo cp nginx.conf /etc/nginx/sites-available/wonderworld
+sudo nginx -t && sudo systemctl reload nginx
 ```
+
+Get an SSL cert with certbot (`sudo certbot --nginx -d yourdomain.co.nz -d www.yourdomain.co.nz`)
+if one isn't already provisioned.
 
 ---
 
-## Step 7 — Deploy Frontend to Vercel
-
-### 7.1 Push to GitHub
-
-```bash
-cd wonderworld
-git init
-git add .
-git commit -m "initial commit"
-git push -u origin main
-```
-
-### 7.2 Import to Vercel
-
-1. Go to [vercel.com](https://vercel.com) → Add New Project
-2. Import your GitHub repo
-3. Framework Preset: **Other**
-4. Build Command: `node scripts/inject-env.js`
-5. Output Directory: `.`
-
-### 7.3 Add environment variables
-
-In Vercel → Settings → **Environment Variables**, add:
-
-| Key | Value |
-|-----|-------|
-| `SUPABASE_URL` | `https://your-ref.supabase.co` |
-| `SUPABASE_ANON_KEY` | your anon key |
-| `STRIPE_PUBLIC_KEY` | `pk_live_...` |
-| `ENVIRONMENT` | `production` |
-
-> Do NOT add secret keys here — they go in Supabase secrets (Step 6).
-
-### 7.4 Set custom domain
-
-1. Vercel → Settings → Domains → Add `wonderworldwestgate.co.nz`
-2. Add the CNAME record to your DNS registrar
-3. Vercel handles SSL automatically
-
-### 7.5 Add Vercel URL to Supabase redirect allowlist
-
-1. Supabase → Authentication → **URL Configuration**
-2. Site URL: `https://wonderworldwestgate.co.nz`
-3. Redirect URLs — add:
-   ```
-   https://wonderworldwestgate.co.nz
-   https://wonderworldwestgate.co.nz/**
-   ```
-
----
-
-## Step 8 — Create Admin User
+## Step 7 — Create Admin User
 
 1. Have your admin sign up normally through the site
-2. In Supabase → **Table Editor → users**
-3. Find the row for that email
-4. Set `is_admin = true`
-5. Save
+2. Find their row in the `users` table and set `is_admin = true`:
+   ```sql
+   UPDATE users SET is_admin = true WHERE email = 'admin@yourdomain.co.nz';
+   ```
 
-The admin dashboard is now accessible at `/admin`
+The admin dashboard is now accessible at `/admin`.
 
 ---
 
-## Step 9 — Test the Full Flow
+## Step 8 — Test the Full Flow
 
-Use Stripe test cards (only works with `pk_test_` keys):
+Use Stripe test cards (only works with `pk_test_...` keys):
 
 | Card | Result |
 |------|--------|
@@ -254,50 +181,23 @@ Any future expiry date and any 3-digit CVV will work.
 
 ---
 
-## Optional: SMS Reminders via pg_cron
-
-To send 24-hour reminder SMS automatically:
-
-1. Supabase Dashboard → **Database → Extensions** → enable `pg_cron`
-2. Run in SQL Editor:
-
-```sql
-select cron.schedule(
-  'send-sms-reminders',
-  '0 * * * *',  -- every hour
-  $$
-  select net.http_post(
-    url := current_setting('app.supabase_url') || '/functions/v1/send-sms-reminders',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-      'Content-Type', 'application/json'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
-```
-
----
-
 ## Troubleshooting
 
 **"Invalid API key" on Stripe payment**
-→ Check that `STRIPE_PUBLIC_KEY` in Vercel env matches the mode (test/live) of your `STRIPE_SECRET_KEY` in Supabase secrets.
-
-**Google sign-in redirect error**
-→ Double-check the redirect URI in Google Cloud Console exactly matches `https://your-ref.supabase.co/auth/v1/callback`.
+→ Check that `STRIPE_PUBLIC_KEY` and `STRIPE_SECRET_KEY` in `.env` are from the same mode (both `test` or both `live`).
 
 **Emails not sending**
-→ Verify your domain in Resend. Check `email_logs` table in Supabase for error details.
+→ Verify your domain in Resend. Check the `email_logs` table for error details.
 
 **Slot holds not releasing**
-→ The `hold_expires_at` column handles expiry, but you can manually clean up with:
+→ The `hold_expires_at` column on `booking_timeslots` handles expiry logic in the app, but you can manually clean up stale holds with:
 ```sql
 delete from public.booking_timeslots
 where status = 'held' and hold_expires_at < now();
 ```
-Consider scheduling this as a pg_cron job too.
 
-**Edge Function errors**
-→ View logs in Supabase Dashboard → Edge Functions → select function → Logs.
+**Server not picking up code changes**
+→ Run `pm2 restart wonderworld`. There is no auto-reload in production.
+
+**Reviews not syncing**
+→ Confirm `GOOGLE_PLACES_API_KEY` and `GOOGLE_PLACE_ID` are set in `.env`, then `pm2 restart wonderworld`.

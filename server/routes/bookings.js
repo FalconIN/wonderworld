@@ -3,6 +3,9 @@ const router  = express.Router();
 const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('../middleware/auth');
+const { bookingLimiter } = require('../middleware/rateLimit');
+const eventBus = require('../eventBus');
+const { roomDisplayName } = require('../roomDisplayNames');
 
 // GET /api/rooms — public room list
 router.get('/rooms', async (req, res) => {
@@ -66,7 +69,7 @@ router.get('/slots', async (req, res) => {
 });
 
 // POST /api/slots/hold — create a 15-min slot hold
-router.post('/slots/hold', requireAuth, async (req, res) => {
+router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
   const { roomId, date, slot } = req.body;
   const userId = req.user.uid;
 
@@ -109,7 +112,7 @@ router.delete('/slots/hold/:holdId', requireAuth, async (req, res) => {
 });
 
 // POST /api/bookings — save a confirmed booking
-router.post('/bookings', requireAuth, async (req, res) => {
+router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
   const uid = req.user.uid;
   const {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
@@ -128,7 +131,7 @@ router.post('/bookings', requireAuth, async (req, res) => {
 
     // Compute expected amount server-side from the room price in the database
     const { rows: [foundRoom] } = await pool.query(
-      'SELECT id, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      'SELECT id, name, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
     if (!foundRoom) return res.status(400).json({ error: 'Invalid room.' });
@@ -179,6 +182,14 @@ router.post('/bookings', requireAuth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // No PII in this event — just the room and a timestamp, for the customer-facing
+    // "just booked" toast (Feature 3).
+    eventBus.emit('booking:confirmed', {
+      roomDisplayName: roomDisplayName(room.name),
+      time: Date.now(),
+    });
+
     res.json({ bookingId: booking.id });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -273,7 +284,7 @@ router.get('/bookings/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/bookings/:id/edit — apply edit after successful payment
-router.post('/bookings/:id/edit', requireAuth, async (req, res) => {
+router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) => {
   const uid = req.user.uid;
   const bookingId = req.params.id;
   const {

@@ -243,10 +243,35 @@ function updateThemeToggleUI(isDark) {
 }
 
 // ---------------------------------------------------------------------------
+// Mobile sidebar drawer
+// ---------------------------------------------------------------------------
+function openAdminSidebar() {
+  document.getElementById('adminSidebar')?.classList.add('sidebar-open');
+  document.getElementById('adminSidebarBackdrop')?.classList.remove('hidden');
+}
+
+function closeAdminSidebar() {
+  document.getElementById('adminSidebar')?.classList.remove('sidebar-open');
+  document.getElementById('adminSidebarBackdrop')?.classList.add('hidden');
+}
+
+function toggleAdminSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  if (!sidebar) return;
+  if (sidebar.classList.contains('sidebar-open')) closeAdminSidebar();
+  else openAdminSidebar();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAdminSidebar();
+});
+
+// ---------------------------------------------------------------------------
 // Tab navigation
 // ---------------------------------------------------------------------------
 function showTab(tab) {
   currentTab = tab;
+  closeAdminSidebar();
 
   // Update nav buttons
   document.querySelectorAll('.admin-nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -254,13 +279,13 @@ function showTab(tab) {
   if (navBtn) navBtn.classList.add('active');
 
   // Show/hide tab panels
-  ['overview','bookings','payments','customers','today'].forEach(t => {
+  ['overview','bookings','payments','customers','today','reviews'].forEach(t => {
     const el = document.getElementById('tab-' + t);
     if (el) el.style.display = t === tab ? 'block' : 'none';
   });
 
   // Page title
-  const titles = { overview: 'Overview', bookings: 'Bookings', payments: 'Payments', customers: 'Customers', today: "Today's Schedule" };
+  const titles = { overview: 'Overview', bookings: 'Bookings', payments: 'Payments', customers: 'Customers', today: "Today's Schedule", reviews: 'Google Reviews' };
   document.getElementById('pageTitle').textContent = titles[tab] || tab;
 
   // Reset search box for the new tab with a relevant placeholder
@@ -273,6 +298,7 @@ function showTab(tab) {
       payments: 'Search ref, email, cardholder...',
       customers: 'Search name, email, phone...',
       today: 'Search...',
+      reviews: 'Search...',
     };
     searchEl.placeholder = placeholders[tab] || 'Search...';
   }
@@ -296,6 +322,7 @@ function showTab(tab) {
   if (tab === 'payments')   loadPayments();
   if (tab === 'customers')  loadCustomers();
   if (tab === 'today')      loadToday();
+  if (tab === 'reviews')    loadReviews();
 }
 
 function refreshCurrentTab() { showTab(currentTab); }
@@ -364,6 +391,7 @@ async function loadOverviewBookingsList(fromDate, toDate) {
       <div class="flex items-center gap-2">
         <span class="badge ${statusBadgeClass(b.status)}">${b.status}</span>
         <span class="text-xs text-gray-400 font-mono">${b.bookingRef}</span>
+        <button onclick="viewBooking('${b.id}')" class="text-xs text-indigo-500 hover:underline font-semibold">View</button>
       </div>
     </div>`).join('');
 }
@@ -1084,6 +1112,58 @@ async function loadToday() {
   await Promise.all([renderTodayRunSheet(), renderAllergyAlerts(), renderBalancesDue()]);
 }
 
+async function loadReviews() {
+  const list = document.getElementById('reviews-list');
+  list.innerHTML = '<p class="text-gray-400 text-sm py-4">Loading...</p>';
+  try {
+    const reviews = await callAPI('admin/reviews', null, 'GET');
+    if (!reviews.length) {
+      list.innerHTML = '<p class="text-gray-400 text-sm py-4">No reviews fetched yet. Click "Fetch now" to pull the latest 5-star Google reviews.</p>';
+      return;
+    }
+    list.innerHTML = reviews.map(r => `
+      <div class="flex items-start justify-between gap-4 py-3 border-b border-gray-100 last:border-0 ${r.visible ? '' : 'opacity-50'}">
+        <div class="flex-1">
+          <div class="text-amber-500 text-sm mb-1">${'★'.repeat(r.rating)}</div>
+          <p class="text-sm text-gray-700 dark:text-gray-300">"${escapeHtml(r.text)}"</p>
+          <div class="text-xs text-gray-400 mt-1">${escapeHtml(r.authorName)} · ${new Date(r.time * 1000).toLocaleDateString('en-NZ')}</div>
+        </div>
+        <button onclick="toggleReviewVisible('${r.id}', ${!r.visible})" class="text-xs font-semibold whitespace-nowrap ${r.visible ? 'text-indigo-500 hover:underline' : 'text-gray-400 hover:underline'}">
+          ${r.visible ? '👁️ Visible' : '🚫 Hidden'}
+        </button>
+      </div>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="text-red-400 text-sm py-4">Failed to load reviews: ${err.message}</p>`;
+  }
+}
+
+async function toggleReviewVisible(reviewId, newVisible) {
+  try {
+    await callAPI('admin/reviews/' + reviewId, { visible: newVisible }, 'PATCH');
+    loadReviews();
+  } catch (err) {
+    alert('Failed to update review: ' + err.message);
+  }
+}
+
+async function fetchReviewsNow() {
+  const btn = document.getElementById('fetch-reviews-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Fetching...'; }
+  try {
+    const result = await callAPI('admin/reviews/fetch-now', {}, 'POST');
+    if (result.ok === false && result.reason === 'not_configured') {
+      alert('Google Places API key / Place ID not configured — add GOOGLE_PLACES_API_KEY and GOOGLE_PLACE_ID to .env first.');
+    } else {
+      alert(`✅ Fetched ${result.fetched} five-star reviews (${result.stored} stored/updated).`);
+    }
+    loadReviews();
+  } catch (err) {
+    alert('Fetch failed: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Fetch now'; }
+  }
+}
+
 async function renderTodayRunSheet() {
   const el = document.getElementById('today-runsheet');
   if (!el) return;
@@ -1281,6 +1361,7 @@ async function loadBookings() {
 }
 
 function handleBookingsSearch(query) {
+  bookingsTabState[bookingsSubTab].search = query;
   renderCurrentBookingsSubTab();
 }
 
@@ -1295,20 +1376,26 @@ function renderBookingsTable(bookings) {
 
   tbody.innerHTML = bookings.map(b => `
     <tr>
-      <td>
+      <td data-label="Dates">
         <div class="text-sm font-semibold">${formatDate(b.partyDate)} · ${b.partyTime}</div>
         <div class="text-xs text-gray-400">Booked ${formatDate(b.createdAt)}</div>
       </td>
-      <td><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span>${b.adminNotes ? ' <span title="Has admin notes">📝</span>' : ''}</td>
-      <td>
+      <td data-label="Ref"><span class="font-mono text-xs text-indigo-600 font-bold">${b.bookingRef}</span>${b.adminNotes ? ' <span title="Has admin notes">📝</span>' : ''}</td>
+      <td data-label="Customer">
         <div class="text-sm font-semibold">${escapeHtml([b.firstName, b.lastName].filter(Boolean).join(' ')) || '—'}</div>
         <div class="text-xs text-gray-400">${escapeHtml(b.contactEmail || '')}</div>
       </td>
-      <td>${b.roomEmoji || ''} ${roomDisplayName(b.roomName)}</td>
-      <td>${b.guestCount}</td>
-      <td class="font-semibold">$${parseFloat(b.totalAmount || 0).toFixed(2)}</td>
-      <td><span class="badge ${statusBadgeClass(b.status)}">${b.status}</span></td>
-      <td>
+      <td data-label="Room">${b.roomEmoji || ''} ${roomDisplayName(b.roomName)}</td>
+      <td data-label="Guests">${b.guestCount}</td>
+      <td data-label="Total" class="font-semibold">$${parseFloat(b.totalAmount || 0).toFixed(2)}</td>
+      <td data-label="Status">
+        <span class="badge ${statusBadgeClass(b.status)}">${b.status}</span>
+        ${b.status === 'pending' ? (() => {
+          const due = parseFloat(b.totalAmount || 0) - parseFloat(b.amountPaid || 0);
+          return due > 0.005 ? `<div class="text-xs font-bold text-amber-600 mt-1">$${due.toFixed(2)} due</div>` : '';
+        })() : ''}
+      </td>
+      <td data-label="Actions">
         <div class="flex gap-2">
           <button onclick="viewBooking('${b.id}')" class="text-xs text-indigo-500 hover:underline font-semibold">View</button>
           ${b.status !== 'cancelled' ? `<button onclick="openEditBookingModal('${b.id}')" class="text-xs text-teal hover:underline font-semibold">Edit</button>` : ''}
@@ -1319,8 +1406,17 @@ function renderBookingsTable(bookings) {
 }
 
 async function viewBooking(bookingId) {
-  const booking = allBookings.find(b => b.id === bookingId);
-  if (!booking) return;
+  let booking = allBookings.find(b => b.id === bookingId);
+  if (!booking) {
+    try {
+      booking = await callAPI('admin/bookings/' + bookingId, null, 'GET');
+    } catch (err) {
+      console.error('viewBooking fetch failed:', err);
+      return;
+    }
+    if (!booking) return;
+    allBookings.push(booking);
+  }
 
   const guestCount = booking.guestCount || 0;
   const baseAmount = booking.baseAmount != null ? parseFloat(booking.baseAmount) : null;
@@ -1598,18 +1694,18 @@ function renderPaymentsTable(payments) {
       : '—';
     return `
     <tr>
-      <td>
+      <td data-label="Cardholder / Card">
         <div class="font-semibold text-sm">${p.cardholderName || '—'}</div>
         <div class="text-xs text-gray-400">${cardInfo}</div>
       </td>
-      <td>
+      <td data-label="Email">
         <div class="text-xs text-gray-400">${p.contactEmail || '—'}</div>
       </td>
-      <td><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
-      <td class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
-      <td><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
-      <td class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
-      <td>
+      <td data-label="Booking Ref"><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
+      <td data-label="Amount" class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
+      <td data-label="Status"><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
+      <td data-label="Date" class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
+      <td data-label="Actions">
         ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
     </tr>`;
@@ -1670,16 +1766,16 @@ function renderCustomersTable(customers) {
     }
     const bookingCount = nonCancelled.length;
     const checkboxCell = (isAdmin || isSelf)
-      ? '<td></td>'
-      : `<td><input type="checkbox" class="customer-checkbox cursor-pointer" data-id="${c.id}" onchange="updateDeleteBtn()"></td>`;
+      ? '<td data-label="Select"></td>'
+      : `<td data-label="Select"><input type="checkbox" class="customer-checkbox cursor-pointer" data-id="${c.id}" onchange="updateDeleteBtn()"></td>`;
     return `<tr>
       ${checkboxCell}
-      <td class="font-semibold text-sm">${name}</td>
-      <td class="text-sm">${c.email || '—'}</td>
-      <td class="text-sm">${c.phone || '—'}</td>
-      <td class="text-sm">${bookingCount} ${bookingCount === 1 ? 'party' : 'parties'}</td>
-      <td class="font-semibold">$${totalSpent.toFixed(2)}</td>
-      <td>${adminCell}</td>
+      <td data-label="Name" class="font-semibold text-sm">${name}</td>
+      <td data-label="Email" class="text-sm">${c.email || '—'}</td>
+      <td data-label="Number" class="text-sm">${c.phone || '—'}</td>
+      <td data-label="Bookings" class="text-sm">${bookingCount} ${bookingCount === 1 ? 'party' : 'parties'}</td>
+      <td data-label="Price Paid" class="font-semibold">$${totalSpent.toFixed(2)}</td>
+      <td data-label="Admin">${adminCell}</td>
     </tr>`;
   }).join('');
   updateDeleteBtn();
@@ -1739,11 +1835,19 @@ async function toggleAdmin(userId, email, currentlyAdmin) {
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
+const BOOKING_SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4};
+
 function getBookingsSorted(bookings) {
   const order = document.getElementById('bookingsSortOrder')?.value || 'party_date_asc';
   return [...bookings].sort((a, b) => {
-    if (order === 'party_date_asc')  return (a.partyDate || '') < (b.partyDate || '') ? -1 : 1;
-    if (order === 'party_date_desc') return (a.partyDate || '') > (b.partyDate || '') ? -1 : 1;
+    if (order === 'party_date_asc' || order === 'party_date_desc') {
+      const dateA = a.partyDate || '', dateB = b.partyDate || '';
+      if (dateA !== dateB) {
+        const cmp = dateA < dateB ? -1 : 1;
+        return order === 'party_date_asc' ? cmp : -cmp;
+      }
+      return (BOOKING_SLOT_ORDER[a.partyTime] || 9) - (BOOKING_SLOT_ORDER[b.partyTime] || 9);
+    }
     if (order === 'created_desc')    return (a.createdAt || '') > (b.createdAt || '') ? -1 : 1;
     if (order === 'created_asc')     return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1;
     return 0;
@@ -1751,6 +1855,12 @@ function getBookingsSorted(bookings) {
 }
 
 function applyBookingsSort() {
+  bookingsTabState[bookingsSubTab].sortOrder = document.getElementById('bookingsSortOrder')?.value || bookingsTabState[bookingsSubTab].sortOrder;
+  renderCurrentBookingsSubTab();
+}
+
+function applyBookingsStatusFilter() {
+  bookingsTabState[bookingsSubTab].statusFilter = document.getElementById('bookingStatusFilter')?.value || '';
   renderCurrentBookingsSubTab();
 }
 
@@ -1823,10 +1933,10 @@ async function adminSignOut() {
 // ---------------------------------------------------------------------------
 // Mirrors the customer-facing ROOMS array in booking.js
 const AB_ROOMS = [
-  { id: 'big',      name: 'The Big Room',      emoji: '🌟', minGuests: 12, maxGuests: 24, pricePerChild: 39 },
-  { id: 'sunshine', name: 'Sunshine Room',     emoji: '☀️', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
-  { id: 'dream',    name: 'Dream Room',        emoji: '🌙', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
-  { id: 'forest',   name: 'Wonder Forest Room',emoji: '🌿', minGuests: 8,  maxGuests: 15, pricePerChild: 39 },
+  { id: 'big',      name: 'The Big Room',      emoji: '🌟', minGuests: 12, maxGuests: 24, pricePerChild: 39, image: 'images/rooms/big.jpg' },
+  { id: 'sunshine', name: 'Sunshine Room',     emoji: '☀️', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/sunshine.jpg' },
+  { id: 'dream',    name: 'Dream Room',        emoji: '🌙', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/dream.jpg' },
+  { id: 'forest',   name: 'Wonder Forest Room',emoji: '🌿', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/forest.jpg' },
 ];
 
 const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
@@ -1935,20 +2045,50 @@ function abBuildRoomCard(room, dimmed) {
   const selected = abState.selectedRoomId === room.id;
   const dimClass = dimmed ? 'opacity-50 pointer-events-none' : '';
   const selClass = selected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white ab-card';
+  const thumb = room.image ? `
+    <img src="${room.image}" alt="${room.name} party room" loading="lazy"
+      class="w-12 h-12 rounded-lg object-cover flex-shrink-0 cursor-zoom-in" style="object-position:center 35%;"
+      onclick="event.stopPropagation(); openRoomPhoto('${room.image}', '${room.name.replace(/'/g, "\\'")}')" />` : '';
   return `
     <div class="border-2 ${selClass} ${dimClass} rounded-xl p-3 cursor-pointer transition-all" onclick="abSelectRoom('${room.id}')">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 min-w-0">
           <span class="text-xl">${room.emoji}</span>
-          <div>
-            <div class="font-semibold text-sm">${roomDisplayName(room.name)}</div>
+          <div class="min-w-0">
+            <div class="font-semibold text-sm truncate">${roomDisplayName(room.name)}</div>
             <div class="text-xs text-gray-400">${room.minGuests}–${room.maxGuests} kids</div>
           </div>
         </div>
-        <div class="text-sm font-bold text-indigo-600">$${room.pricePerChild}/child</div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div class="text-sm font-bold text-indigo-600">$${room.pricePerChild}/child</div>
+          ${thumb}
+        </div>
       </div>
     </div>`;
 }
+
+// ---------------------------------------------------------------------------
+// Room photo lightbox
+// ---------------------------------------------------------------------------
+function openRoomPhoto(src, title) {
+  const modal = document.getElementById('roomPhotoOverlay');
+  const img = document.getElementById('roomPhotoImg');
+  const cap = document.getElementById('roomPhotoCaption');
+  if (!modal || !img) return;
+  img.src = src;
+  img.alt = title + ' party room';
+  if (cap) cap.textContent = title;
+  modal.style.display = 'flex';
+}
+
+function closeRoomPhoto() {
+  const modal = document.getElementById('roomPhotoOverlay');
+  if (modal) modal.style.display = 'none';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeRoomPhoto();
+});
 
 async function abSelectRoom(roomId) {
   abState.selectedRoomId = roomId;

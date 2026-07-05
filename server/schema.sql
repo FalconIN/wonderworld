@@ -82,14 +82,12 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   base_amount              numeric(10,2),
   addons_amount            numeric(10,2) DEFAULT 0,
   total_amount             numeric(10,2) NOT NULL,
-  is_weekend               boolean     NOT NULL DEFAULT false,
   status                   text        NOT NULL DEFAULT 'confirmed'
                            CHECK (status IN ('pending', 'confirmed', 'cancelled', 'refunded')),
   contact_email            text        NOT NULL,
   contact_phone            text,
   stripe_payment_intent_id text,
   cancelled_at             timestamptz,
-  refunded_at              timestamptz,
   notes                    text,
   admin_notes              text,                    -- internal only, never shown to the customer
   created_at               timestamptz NOT NULL DEFAULT now(),
@@ -135,7 +133,6 @@ CREATE TABLE IF NOT EXISTS public.payments (
   cardholder_name          text,
   payment_method           text,
   error_message            text,
-  metadata                 jsonb       DEFAULT '{}',
   refunded_at              timestamptz,
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
@@ -174,7 +171,6 @@ CREATE TABLE IF NOT EXISTS public.sms_logs (
 );
 
 -- ── 8. BOOKING_EDITS ────────────────────────────────────────
--- Run to apply: psql -U wonderworld -d wonderworld -c "$(tail -n 12 schema.sql)"
 CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
@@ -187,6 +183,19 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   payment_intent_id  text,
   created_at         timestamptz   NOT NULL DEFAULT now()
 );
--- Migration: ALTER TABLE public.booking_edits DROP CONSTRAINT booking_edits_change_type_check;
--- Migration: ALTER TABLE public.booking_edits ADD CONSTRAINT booking_edits_change_type_check CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule'));
 CREATE INDEX IF NOT EXISTS idx_booking_edits_booking ON public.booking_edits (booking_id);
+
+-- ── 9. GOOGLE_REVIEWS ────────────────────────────────────────
+-- Populated by a node-cron job (server/services/googleReviewsSync.js) every 24h.
+CREATE TABLE IF NOT EXISTS public.google_reviews (
+  id                uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  google_review_id  text          UNIQUE,
+  author_name       text          NOT NULL,
+  rating            integer       NOT NULL,
+  text              text          NOT NULL,
+  time              bigint        NOT NULL,
+  profile_photo_url text,
+  visible           boolean       NOT NULL DEFAULT true,
+  created_at        timestamptz   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_google_reviews_visible_time ON public.google_reviews (visible, time DESC);

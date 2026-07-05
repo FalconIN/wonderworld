@@ -1,32 +1,17 @@
 const express = require('express');
-const router  = require('express').Router();
-const https   = require('https');
+const router  = express.Router();
+const { placesDetailsRequest } = require('../services/placesApi');
 
 let cache     = null;
 let cacheTime = 0;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-function fetchFromPlacesAPI(apiKey, placeId) {
-  return new Promise((resolve, reject) => {
-    const url = `https://maps.googleapis.com/maps/api/place/details/json` +
-                `?place_id=${encodeURIComponent(placeId)}` +
-                `&fields=rating,user_ratings_total` +
-                `&key=${apiKey}`;
-    https.get(url, (res) => {
-      let raw = '';
-      res.on('data', c => raw += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(raw);
-          if (json.status !== 'OK') return reject(new Error('Places API: ' + json.status));
-          resolve({
-            rating:           json.result.rating,
-            userRatingsTotal: json.result.user_ratings_total,
-          });
-        } catch (e) { reject(e); }
-      });
-    }).on('error', reject);
-  });
+async function fetchFromPlacesAPI(apiKey, placeId) {
+  const result = await placesDetailsRequest(apiKey, placeId, 'rating,user_ratings_total');
+  return {
+    rating:           result.rating,
+    userRatingsTotal: result.user_ratings_total,
+  };
 }
 
 // GET /api/google-rating

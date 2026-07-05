@@ -565,6 +565,92 @@ async function updateGoogleRating() {
 }
 
 // ---------------------------------------------------------------------------
+// Live reviews carousel (falls back to the hardcoded cards on failure/empty)
+// ---------------------------------------------------------------------------
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+
+async function loadLiveReviews() {
+  try {
+    const res = await fetch('/api/reviews');
+    if (!res.ok) return;
+    const reviews = await res.json();
+    if (!Array.isArray(reviews) || !reviews.length) return;
+
+    const track = document.querySelector('.marquee-track');
+    if (!track) return;
+
+    const cardHtml = reviews.map(r => `
+      <div class="review-card">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"${escapeHtml(r.text)}"</p>
+        <div class="review-name">${escapeHtml(r.authorName)}</div>
+      </div>`).join('');
+
+    // Duplicate the set once so the translateX(-50%) marquee loop stays seamless
+    track.innerHTML = cardHtml + cardHtml;
+  } catch { /* silently keep the hardcoded fallback */ }
+}
+
+// ---------------------------------------------------------------------------
+// Live "just booked" toast notifications
+// ---------------------------------------------------------------------------
+function relativeTime(ts) {
+  const diffMs = Date.now() - ts;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins === 1) return '1 minute ago';
+  if (mins < 60) return `${mins} minutes ago`;
+  const hours = Math.floor(mins / 60);
+  return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+}
+
+function showBookingToast(msg) {
+  const stackCount = document.querySelectorAll('.booking-toast').length;
+  const el = document.createElement('div');
+  el.className = 'booking-toast';
+  el.style.bottom = `calc(1.5rem + ${stackCount * 4.25}rem)`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+
+  requestAnimationFrame(() => el.classList.add('show'));
+
+  setTimeout(() => {
+    el.classList.remove('show');
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 400);
+  }, 5000);
+}
+
+function initBookingToasts() {
+  const es = new EventSource('/api/notifications/live');
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      showBookingToast(`🎉 The ${data.roomDisplayName} was just booked!`);
+    } catch { /* ignore malformed event */ }
+  };
+  // Native EventSource auto-reconnects on drop — no manual backoff loop needed.
+  es.onerror = () => console.warn('Live notifications stream error — will auto-reconnect.');
+}
+
+function showRecentBookingToast() {
+  fetch('/api/notifications/recent')
+    .then(res => res.json())
+    .then(data => {
+      if (!data) return;
+      const delay = 3000 + Math.random() * 2000;
+      setTimeout(() => {
+        showBookingToast(`🎉 The ${data.roomDisplayName} was just booked! (${relativeTime(data.time)})`);
+      }, delay);
+    })
+    .catch(() => { /* no recent booking to show, that's fine */ });
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -572,6 +658,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderFAQ();
   renderRooms();
   updateGoogleRating();
+  loadLiveReviews();
+  showRecentBookingToast();
+  initBookingToasts();
 
   const dateInput = document.getElementById('partyDate');
   if (dateInput) {
