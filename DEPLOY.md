@@ -102,6 +102,28 @@ table.
 
 ---
 
+## Step 5b — POLi Payments (NZ bank-account checkout) Setup — optional
+
+Adds a "Bank Account" option alongside card at checkout — the customer pays
+via a redirect to their own bank instead of entering card details. Entirely
+optional: leave `POLI_MERCHANT_CODE`/`POLI_AUTH_CODE` unset and the site
+behaves exactly as it does today, card-only.
+
+1. Get a merchant account via [polipay.co.nz](https://www.polipay.co.nz) (Merco Ltd) — requires their business approval process, not instant.
+2. Once approved, get your merchant code + authentication code from the merchant console at `consoles.apac.paywithpoli.com` → these become `POLI_MERCHANT_CODE` / `POLI_AUTH_CODE`.
+3. `pm2 restart wonderworld` — the option appears automatically once both vars are set (see `POLI_CONFIGURED` in `server/index.js`).
+
+**Before relying on this in production:** the exact response field names in
+`server/services/poliClient.js` (`NavigateURL`, `Token`, the `TransactionStatusCode`
+success value, the notification callback payload shape) were reconstructed
+from a real open-source POLi client implementation and cross-referenced
+descriptions, NOT a live sandbox call — POLi's own interactive API docs are a
+JS app that couldn't be scraped for the literal spec. Run one real transaction
+in whatever test/sandbox mode POLi offers and check the actual response XML
+against what the code expects before trusting this with real customers.
+
+---
+
 ## Step 6 — Configure and Start the App
 
 ### 6.1 Environment variables
@@ -113,7 +135,8 @@ cp .env.example .env
 Fill in every value in `.env` — see `.env.example` for the full list
 (Postgres creds, Firebase, Stripe, Resend, Twilio, and optionally
 `GOOGLE_PLACES_API_KEY` / `GOOGLE_PLACE_ID` for the live Google reviews sync,
-which degrades gracefully if left unset).
+and `POLI_MERCHANT_CODE` / `POLI_AUTH_CODE` for POLi bank-account checkout —
+both degrade gracefully if left unset).
 
 ### 6.2 Install dependencies and start with PM2
 

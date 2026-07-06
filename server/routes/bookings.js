@@ -4,8 +4,7 @@ const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('../middleware/auth');
 const { bookingLimiter } = require('../middleware/rateLimit');
-const eventBus = require('../eventBus');
-const { roomDisplayName } = require('../roomDisplayNames');
+const { createConfirmedBooking } = require('../services/bookingCreator');
 
 // GET /api/rooms — public room list
 router.get('/rooms', async (req, res) => {
@@ -150,52 +149,16 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     throw err;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    const { rows: [booking] } = await client.query(
-      `INSERT INTO bookings
-         (booking_ref, user_id, party_room_id, party_date, party_time, guest_count,
-          food_choice, allergy_notes, addons_summary, base_amount, addons_amount,
-          total_amount, status, contact_email, contact_phone, stripe_payment_intent_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15)
-       RETURNING id`,
-      [bookingRef, uid, room.id, partyDate, partyTime, guestCount,
-       foodChoice, allergyNotes, addonsSummary, baseAmount, addonsAmount,
-       verifiedTotalAmount, contactEmail, contactPhone, stripePaymentIntentId]
-    );
-
-    // Upgrade slot hold to confirmed
-    if (slotHoldId) {
-      await client.query(
-        `UPDATE booking_timeslots SET status = 'confirmed', booking_id = $1 WHERE id = $2`,
-        [booking.id, slotHoldId]
-      );
-    }
-
-    // Save payment record with the Stripe-verified amount
-    await client.query(
-      `INSERT INTO payments (booking_id, user_id, stripe_payment_intent_id, amount, currency, status, cardholder_name)
-       VALUES ($1,$2,$3,$4,'nzd','succeeded',$5)`,
-      [booking.id, uid, stripePaymentIntentId, verifiedTotalAmount, cardholderName || null]
-    );
-
-    await client.query('COMMIT');
-
-    // No PII in this event — just the room and a timestamp, for the customer-facing
-    // "just booked" toast (Feature 3).
-    eventBus.emit('booking:confirmed', {
-      roomDisplayName: roomDisplayName(room.name),
-      time: Date.now(),
+    const bookingId = await createConfirmedBooking({
+      bookingRef, uid, room, partyDate, partyTime, guestCount, foodChoice,
+      allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount: verifiedTotalAmount,
+      contactEmail, contactPhone, slotHoldId, cardholderName,
+      paymentProvider: 'stripe', stripePaymentIntentId,
     });
-
-    res.json({ bookingId: booking.id });
+    res.json({ bookingId });
   } catch (err) {
-    await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
   }
 });
 

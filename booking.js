@@ -189,16 +189,6 @@ async function updateTimeSlots() {
   const day = d.getDay();
   state.isWeekend = (day === 0 || day === 6);
 
-  const tag = document.getElementById('dayTypeTag');
-  tag.style.display = 'inline-block';
-  if (state.isWeekend) {
-    tag.textContent = '📅 Weekend — peak pricing applies';
-    tag.className   = 'mt-2 text-xs font-semibold rounded-full px-3 py-1 inline-block bg-amber-100 text-amber-700';
-  } else {
-    tag.textContent = '📅 Weekday — standard pricing';
-    tag.className   = 'mt-2 text-xs font-semibold rounded-full px-3 py-1 inline-block bg-teal-100 text-teal-700';
-  }
-
   // Show loading state
   document.getElementById('timeSlotGrid').innerHTML = `
     <div class="col-span-2 py-6 text-center text-gray-400">

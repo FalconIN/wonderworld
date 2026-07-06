@@ -136,6 +136,9 @@ CREATE TABLE IF NOT EXISTS public.payments (
   payment_method           text,
   error_message            text,
   refunded_at              timestamptz,
+  payment_provider         text        NOT NULL DEFAULT 'stripe',
+  poli_transaction_token   text        UNIQUE,
+  poli_transaction_ref     text,
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );
@@ -144,6 +147,21 @@ CREATE INDEX IF NOT EXISTS idx_payments_booking_id ON public.payments (booking_i
 CREATE INDEX IF NOT EXISTS idx_payments_user_id    ON public.payments (user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_stripe_pi  ON public.payments (stripe_payment_intent_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status     ON public.payments (status);
+
+-- ── 5b. POLI PENDING BOOKINGS ────────────────────────────────
+-- Temporary staging for a booking's full payload while the customer is away
+-- at their bank during a POLi redirect flow — Stripe doesn't need this since
+-- Stripe Elements confirms in-page. Row is deleted once the booking is
+-- confirmed (or the slot hold it references expires).
+CREATE TABLE IF NOT EXISTS public.poli_pending_bookings (
+  slot_hold_id  uuid        PRIMARY KEY REFERENCES public.booking_timeslots(id) ON DELETE CASCADE,
+  payload       jsonb       NOT NULL,
+  poli_token    text        UNIQUE,
+  poli_ref      text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_poli_pending_token ON public.poli_pending_bookings (poli_token);
 
 DROP TRIGGER IF EXISTS set_payments_updated_at ON public.payments;
 CREATE TRIGGER set_payments_updated_at

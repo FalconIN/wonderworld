@@ -53,6 +53,7 @@ async function handleSignedInUser(user) {
   updateNavUI(true);
 
   if (typeof checkAfterPayReturn === 'function') checkAfterPayReturn();
+  if (typeof checkPoliReturn === 'function') checkPoliReturn();
 
   if (state.user.isAdmin) {
     document.querySelectorAll('[data-admin-only]').forEach(el => el.style.removeProperty('display'));

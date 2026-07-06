@@ -86,6 +86,7 @@ async function goToStep(n) {
   // Step-specific hooks
   if (n === 4) {
     renderOrderSummary();
+    if (typeof initPoliOption === 'function') initPoliOption();
     // Mount Stripe elements after a short delay (DOM must be ready)
     setTimeout(mountStripeElements, 100);
   }
@@ -493,7 +494,7 @@ const FAQ_DATA = [
   { q: "What's the cancellation or rescheduling policy?", a: "Cancellations made more than 14 days before your party date receive a full refund. Cancellations made 7–14 days before receive a 50% refund. Cancellations made less than 7 days before are non-refundable. No-shows on the day are non-refundable. Contact us early and we'll always do our best to help." },
   { q: "Are parents and adults allowed to stay?", a: "Yes! Parents and caregivers are welcome to stay for the entire party. We have comfortable seating areas and complimentary tea and coffee for adults while the kids have the time of their lives." },
   { q: "Do you cater for dietary requirements and allergies?", a: "Definitely. We offer gluten-free, dairy-free, and nut-free options. Please note all dietary requirements during booking and our kitchen team will ensure every child is safely catered for." },
-  { q: "Do children need grip socks?", a: "Yes — grip or non-slip socks are required for all children on the play equipment, for safety and hygiene reasons. No bare feet or regular shoes are permitted in the playground. Grip socks are available for purchase at our front desk if you forget to bring a pair." },
+  { q: "Do children need grip socks?", a: "Yes — grip or non-slip socks are required for everyone on the play equipment, kids AND adults alike, for safety and hygiene reasons. No bare feet or regular shoes are permitted in the playground. Grip socks are available for purchase at our front desk if you forget to bring a pair." },
 ];
 
 function renderFAQ() {
@@ -642,6 +643,14 @@ function showRecentBookingToast() {
     .then(res => res.json())
     .then(data => {
       if (!data) return;
+
+      // This runs on every page load in this multi-page site — without this
+      // check, browsing from page to page re-shows the same historical
+      // booking every single time until a genuinely new one comes in.
+      const lastShown = sessionStorage.getItem('ww_last_recent_toast');
+      if (lastShown === String(data.time)) return;
+      sessionStorage.setItem('ww_last_recent_toast', String(data.time));
+
       const delay = 3000 + Math.random() * 2000;
       setTimeout(() => {
         showBookingToast(`🎉 The ${data.roomDisplayName} was just booked! (${relativeTime(data.time)})`);

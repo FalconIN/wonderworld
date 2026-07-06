@@ -32,6 +32,7 @@ function clientConfig() {
     FIREBASE_APP_ID:              process.env.FIREBASE_APP_ID              || '',
     STRIPE_PK:                    process.env.STRIPE_PUBLIC_KEY            || '',
     ENVIRONMENT:                  process.env.ENVIRONMENT                  || 'production',
+    POLI_CONFIGURED:              !!(process.env.POLI_MERCHANT_CODE && process.env.POLI_AUTH_CODE),
   };
 }
 
@@ -64,6 +65,7 @@ const notificationsRouter    = require('./routes/notifications');
 const liveNotificationsRouter = require('./routes/liveNotifications');
 const googleRatingRouter     = require('./routes/googleRating');
 const reviewsRouter          = require('./routes/reviews');
+const poliRouter              = require('./routes/poli');
 
 app.use('/api', bookingsRouter);
 app.use('/api/payments', paymentsRouter);
@@ -72,6 +74,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/notifications', liveNotificationsRouter);
 app.use('/api/google-rating', googleRatingRouter);
 app.use('/api/reviews', reviewsRouter);
+app.use('/api/poli', poliRouter);
 
 // ---------------------------------------------------------------------------
 // Scheduled jobs
@@ -99,6 +102,7 @@ app.get(['/login', '/login.html'],   serveHtml('login.html'));
 app.get(['/admin', '/admin.html'],   serveHtml('admin.html'));
 app.get(['/prices', '/prices.html'], serveHtml('prices.html'));
 app.get(['/rooms', '/rooms.html'],   serveHtml('rooms.html'));
+app.get(['/gallery', '/gallery.html'], serveHtml('gallery.html'));
 app.get(['/menu', '/menu.html'],     serveHtml('menu.html'));
 app.get(['/faq', '/faq.html'],       serveHtml('faq.html'));
 app.get(['/hours', '/hours.html'],   serveHtml('hours.html'));
