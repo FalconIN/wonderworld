@@ -385,7 +385,7 @@ async function loadOverviewBookingsList(fromDate, toDate) {
         <span class="text-2xl">${b.roomEmoji || '🎉'}</span>
         <div>
           <div class="font-semibold text-sm text-gray-900 ${b.status === 'cancelled' ? 'line-through' : ''}">${roomDisplayName(b.roomName)} · ${b.guestCount} kids</div>
-          <div class="text-xs text-gray-400">${(b.partyDate||'').slice(0,10)} @ ${b.partyTime} · ${b.contactEmail || ''}</div>
+          <div class="text-xs text-gray-400">${(b.partyDate||'').slice(0,10)} @ ${b.partyTime} · ${escapeHtml(b.contactEmail || '')}</div>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -580,14 +580,14 @@ function renderImportPreview(headerRow, colMap) {
   body.innerHTML = importParsedRows.map(r => `
     <tr class="${r.valid ? '' : 'bg-red-50'}">
       <td>${r.valid ? '✅' : '⚠️'}</td>
-      <td>${r.firstName || '<span class="text-red-400">—</span>'}</td>
-      <td>${r.lastName || ''}</td>
-      <td>${r.email || '<span class="text-red-400">—</span>'}</td>
-      <td>${r.matchedRoom ? r.matchedRoom.name : `<span class="text-red-400">${r.roomText || '—'}</span>`}</td>
+      <td>${r.firstName ? escapeHtml(r.firstName) : '<span class="text-red-400">—</span>'}</td>
+      <td>${r.lastName ? escapeHtml(r.lastName) : ''}</td>
+      <td>${r.email ? escapeHtml(r.email) : '<span class="text-red-400">—</span>'}</td>
+      <td>${r.matchedRoom ? escapeHtml(r.matchedRoom.name) : `<span class="text-red-400">${escapeHtml(r.roomText || '—')}</span>`}</td>
       <td>${r.guests ?? '<span class="text-red-400">—</span>'}</td>
-      <td>${r.date || `<span class="text-red-400">${r.dateRaw || '—'}</span>`}</td>
-      <td>${r.time && ['9:30 AM','11:30 AM','1:30 PM','3:30 PM'].includes(r.time) ? r.time : `<span class="text-red-400">${r.time || '—'}</span>`}</td>
-      <td class="text-xs">${r.addonsSummary || '<span class="text-gray-300">—</span>'}</td>
+      <td>${r.date || `<span class="text-red-400">${escapeHtml(r.dateRaw || '—')}</span>`}</td>
+      <td>${r.time && ['9:30 AM','11:30 AM','1:30 PM','3:30 PM'].includes(r.time) ? r.time : `<span class="text-red-400">${escapeHtml(r.time || '—')}</span>`}</td>
+      <td class="text-xs">${r.addonsSummary ? escapeHtml(r.addonsSummary) : '<span class="text-gray-300">—</span>'}</td>
       <td>$${r.price.toFixed(2)}</td>
     </tr>`).join('');
 
@@ -1695,11 +1695,11 @@ function renderPaymentsTable(payments) {
     return `
     <tr>
       <td data-label="Cardholder / Card">
-        <div class="font-semibold text-sm">${p.cardholderName || '—'}</div>
+        <div class="font-semibold text-sm">${escapeHtml(p.cardholderName) || '—'}</div>
         <div class="text-xs text-gray-400">${cardInfo}</div>
       </td>
       <td data-label="Email">
-        <div class="text-xs text-gray-400">${p.contactEmail || '—'}</div>
+        <div class="text-xs text-gray-400">${escapeHtml(p.contactEmail) || '—'}</div>
       </td>
       <td data-label="Booking Ref"><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
       <td data-label="Amount" class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
@@ -1752,17 +1752,16 @@ function renderCustomersTable(customers) {
   tbody.innerHTML = customers.map(c => {
     const nonCancelled = (c.bookings || []).filter(b => b.status !== 'cancelled');
     const totalSpent = nonCancelled.reduce((s, b) => s + parseFloat(b.totalAmount || 0), 0);
-    const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || '—';
+    const name = escapeHtml(`${c.firstName || ''} ${c.lastName || ''}`.trim()) || '—';
     const isAdmin = c.isAdmin;
     const isSelf = c.id === (auth.currentUser && auth.currentUser.uid);
-    const safeEmail = (c.email || '').replace(/'/g, "\\'");
     let adminCell;
     if (isSelf) {
       adminCell = '<span class="text-xs px-3 py-1 rounded-lg font-semibold bg-indigo-100 text-indigo-700">✅ You</span>';
     } else if (isAdmin) {
-      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', true)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-indigo-100 text-indigo-700 hover:bg-red-100 hover:text-red-600">✅ Admin</button>';
+      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', true)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-indigo-100 text-indigo-700 hover:bg-red-100 hover:text-red-600">✅ Admin</button>';
     } else {
-      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', \'' + safeEmail + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
+      adminCell = '<button onclick="toggleAdmin(\'' + c.id + '\', false)" class="text-xs px-3 py-1 rounded-lg font-semibold transition-all bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-700">Make Admin</button>';
     }
     const bookingCount = nonCancelled.length;
     const checkboxCell = (isAdmin || isSelf)
@@ -1771,8 +1770,8 @@ function renderCustomersTable(customers) {
     return `<tr>
       ${checkboxCell}
       <td data-label="Name" class="font-semibold text-sm">${name}</td>
-      <td data-label="Email" class="text-sm">${c.email || '—'}</td>
-      <td data-label="Number" class="text-sm">${c.phone || '—'}</td>
+      <td data-label="Email" class="text-sm">${escapeHtml(c.email) || '—'}</td>
+      <td data-label="Number" class="text-sm">${escapeHtml(c.phone) || '—'}</td>
       <td data-label="Bookings" class="text-sm">${bookingCount} ${bookingCount === 1 ? 'party' : 'parties'}</td>
       <td data-label="Price Paid" class="font-semibold">$${totalSpent.toFixed(2)}</td>
       <td data-label="Admin">${adminCell}</td>
@@ -1818,7 +1817,8 @@ async function deleteSelectedCustomers() {
   }
 }
 
-async function toggleAdmin(userId, email, currentlyAdmin) {
+async function toggleAdmin(userId, currentlyAdmin) {
+  const email = allCustomers.find(c => c.id === userId)?.email || 'this user';
   const action = currentlyAdmin ? 'remove admin from' : 'make admin';
   const confirmed = confirm(`⚠️ Are you sure you want to ${action} ${email}?\n\nThis will ${currentlyAdmin ? 'revoke their access to the admin dashboard.' : 'give them FULL access to the admin dashboard.'}`);
   if (!confirmed) return;
