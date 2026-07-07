@@ -192,10 +192,10 @@ async function sendReset() {
   const email = document.getElementById('loginEmail').value.trim().toLowerCase();
   if (!email) { showMsg('Enter your email first.', true); return; }
   try {
-    await auth.sendPasswordResetEmail(email);
-    showMsg('✅ Password reset email sent!');
+    await callAPI('auth/forgot-password', { email });
+    showMsg('✅ Password reset email sent — check your inbox (and your spam folder)!');
   } catch (err) {
-    showMsg('Error: ' + err.message, true);
+    showMsg(err.message || 'Password reset failed. Please try again.', true);
   }
 }
 

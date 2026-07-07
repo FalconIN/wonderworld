@@ -96,7 +96,7 @@ function updateNavUI(isLoggedIn) {
             </div>
             <button onclick="openBooking()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">🎉 Book a Party</button>
             <button onclick="viewMyBookings()" class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors">📋 My Bookings</button>
-            ${state.user.isAdmin ? `<a href="/admin.html" class="block px-4 py-3 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors">🔧 Admin Dashboard</a>` : ''}
+            ${state.user.isAdmin ? `<a href="/admin" class="block px-4 py-3 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors">🔧 Admin Dashboard</a>` : ''}
             <button onclick="signOut()" class="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100">Sign Out</button>
           </div>
         </div>
@@ -184,8 +184,8 @@ async function handleLogin() {
 
   if (!email || !password) throw new Error('Please enter your email and password.');
 
-  await auth.signInWithEmailAndPassword(email, password);
-  // onAuthStateChanged fires and calls handleSignedInUser() automatically
+  const cred = await auth.signInWithEmailAndPassword(email, password);
+  await handleSignedInUser(cred.user);
   goToStep(1);
 }
 
@@ -224,10 +224,10 @@ async function sendPasswordReset() {
   if (!email) { showFieldError('Enter your email address first.'); return; }
 
   try {
-    await auth.sendPasswordResetEmail(email);
-    showFieldError('✅ Password reset email sent — check your inbox!');
+    await callAPI('auth/forgot-password', { email });
+    showFieldError('✅ Password reset email sent — check your inbox (and your spam folder)!');
   } catch (err) {
-    showFieldError(translateFirebaseError(err.code) || 'Password reset failed.');
+    showFieldError(err.message || 'Password reset failed. Please try again.');
   }
 }
 

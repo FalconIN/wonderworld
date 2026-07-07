@@ -66,6 +66,7 @@ const liveNotificationsRouter = require('./routes/liveNotifications');
 const googleRatingRouter     = require('./routes/googleRating');
 const reviewsRouter          = require('./routes/reviews');
 const poliRouter              = require('./routes/poli');
+const authRouter              = require('./routes/auth');
 
 app.use('/api', bookingsRouter);
 app.use('/api/payments', paymentsRouter);
@@ -75,6 +76,7 @@ app.use('/api/notifications', liveNotificationsRouter);
 app.use('/api/google-rating', googleRatingRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/poli', poliRouter);
+app.use('/api/auth', authRouter);
 
 // ---------------------------------------------------------------------------
 // Scheduled jobs
@@ -99,7 +101,9 @@ app.get('/api/config', (req, res) => res.json(clientConfig()));
 // ---------------------------------------------------------------------------
 app.get(['/', '/index.html'],       serveHtml('index.html'));
 app.get(['/login', '/login.html'],   serveHtml('login.html'));
-app.get(['/admin', '/admin.html'],   serveHtml('admin.html'));
+app.get(['/reset-password', '/reset-password.html'], serveHtml('reset-password.html'));
+app.get('/admin.html', (req, res) => res.redirect(301, '/admin'));
+app.get('/admin',      serveHtml('admin.html'));
 app.get(['/prices', '/prices.html'], serveHtml('prices.html'));
 app.get(['/rooms', '/rooms.html'],   serveHtml('rooms.html'));
 app.get(['/gallery', '/gallery.html'], serveHtml('gallery.html'));

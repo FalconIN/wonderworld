@@ -25,4 +25,14 @@ const paymentLimiter = rateLimit({
   message: { error: 'Too many payment requests. Please wait a few minutes and try again.' },
 });
 
-module.exports = { bookingLimiter, paymentLimiter };
+// Password reset is unauthenticated (no req.user yet), so key by IP only.
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: { error: 'Too many password reset requests. Please wait a few minutes and try again.' },
+});
+
+module.exports = { bookingLimiter, paymentLimiter, passwordResetLimiter };
