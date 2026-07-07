@@ -12,11 +12,16 @@ const ROOT = path.join(__dirname, '..');
 // limiting see the real client IP from X-Forwarded-For instead of nginx's.
 app.set('trust proxy', 1);
 
+// Node's own guidance: after an uncaught exception the process is in an
+// unknown state, so exit and let PM2 restart it clean rather than limping
+// on with possibly-corrupted in-memory state.
 process.on('uncaughtException', err => {
   console.error('Uncaught exception:', err);
+  process.exit(1);
 });
 process.on('unhandledRejection', err => {
   console.error('Unhandled rejection:', err);
+  process.exit(1);
 });
 
 // ---------------------------------------------------------------------------
