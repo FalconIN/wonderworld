@@ -38,12 +38,17 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
 
   try {
     const { rows: [room] } = await pool.query(
-      'SELECT id, name, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
 
-    const baseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
+    const guests = parseInt(guestCount, 10);
+    if (!guests || guests < room.min_guests || guests > room.max_guests) {
+      return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
+    }
+
+    const baseAmount = parseFloat(room.base_price_per_child) * guests;
     const totalAmount = baseAmount + parseFloat(addonsAmount || 0);
     if (!totalAmount || totalAmount < 1) return res.status(400).json({ error: 'Invalid booking amount.' });
 
@@ -102,10 +107,14 @@ async function verifyAndConfirm(token) {
   // Re-verify the amount server-side against the room price, same defense
   // as the Stripe path — never trust the amount POLi echoes back alone.
   const { rows: [room] } = await pool.query(
-    'SELECT id, name, base_price_per_child FROM party_rooms WHERE id = $1', [p.roomId]
+    'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE id = $1', [p.roomId]
   );
   if (!room) throw new Error('Room no longer exists for pending POLi booking.');
-  const expected = parseFloat(room.base_price_per_child) * parseInt(p.guestCount, 10) + parseFloat(p.addonsAmount || 0);
+  const pendingGuests = parseInt(p.guestCount, 10);
+  if (!pendingGuests || pendingGuests < room.min_guests || pendingGuests > room.max_guests) {
+    throw new Error(`Guest count ${p.guestCount} is outside room limits (${room.min_guests}-${room.max_guests}).`);
+  }
+  const expected = parseFloat(room.base_price_per_child) * pendingGuests + parseFloat(p.addonsAmount || 0);
   if (result.amount && Math.abs(parseFloat(result.amount) - expected) > 0.01) {
     throw new Error(`POLi amount (${result.amount}) does not match expected booking total (${expected}).`);
   }

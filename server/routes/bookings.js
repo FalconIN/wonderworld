@@ -130,13 +130,18 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
 
     // Compute expected amount server-side from the room price in the database
     const { rows: [foundRoom] } = await pool.query(
-      'SELECT id, name, base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
     if (!foundRoom) return res.status(400).json({ error: 'Invalid room.' });
     room = foundRoom;
 
-    const serverBaseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
+    const guests = parseInt(guestCount, 10);
+    if (!guests || guests < room.min_guests || guests > room.max_guests) {
+      return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
+    }
+
+    const serverBaseAmount = parseFloat(room.base_price_per_child) * guests;
     const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
 
     if (pi.amount !== expectedCents) {

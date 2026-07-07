@@ -31,12 +31,17 @@ router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
   const uid = req.user.uid;
   try {
     const { rows: [room] } = await pool.query(
-      'SELECT base_price_per_child FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      'SELECT base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
 
-    const baseAmount = parseFloat(room.base_price_per_child) * parseInt(guestCount, 10);
+    const guests = parseInt(guestCount, 10);
+    if (!guests || guests < room.min_guests || guests > room.max_guests) {
+      return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
+    }
+
+    const baseAmount = parseFloat(room.base_price_per_child) * guests;
     const amount = Math.round((baseAmount + parseFloat(addonsAmount || 0)) * 100);
     if (!amount || amount < 100) return res.status(400).json({ error: 'Invalid booking amount.' });
 
