@@ -145,7 +145,38 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
 
     if (pi.amount !== expectedCents) {
-      return res.status(400).json({ error: 'Payment amount does not match booking total.' });
+      // The card has already been captured (pi.status === 'succeeded' above) for a stale
+      // amount — most likely the guest count/add-ons changed after the Payment Element was
+      // mounted. Refund immediately rather than leaving the customer charged with no booking,
+      // and leave a record in `payments` (booking_id NULL, since no booking was created) so
+      // it's visible in the admin Payments tab for reconciliation.
+      let refundStatus = 'failed';
+      let refundNote = 'Auto-refund failed — needs manual reconciliation.';
+      try {
+        await stripe.refunds.create({ payment_intent: stripePaymentIntentId });
+        refundStatus = 'refunded';
+        refundNote = 'Auto-refunded.';
+      } catch (refundErr) {
+        refundNote = `Auto-refund failed: ${refundErr.message} — needs manual reconciliation.`;
+      }
+
+      await pool.query(
+        `INSERT INTO payments
+           (booking_id, user_id, stripe_payment_intent_id, amount, currency, status,
+            payment_provider, error_message, refunded_at)
+         VALUES (NULL, $1, $2, $3, 'nzd', $4, 'stripe', $5, CASE WHEN $4 = 'refunded' THEN now() ELSE NULL END)
+         ON CONFLICT (stripe_payment_intent_id) DO UPDATE
+           SET status = EXCLUDED.status, error_message = EXCLUDED.error_message,
+               refunded_at = EXCLUDED.refunded_at, updated_at = now()`,
+        [uid, stripePaymentIntentId, pi.amount / 100, refundStatus,
+         `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}. ${refundNote}`]
+      );
+
+      return res.status(400).json({
+        error: refundStatus === 'refunded'
+          ? "Your booking total changed after payment started, so we've automatically refunded your card. Please try booking again."
+          : 'Your booking total changed after payment started. We could not confirm the refund — please contact us at Bookings@wonderworldwestgate.co.nz so we can sort this out.'
+      });
     }
 
     verifiedTotalAmount = pi.amount / 100;

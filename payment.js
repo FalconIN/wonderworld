@@ -4,6 +4,7 @@ let stripeElements = null;
 let stripePaymentElement = null;
 let stripeElementsMounted = false;
 let clientSecret = null;
+let mountedTotalCents = null;
 
 // ---------------------------------------------------------------------------
 // Afterpay return handler — called from app.js after all state is initialized
@@ -201,12 +202,22 @@ async function processPoliPayment() {
 // Mount Stripe Payment Element when step 4 is shown
 // ---------------------------------------------------------------------------
 async function mountStripeElements() {
-  if (stripeElementsMounted) return;
+  const totalAmount = state.calculatedTotal || 0;
+  const totalCents = Math.round(totalAmount * 100);
+
+  if (stripeElementsMounted) {
+    // Guest count/food/add-ons can still be edited via the step 4 → 3 → 2 back buttons.
+    // If the total hasn't changed, keep the already-mounted element (and its PaymentIntent)
+    // as-is. If it HAS changed, the existing PaymentIntent is now stale — tear it down and
+    // create a fresh one for the current total instead of letting the customer pay the old
+    // amount and fail the server-side total check after being charged.
+    if (mountedTotalCents === totalCents) return;
+    resetPaymentElement();
+  }
 
   const wrapper = document.getElementById('stripe-payment-wrapper');
   if (!wrapper) return;
 
-  const totalAmount = state.calculatedTotal || 0;
   wrapper.innerHTML = '<div class="text-gray-400 text-sm text-center py-6">Loading payment options...</div>';
 
   try {
@@ -226,6 +237,7 @@ async function mountStripeElements() {
       },
     });
     clientSecret = result.clientSecret;
+    mountedTotalCents = totalCents;
   } catch (err) {
     // A 400 means the server rejected the booking details themselves (e.g. guest count
     // outside the room's limits) — show that message as-is instead of framing it as a
@@ -355,4 +367,5 @@ function resetPaymentElement() {
   stripeElements = null;
   stripeElementsMounted = false;
   clientSecret = null;
+  mountedTotalCents = null;
 }
