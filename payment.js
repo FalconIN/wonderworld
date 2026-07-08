@@ -227,7 +227,11 @@ async function mountStripeElements() {
     });
     clientSecret = result.clientSecret;
   } catch (err) {
-    wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-4">Failed to load payment: ${err.message}</div>`;
+    // A 400 means the server rejected the booking details themselves (e.g. guest count
+    // outside the room's limits) — show that message as-is instead of framing it as a
+    // Stripe/payment loading problem.
+    const message = err.status === 400 ? err.message : `Failed to load payment: ${err.message}`;
+    wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-4">${message}</div>`;
     return;
   }
 

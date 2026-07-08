@@ -1605,7 +1605,10 @@ async function mountEditStripeElement(deltaAmount) {
     });
     editState.editClientSecret = result.clientSecret;
   } catch (err) {
-    wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-3">Failed to load payment: ${err.message}</div>`;
+    // A 400 means the server rejected the request details themselves, not a Stripe/loading
+    // failure — show that message as-is instead of framing it as a payment load problem.
+    const message = err.status === 400 ? err.message : `Failed to load payment: ${err.message}`;
+    wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-3">${message}</div>`;
     return;
   }
 

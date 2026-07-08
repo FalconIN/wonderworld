@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.party_rooms (
 
 INSERT INTO public.party_rooms (slug, name, emoji, tag_line, color, min_guests, max_guests, base_price_per_child, weekday_total, weekend_total, description, sort_order)
 VALUES
-  ('big',      'The Big Room',         '🌟', 'Exclusive Extra Large Zone', 'indigo', 16, 24, 39.00, 49.00, 59.00, 'Our flagship space — private stage, expanded play zone.',         1),
+  ('big',      'The Big Room',         '🌟', 'Exclusive Extra Large Zone', 'indigo', 12, 24, 39.00, 49.00, 59.00, 'Our flagship space — private stage, expanded play zone.',         1),
   ('sunshine', 'Sunshine Room',        '☀️', 'Yellow · Warm & Cheerful',  'yellow',  8, 15, 39.00, null,  null,  'Bright, sunny, and full of energy.',                              2),
   ('dream',    'Dream Room',           '🌙', 'Purple · Magical & Dreamy', 'purple',  8, 15, 39.00, null,  null,  'Soft lighting, dreamy decor.',                                    3),
   ('forest',   'Wonder Forest Room',   '🌿', 'Green · Nature Adventure',  'green',   8, 15, 39.00, null,  null,  'An immersive forest theme.',                                      4)
