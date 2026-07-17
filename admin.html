@@ -7,22 +7,7 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    darkMode: 'class',
-    theme: {
-      extend: {
-        fontFamily: { display: ['Fredoka', 'sans-serif'], body: ['Inter', 'sans-serif'] },
-        colors: {
-          teal: { DEFAULT: '#0E9F6E', light: '#D1FAE5' },
-          indigo: { DEFAULT: '#4F46E5', light: '#EEF2FF' },
-          amber: { DEFAULT: '#F59E0B', light: '#FEF3C7' },
-        },
-      },
-    },
-  };
-</script>
+<link rel="stylesheet" href="tailwind-admin.css?v=1" />
 <script>
   // Apply saved theme before paint to avoid flash
   (function() {
@@ -30,10 +15,10 @@
     if (saved === 'dark') document.documentElement.classList.add('dark');
   })();
 </script>
-<link rel="stylesheet" href="styles.css?v=3" />
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://js.stripe.com/v3/"></script>
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<script src="https://js.stripe.com/v3/" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -49,7 +34,7 @@
   <div id="adminSidebar" class="fixed md:static top-0 left-0 z-50 h-screen md:h-auto w-72 md:w-64 max-w-[85vw] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-0 flex flex-col flex-shrink-0 transition-transform duration-300 -translate-x-full md:translate-x-0">
     <div class="p-6 border-b border-gray-200 dark:border-gray-800 flex items-center gap-3">
       <a href="/" class="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-colors">
-        <img src="wwmascot-64.png?v=2" class="w-8 h-8 rounded-lg" />
+        <img src="wwmascot-64.png?v=3" class="w-8 h-8 rounded-lg" />
         <div>
           <div class="font-display font-bold text-lg text-gray-900 dark:text-white">Wonder World</div>
           <div class="text-gray-400 text-xs">Admin Dashboard</div>
@@ -311,15 +296,68 @@
 
     <!-- ── PAYMENTS TAB ──────────────────────────────────── -->
     <div id="tab-payments" class="p-8" style="display:none">
+      <!-- Summary banner -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <div class="flex flex-wrap items-end justify-between gap-4 mb-5">
+          <div>
+            <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white" id="payments-summary-title">📊 This Month</h2>
+            <p class="text-gray-400 text-sm mt-0.5" id="payments-summary-subtitle">Payment traffic overview</p>
+          </div>
+          <div class="flex items-end gap-3 flex-wrap">
+            <div>
+              <label class="lbl">From</label>
+              <input class="field" id="paymentsRangeFrom" type="date" />
+            </div>
+            <div>
+              <label class="lbl">To</label>
+              <input class="field" id="paymentsRangeTo" type="date" />
+            </div>
+            <button onclick="applyPaymentsDateRange()" class="btn-primary py-2.5 px-5 whitespace-nowrap">Filter</button>
+            <button onclick="clearPaymentsDateRange()" class="btn-secondary py-2.5 px-5 whitespace-nowrap">Clear</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">💰</div>
+            <div class="font-display font-bold text-2xl text-indigo-600" id="payments-summary-revenue">—</div>
+            <div class="text-gray-400 text-sm">Revenue</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">🧾</div>
+            <div class="font-display font-bold text-2xl text-gray-900 dark:text-white" id="payments-summary-count">—</div>
+            <div class="text-gray-400 text-sm">Successful Payments</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">📈</div>
+            <div class="font-display font-bold text-2xl text-teal" id="payments-summary-avg">—</div>
+            <div class="text-gray-400 text-sm">Average Payment</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">↩️</div>
+            <div class="font-display font-bold text-2xl text-amber-500" id="payments-summary-refunds">—</div>
+            <div class="text-gray-400 text-sm">Refunded <span id="payments-summary-refund-count" class="text-xs font-normal"></span></div>
+          </div>
+        </div>
+      </div>
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
+        <!-- Sub-tab header -->
         <div class="p-5 border-b border-gray-100 dark:border-gray-800">
-          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Payments</h2>
+          <div class="flex items-center gap-1">
+            <button onclick="switchPaymentsSubTab('stripe')" id="pst-stripe"
+              class="bookings-sub-tab active px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              💳 Payments <span id="stripe-payments-badge" class="ml-1 inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+            </button>
+            <button onclick="switchPaymentsSubTab('manual')" id="pst-manual"
+              class="bookings-sub-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              ✍️ Manually Added Bookings <span id="manual-payments-badge" class="ml-1 inline-block bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+            </button>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="admin-table" id="payments-table">
             <thead>
               <tr>
-                <th>Cardholder / Card</th><th>Email</th><th>Booking Ref</th><th>Amount</th><th>Status</th><th>Date</th><th>Actions</th>
+                <th>Customer</th><th>Email</th><th>Booking Ref</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th>
               </tr>
             </thead>
             <tbody id="payments-tbody">
@@ -334,7 +372,7 @@
     <div id="tab-customers" class="p-8" style="display:none">
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
         <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4 flex-wrap">
-          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Customers</h2>
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Customers <span id="customers-count" class="text-sm font-normal text-gray-400"></span></h2>
           <button onclick="deleteSelectedCustomers()" id="delete-customers-btn" class="hidden text-xs text-red-500 hover:text-red-600 font-semibold border border-red-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
             🗑️ Delete Selected
           </button>
@@ -387,15 +425,57 @@
 
     <!-- ── REVIEWS TAB ──────────────────────────────────── -->
     <div id="tab-reviews" class="p-8" style="display:none">
+      <!-- Overall Rating -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🌟 Overall Rating</h2>
+        <p class="text-gray-400 text-sm mb-4">Shown on the public site (hero badge + stats strip). Set manually — no longer pulled live from Google.</p>
+        <div id="site-rating-display" class="flex items-center gap-6 flex-wrap">Loading...</div>
+        <div id="site-rating-form" class="flex items-end gap-3 flex-wrap mt-4" style="display:none">
+          <div><label class="lbl">Rating (0–5)</label><input class="field w-28" id="sr_rating" type="number" min="0" max="5" step="0.1" /></div>
+          <div><label class="lbl">Review Count</label><input class="field w-32" id="sr_reviewCount" type="number" min="0" step="1" /></div>
+          <button onclick="saveSiteRating()" class="btn-primary py-2.5 px-5 text-sm">Save</button>
+          <button onclick="cancelEditSiteRating()" class="btn-secondary py-2.5 px-5 text-sm">Cancel</button>
+        </div>
+      </div>
+
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
         <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
             <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">⭐ Google Reviews</h2>
             <p class="text-gray-400 text-sm">5-star reviews auto-fetched daily from Google Places. Hide any you don't want on the public carousel.</p>
           </div>
-          <button onclick="fetchReviewsNow()" id="fetch-reviews-btn" class="btn-secondary py-2.5 px-5 text-sm">🔄 Fetch now</button>
+          <div class="flex gap-2">
+            <button onclick="openPasteReviewsModal()" class="btn-secondary py-2.5 px-5 text-sm">📋 Paste Reviews</button>
+            <button onclick="fetchReviewsNow()" id="fetch-reviews-btn" class="btn-secondary py-2.5 px-5 text-sm">🔄 Fetch now</button>
+          </div>
         </div>
         <div id="reviews-list">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PASTE REVIEWS MODAL ────────────────────────────────── -->
+<div id="pasteReviewsModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePasteReviewsModal()">
+  <div class="modal-box" style="max-width:900px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-xl md:text-2xl text-gray-900 dark:text-white">📋 Paste Reviews</h2>
+      <button onclick="closePasteReviewsModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+    <div id="pasteReviewsStep1">
+      <p class="text-sm text-gray-500 mb-3">Paste review text copied straight off Google Maps (select a chunk of the reviews panel and copy — it can include multiple reviews, owner replies, "Local Guide" tags, etc., the parser will sort it out). Google doesn't include star ratings in copied text, so every parsed review defaults to 5★ — check the preview and adjust any that shouldn't be.</p>
+      <textarea id="pasteReviewsInput" class="field" style="min-height:220px;font-family:inherit" placeholder="Paste reviews here..."></textarea>
+      <div class="flex gap-3 mt-4">
+        <button onclick="closePasteReviewsModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="parsePastedReviews()" class="btn-primary flex-1 py-3">Parse</button>
+      </div>
+    </div>
+    <div id="pasteReviewsStep2" style="display:none">
+      <div id="pasteReviewsSummary" class="text-sm text-gray-600 dark:text-gray-300 mb-4"></div>
+      <div id="pasteReviewsPreview" class="space-y-3"></div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="backToPasteInput()" class="btn-secondary flex-1 py-3">Back</button>
+        <button onclick="confirmReviewsImport()" class="btn-primary flex-1 py-3" id="confirmReviewsImportBtn">Import Reviews</button>
       </div>
     </div>
   </div>
@@ -741,7 +821,7 @@
   }
 </style>
 
-<script src="firebase.js"></script>
-<script src="admin.js?v=32"></script>
+<script src="firebase.js" defer></script>
+<script src="admin.js?v=38" defer></script>
 </body>
 </html>

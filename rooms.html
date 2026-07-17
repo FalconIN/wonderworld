@@ -4,42 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Party Rooms — Wonder World Westgate</title>
+<meta name="description" content="Explore our 4 exclusive party rooms at Wonder World Westgate — decorated, staffed spaces for kids' birthday parties in West Auckland." />
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="styles.css" />
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://js.stripe.com/v3/"></script>
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5', dark: '#065F46' },
-          indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF', dark: '#1e3a8a' },
-          blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
-          cta:    { DEFAULT: '#F97316', dark: '#EA6000' },
-          amber:  { DEFAULT: '#F59E0B', light: '#FEF3C7', dark: '#B45309' },
-          offwhite: '#EFF6FF',
-        },
-        fontFamily: {
-          display: ['Fredoka', 'sans-serif'],
-          body:    ['Nunito', 'sans-serif'],
-        },
-        borderRadius: { '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem' },
-        boxShadow: {
-          soft:  '0 6px 20px rgba(30,58,138,0.08)',
-          card:  '0 12px 36px rgba(30,58,138,0.14)',
-          clay:  '0 8px 24px rgba(30,58,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9)',
-          glow:  '0 0 0 4px rgba(59,130,246,0.2)',
-        },
-      },
-    },
-  };
-</script>
+<link rel="stylesheet" href="tailwind.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<!-- Stripe JS (needed: this page has the booking/payment modal) -->
+<script src="https://js.stripe.com/v3/" defer></script>
 </head>
 <body>
 
@@ -53,7 +28,7 @@
 <nav>
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <img src="wwmascot-64.png?v=2" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
+      <img src="wwmascot-64.png?v=3" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
       <a href="/" class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></a>
     </div>
     <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
@@ -73,6 +48,8 @@
   </div>
 </nav>
 
+<main>
+
 <!-- ── PAGE HEADER ───────────────────────────────────────── -->
 <div style="background:linear-gradient(135deg,#1E3A8A,#3B82F6);">
   <div class="max-w-6xl mx-auto px-5 py-10 text-center text-white">
@@ -84,6 +61,13 @@
 <!-- ── PARTY ROOMS ────────────────────────────────────────── -->
 <section class="py-16 bg-white">
   <div class="max-w-6xl mx-auto px-5">
+    <div class="mb-8 bg-red-600 text-white rounded-2xl p-5 flex items-center gap-4 shadow-lg">
+      <span class="text-4xl flex-shrink-0">🚫</span>
+      <div>
+        <div class="font-display font-bold text-xl">NO OUTSIDE FOOD OR DRINKS ALLOWED</div>
+        <div class="text-sm text-red-100 mt-0.5">For the safety and cleanliness of our play area. Water bottles are permitted.</div>
+      </div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div class="rounded-3xl overflow-hidden border-2 border-indigo-light shadow-soft hover:shadow-card transition-all hover:-translate-y-1 bg-gradient-to-br from-indigo-light to-white">
         <div class="p-7">
@@ -118,7 +102,7 @@
         <div class="rounded-2xl border-2 border-yellow-100 bg-yellow-50 p-5 flex items-center gap-4 hover:shadow-card transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openBooking()">
           <div class="w-12 h-12 rounded-xl bg-yellow-400 flex items-center justify-center text-2xl flex-shrink-0">☀️</div>
           <div class="flex-1">
-            <div class="font-display font-bold text-lg">Sunshine Room <span class="text-yellow-600 text-sm font-normal">(Yellow)</span></div>
+            <div class="font-display font-bold text-lg">Sunshine Room <span class="text-yellow-700 text-sm font-normal">(Yellow)</span></div>
             <div class="text-xs text-gray-500">Min 8 kids · Bright & cheerful</div>
           </div>
           <img src="images/rooms/sunshine.jpg" alt="Sunshine Room party room" loading="lazy"
@@ -138,7 +122,7 @@
         <div class="rounded-2xl border-2 border-green-100 bg-green-50 p-5 flex items-center gap-4 hover:shadow-card transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openBooking()">
           <div class="w-12 h-12 rounded-xl bg-green-400 flex items-center justify-center text-2xl flex-shrink-0">🌿</div>
           <div class="flex-1">
-            <div class="font-display font-bold text-lg">Wonder Forest Room <span class="text-green-600 text-sm font-normal">(Green)</span></div>
+            <div class="font-display font-bold text-lg">Wonder Forest Room <span class="text-green-700 text-sm font-normal">(Green)</span></div>
             <div class="text-xs text-gray-500">Min 8 kids · Nature adventure</div>
           </div>
           <img src="images/rooms/forest.jpg" alt="Wonder Forest Room party room" loading="lazy"
@@ -156,13 +140,6 @@
       <div class="w-px bg-blue-200 hidden md:block"></div>
       <div><strong class="font-display">Extra Kids</strong><br/>Charged at package rate</div>
     </div>
-    <div class="mt-6 bg-red-600 text-white rounded-2xl p-5 flex items-center gap-4 shadow-lg">
-      <span class="text-4xl flex-shrink-0">🚫</span>
-      <div>
-        <div class="font-display font-bold text-xl">NO OUTSIDE FOOD OR DRINKS ALLOWED</div>
-        <div class="text-sm text-red-100 mt-0.5">For the safety and cleanliness of our play area. Water bottles are permitted.</div>
-      </div>
-    </div>
     <div class="mt-8 text-center">
       <button onclick="openBooking()" class="btn-primary text-lg py-4 px-10">Start Booking — It's Quick & Easy</button>
     </div>
@@ -170,6 +147,8 @@
 </section>
 
 <!-- ── FOOTER ─────────────────────────────────────────────── -->
+</main>
+
 <footer class="bg-gray-900 text-white py-12">
   <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between gap-8">
     <div>
@@ -868,10 +847,10 @@
   </div>
 </div>
 
-<script src="firebase.js"></script>
-<script src="auth.js?v=3"></script>
-<script src="booking.js?v=22"></script>
-<script src="payment.js?v=3"></script>
-<script src="app.js?v=23"></script>
+<script src="firebase.js" defer></script>
+<script src="auth.js?v=4" defer></script>
+<script src="booking.js?v=24" defer></script>
+<script src="payment.js?v=4" defer></script>
+<script src="app.js?v=26" defer></script>
 </body>
 </html>

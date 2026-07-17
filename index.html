@@ -4,47 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Wonder World Westgate — Indoor Play & Birthday Parties Auckland</title>
+<meta name="description" content="Wonder World Westgate — indoor playground and kids' party venue in West Auckland. Book birthday parties, casual play sessions and party rooms online." />
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="styles.css?v=2" />
+<link rel="stylesheet" href="tailwind.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=5" />
 
 <!-- Firebase JS v9 compat (drop-in for v8-style SDK) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
 
-<!-- Stripe JS -->
-<script src="https://js.stripe.com/v3/"></script>
-
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5', dark: '#065F46' },
-          indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF', dark: '#1e3a8a' },
-          blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
-          cta:    { DEFAULT: '#F97316', dark: '#EA6000' },
-          amber:  { DEFAULT: '#F59E0B', light: '#FEF3C7', dark: '#B45309' },
-          offwhite: '#EFF6FF',
-        },
-        fontFamily: {
-          display: ['Fredoka', 'sans-serif'],
-          body:    ['Nunito', 'sans-serif'],
-        },
-        borderRadius: { '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem' },
-        boxShadow: {
-          soft:  '0 6px 20px rgba(30,58,138,0.08)',
-          card:  '0 12px 36px rgba(30,58,138,0.14)',
-          clay:  '0 8px 24px rgba(30,58,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9)',
-          glow:  '0 0 0 4px rgba(59,130,246,0.2)',
-        },
-      },
-    },
-  };
-</script>
+<!-- Stripe JS (needed: this page has the booking/payment modal) -->
+<script src="https://js.stripe.com/v3/" defer></script>
 
 </head>
 <body>
@@ -59,7 +32,7 @@
 <nav>
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <img src="wwmascot-64.png?v=2" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
+      <img src="wwmascot-64.png?v=3" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
       <a href="/" class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></a>
     </div>
     <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
@@ -79,6 +52,7 @@
   </div>
 </nav>
 
+<main>
 <!-- ── HERO ──────────────────────────────────────────────── -->
 <section class="hero-bg relative overflow-hidden">
   <!-- Aurora blobs -->
@@ -177,7 +151,7 @@
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-12">
       <h2 class="font-display font-bold text-4xl text-gray-900 mb-3">Why Families Love Wonder World</h2>
-      <p class="text-gray-500 text-lg max-w-xl mx-auto font-body">We've thought of everything — so the only thing on your to-do list is showing up and celebrating.</p>
+      <p class="text-gray-600 text-lg max-w-xl mx-auto font-body">We've thought of everything — so the only thing on your to-do list is showing up and celebrating.</p>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
       <div class="clay-card tilt-card p-7 text-center cursor-default reveal reveal-d1">
@@ -238,20 +212,20 @@
       <div class="rounded-3xl bg-yellow-50 border-2 border-yellow-100 p-6 text-center hover:shadow-card transition-all hover:-translate-y-1 cursor-pointer" onclick="openBooking()">
         <div class="w-14 h-14 rounded-2xl bg-yellow-400 flex items-center justify-center text-3xl mx-auto mb-3">☀️</div>
         <div class="font-display font-bold text-base text-gray-900">Sunshine Room</div>
-        <div class="text-xs text-yellow-600 font-semibold mt-1">Min 8 kids</div>
-        <div class="text-xs text-gray-400 mt-1">Bright & cheerful</div>
+        <div class="text-xs text-yellow-700 font-semibold mt-1">Min 8 kids</div>
+        <div class="text-xs text-gray-600 mt-1">Bright & cheerful</div>
       </div>
       <div class="rounded-3xl bg-purple-50 border-2 border-purple-100 p-6 text-center hover:shadow-card transition-all hover:-translate-y-1 cursor-pointer" onclick="openBooking()">
         <div class="w-14 h-14 rounded-2xl bg-purple-400 flex items-center justify-center text-3xl mx-auto mb-3">🌙</div>
         <div class="font-display font-bold text-base text-gray-900">Dream Room</div>
         <div class="text-xs text-purple-600 font-semibold mt-1">Min 8 kids</div>
-        <div class="text-xs text-gray-400 mt-1">Magical & dreamy</div>
+        <div class="text-xs text-gray-600 mt-1">Magical & dreamy</div>
       </div>
       <div class="rounded-3xl bg-green-50 border-2 border-green-100 p-6 text-center hover:shadow-card transition-all hover:-translate-y-1 cursor-pointer" onclick="openBooking()">
         <div class="w-14 h-14 rounded-2xl bg-green-400 flex items-center justify-center text-3xl mx-auto mb-3">🌿</div>
         <div class="font-display font-bold text-base text-gray-900">Wonder Forest</div>
-        <div class="text-xs text-green-600 font-semibold mt-1">Min 8 kids</div>
-        <div class="text-xs text-gray-400 mt-1">Nature adventure</div>
+        <div class="text-xs text-green-700 font-semibold mt-1">Min 8 kids</div>
+        <div class="text-xs text-gray-600 mt-1">Nature adventure</div>
       </div>
     </div>
     <div class="text-center">
@@ -266,7 +240,7 @@
     <div class="flex flex-col md:flex-row items-center gap-12">
       <div class="flex-1">
         <h2 class="font-display font-bold text-4xl text-gray-900 mb-3 reveal">Legendary Party Food</h2>
-        <p class="text-gray-500 text-lg leading-relaxed mb-6 max-w-lg">Nuggets, mini burgers, fresh sushi, pizza add-ons — all made fresh daily. Kids love it, and there's plenty for the adults too. Outside birthday cake is always welcome.</p>
+        <p class="text-gray-600 text-lg leading-relaxed mb-6 max-w-lg">Nuggets, mini burgers, fresh sushi, pizza add-ons — all made fresh daily. Kids love it, and there's plenty for the adults too. Outside birthday cake is always welcome.</p>
         <div class="flex flex-wrap gap-2 mb-7">
           <span class="bg-orange-50 border border-orange-200 text-orange-700 text-sm font-semibold rounded-full px-3 py-1">🍗 Chicken Nuggets</span>
           <span class="bg-orange-50 border border-orange-200 text-orange-700 text-sm font-semibold rounded-full px-3 py-1">🍔 Mini Burgers</span>
@@ -370,7 +344,7 @@
 <section class="py-20 bg-offwhite">
   <div class="max-w-3xl mx-auto px-5 text-center">
     <h2 class="font-display font-bold text-4xl md:text-5xl text-gray-900 mb-4 reveal">Ready to make it happen?</h2>
-    <p class="text-gray-500 text-lg mb-10 max-w-xl mx-auto">Book online in minutes — pick your room, date, and food. We handle everything else so you can be fully present on the day.</p>
+    <p class="text-gray-600 text-lg mb-10 max-w-xl mx-auto">Book online in minutes — pick your room, date, and food. We handle everything else so you can be fully present on the day.</p>
     <button onclick="openBooking()" class="btn-primary text-xl py-5 px-14">Book a Party Room</button>
     <p class="text-gray-400 text-sm mt-6">
       <a href="/prices" class="text-indigo-500 hover:underline">View pricing</a>
@@ -381,6 +355,7 @@
     </p>
   </div>
 </section>
+</main>
 
 <!-- ── FOOTER ─────────────────────────────────────────────── -->
 <footer class="bg-gray-900 text-white py-12">
@@ -428,6 +403,9 @@
 
     <div id="wizardTopBar" class="bg-white border-b border-gray-100 px-6 pt-5 pb-4">
       <div id="stepIndicator" class="flex items-center mb-4" style="display:none!important"></div>
+      <div id="sessionCountdown" style="display:none" class="text-xs text-gray-400 text-right mb-2">
+        Time left to complete this booking: <span id="sessionCountdownDisplay">15:00</span>
+      </div>
       <div id="timerContainer" style="display:none">
         <div class="timer-bar" id="timerBar">
           <span class="text-lg">⏱️</span>
@@ -1228,10 +1206,10 @@
 </div>
 
 <!-- Scripts — order matters -->
-<script src="firebase.js"></script>
-<script src="auth.js?v=3"></script>
-<script src="booking.js?v=22"></script>
-<script src="payment.js?v=3"></script>
-<script src="app.js?v=23"></script>
+<script src="firebase.js" defer></script>
+<script src="auth.js?v=4" defer></script>
+<script src="booking.js?v=24" defer></script>
+<script src="payment.js?v=4" defer></script>
+<script src="app.js?v=26" defer></script>
 </body>
 </html>

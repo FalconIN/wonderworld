@@ -4,42 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Rules & Safety — Wonder World Westgate</title>
+<meta name="description" content="Rules, safety guidelines and the liability waiver for visiting Wonder World Westgate indoor playground." />
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="styles.css" />
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://js.stripe.com/v3/"></script>
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5', dark: '#065F46' },
-          indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF', dark: '#1e3a8a' },
-          blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
-          cta:    { DEFAULT: '#F97316', dark: '#EA6000' },
-          amber:  { DEFAULT: '#F59E0B', light: '#FEF3C7', dark: '#B45309' },
-          offwhite: '#EFF6FF',
-        },
-        fontFamily: {
-          display: ['Fredoka', 'sans-serif'],
-          body:    ['Nunito', 'sans-serif'],
-        },
-        borderRadius: { '2xl': '1rem', '3xl': '1.5rem', '4xl': '2rem' },
-        boxShadow: {
-          soft:  '0 6px 20px rgba(30,58,138,0.08)',
-          card:  '0 12px 36px rgba(30,58,138,0.14)',
-          clay:  '0 8px 24px rgba(30,58,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9)',
-          glow:  '0 0 0 4px rgba(59,130,246,0.2)',
-        },
-      },
-    },
-  };
-</script>
+<link rel="stylesheet" href="tailwind.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<!-- Stripe JS (needed: this page has the booking/payment modal) -->
+<script src="https://js.stripe.com/v3/" defer></script>
 </head>
 <body>
 
@@ -53,7 +28,7 @@
 <nav>
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
     <div class="flex items-center gap-2">
-      <img src="wwmascot-64.png?v=2" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
+      <img src="wwmascot-64.png?v=3" alt="Wonder World mascot" class="w-9 h-9 rounded-xl" />
       <a href="/" class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></a>
     </div>
     <div class="hidden md:flex items-center gap-6 text-sm font-medium text-gray-600">
@@ -72,6 +47,8 @@
     </div>
   </div>
 </nav>
+
+<main>
 
 <!-- ── PAGE HEADER ───────────────────────────────────────── -->
 <div style="background:linear-gradient(135deg,#991B1B,#1E3A8A);">
@@ -150,6 +127,8 @@
 </section>
 
 <!-- ── FOOTER ─────────────────────────────────────────────── -->
+</main>
+
 <footer class="bg-gray-900 text-white py-12">
   <div class="max-w-6xl mx-auto px-5 flex flex-col md:flex-row justify-between gap-8">
     <div>
@@ -691,10 +670,10 @@
   </div>
 </div>
 
-<script src="firebase.js"></script>
-<script src="auth.js?v=3"></script>
-<script src="booking.js?v=22"></script>
-<script src="payment.js?v=3"></script>
-<script src="app.js?v=23"></script>
+<script src="firebase.js" defer></script>
+<script src="auth.js?v=4" defer></script>
+<script src="booking.js?v=24" defer></script>
+<script src="payment.js?v=4" defer></script>
+<script src="app.js?v=26" defer></script>
 </body>
 </html>

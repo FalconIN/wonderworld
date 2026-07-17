@@ -4,29 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sign In — Wonder World Westgate</title>
+<meta name="description" content="Sign in to your Wonder World Westgate account to manage bookings and birthday parties." />
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="styles.css" />
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        fontFamily: { display: ['Fredoka', 'sans-serif'], body: ['Nunito', 'sans-serif'] },
-        colors: {
-          teal:   { DEFAULT: '#0E9F6E', light: '#D1FAE5' },
-          indigo: { DEFAULT: '#1E3A8A', light: '#EFF6FF' },
-          blue:   { DEFAULT: '#3B82F6', light: '#DBEAFE' },
-          cta:    { DEFAULT: '#F97316' },
-          offwhite: '#EFF6FF',
-        },
-      },
-    },
-  };
-</script>
+<link rel="stylesheet" href="tailwind.css?v=1" />
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<!-- Stripe JS not loaded here: this page has no payment functionality -->
 
 </head>
 <body class="min-h-screen flex flex-col font-body" style="background:#EFF6FF;">
@@ -35,15 +21,14 @@
 <nav class="bg-white border-b border-gray-100">
   <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2">
-      <img src="wwmascot-64.png?v=2" alt="Wonder World" class="w-9 h-9 rounded-xl" />
+      <img src="wwmascot-64.png?v=3" alt="Wonder World" class="w-9 h-9 rounded-xl" />
       <span class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></span>
     </a>
     <a href="/" class="text-sm text-gray-500 hover:text-indigo-500 transition-colors">← Back to home</a>
   </div>
 </nav>
 
-<!-- Main -->
-<div class="flex-1 flex items-center justify-center px-4 py-12">
+<main class="flex-1 flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-md">
     <div class="text-center mb-8">
       <div class="text-5xl mb-3">👋</div>
@@ -102,15 +87,18 @@
       <p class="text-xs text-gray-400 text-center mt-4">By continuing you agree to our <a href="/rules" target="_blank" class="text-indigo-500">Terms of Entry & Liability Waiver</a> and <a href="/privacy" target="_blank" class="text-indigo-500">Privacy Policy</a>.</p>
     </div>
   </div>
-</div>
+</main>
 
-<script src="firebase.js"></script>
+<script src="firebase.js" defer></script>
 <script>
 let currentMode = 'signup';
 
-// Redirect if already logged in
-auth.onAuthStateChanged(user => {
-  if (user) window.location.href = '/';
+// Redirect if already logged in — firebase.js is deferred, so wait for it
+// to have run (and DOMContentLoaded to fire) before touching `auth`.
+document.addEventListener('DOMContentLoaded', () => {
+  auth.onAuthStateChanged(user => {
+    if (user) window.location.href = '/';
+  });
 });
 
 function switchTab(mode) {
