@@ -4,6 +4,13 @@ const { requireAuth } = require('../middleware/auth');
 const pool    = require('../db');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
 
+// Referenced below but was never defined in this file — every SMS branch
+// (booking-modified, booking-rescheduled) threw an unhandled ReferenceError
+// for any customer with a phone number on file, before ever reaching the
+// Twilio call. Mirrors the same derivation already used in
+// services/bookingNotifications.js.
+const TWILIO_CONFIGURED = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+
 // Converts whatever partyDate arrives as (JS Date object serialised to ISO string,
 // or a plain "YYYY-MM-DD" string) into a clean "3 July 2026" display string.
 // We build the Date from year/month/day parts to avoid any UTC-offset shifts.
@@ -111,8 +118,14 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
 router.post('/booking-rescheduled', requireAuth, async (req, res) => {
   const {
     bookingId, bookingRef, email, phone,
-    firstName, roomName, partyDate, oldTime, newTime,
+    firstName, roomName, partyDate, oldDate, oldTime, newTime,
   } = req.body;
+
+  // partyDate is the new date (kept under its original name for backward
+  // compatibility with the time-only reschedule path); oldDate is optional —
+  // omitted when only the time changed on the same date.
+  const dateChanged = !!oldDate && String(oldDate).slice(0, 10) !== String(partyDate).slice(0, 10);
+  const heading = dateChanged ? 'Party Date & Time Updated!' : 'Party Time Updated!';
 
   const results = { email: null, sms: null };
 
@@ -123,23 +136,28 @@ router.post('/booking-rescheduled', requireAuth, async (req, res) => {
     const { data, error } = await resend.emails.send({
       from:    'Wonder World Westgate <bookings@wonderworldwestgate.co.nz>',
       to:      email,
-      subject: `🕐 Party Time Updated — Ref: ${bookingRef}`,
+      subject: `🕐 ${heading} — Ref: ${bookingRef}`,
       html: `
         <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;color:#111827">
           <div style="background:linear-gradient(135deg,#1E3A8A,#2563EB);border-radius:20px;padding:32px;text-align:center;margin-bottom:28px">
             <div style="font-size:40px;margin-bottom:8px">🕐</div>
-            <h1 style="color:white;font-size:24px;font-weight:700;margin:0 0 4px">Party Time Updated!</h1>
+            <h1 style="color:white;font-size:24px;font-weight:700;margin:0 0 4px">${heading}</h1>
             <p style="color:rgba(255,255,255,0.85);margin:0;font-size:14px">Wonder World Westgate</p>
           </div>
 
-          <p style="font-size:15px;margin-bottom:20px">Hi <strong>${firstName}</strong>! We've rescheduled your party to a new time slot. Everything else stays the same — here's what changed:</p>
+          <p style="font-size:15px;margin-bottom:20px">Hi <strong>${firstName}</strong>! We've rescheduled your party. Everything else stays the same — here's what changed:</p>
 
           <div style="background:#F9FAFB;border-radius:16px;padding:24px;margin-bottom:20px">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9CA3AF;margin-bottom:6px">Booking Reference</div>
             <div style="font-size:22px;font-weight:700;color:#1E3A8A;margin-bottom:20px">${bookingRef}</div>
             <table style="width:100%;font-size:14px;border-collapse:collapse">
               <tr><td style="padding:6px 0;color:#6B7280;width:40%">Room</td><td style="font-weight:600">${roomName}</td></tr>
+              ${dateChanged ? `
+              <tr><td style="padding:6px 0;color:#6B7280">Previous date</td><td style="font-weight:600;text-decoration:line-through;color:#9CA3AF">${fmtDate(oldDate)}</td></tr>
+              <tr><td style="padding:6px 0;color:#6B7280">New date</td><td style="font-weight:700;color:#1E3A8A;font-size:16px">${fmtDate(partyDate)}</td></tr>
+              ` : `
               <tr><td style="padding:6px 0;color:#6B7280">Date</td><td style="font-weight:600">${fmtDate(partyDate)}</td></tr>
+              `}
               <tr><td style="padding:6px 0;color:#6B7280">Previous time</td><td style="font-weight:600;text-decoration:line-through;color:#9CA3AF">${oldTime}</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">New time</td><td style="font-weight:700;color:#1E3A8A;font-size:16px">${newTime}</td></tr>
             </table>
@@ -175,7 +193,7 @@ router.post('/booking-rescheduled', requireAuth, async (req, res) => {
       await client.messages.create({
         from: process.env.TWILIO_PHONE_NUMBER,
         to:   nzPhone,
-        body: `Wonder World Westgate: Hi ${firstName}! Your party time has been updated. Ref: ${bookingRef} — ${roomName} on ${fmtDate(partyDate)} is now at ${newTime}. See you soon!`,
+        body: `Wonder World Westgate: Hi ${firstName}! Your party has been rescheduled. Ref: ${bookingRef} — ${roomName} is now on ${fmtDate(partyDate)} at ${newTime}. See you soon!`,
       });
       results.sms = 'sent';
     } catch (err) {

@@ -17,11 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (user) {
       await handleSignedInUser(user);
 
-      // If booking modal was open before Google OAuth redirect, re-open it
+      // If booking modal was open before Google OAuth redirect, re-open it —
+      // openBooking() itself now resumes/advances appropriately since
+      // state.isAuthenticated is already true by this point.
       if (sessionStorage.getItem('ww_booking_intent')) {
         sessionStorage.removeItem('ww_booking_intent');
         openBooking();
-        setTimeout(() => goToStep(1), 300);
       }
     } else {
       handleSignedOut();
@@ -172,7 +173,8 @@ async function handleSignup() {
   // Send email verification (non-blocking)
   cred.user.sendEmailVerification().catch(() => {});
 
-  goToStep(1);
+  if (typeof resumeOrStartWizard === 'function') resumeOrStartWizard();
+  else goToStep(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +188,8 @@ async function handleLogin() {
 
   const cred = await auth.signInWithEmailAndPassword(email, password);
   await handleSignedInUser(cred.user);
-  goToStep(1);
+  if (typeof resumeOrStartWizard === 'function') resumeOrStartWizard();
+  else goToStep(1);
 }
 
 // ---------------------------------------------------------------------------

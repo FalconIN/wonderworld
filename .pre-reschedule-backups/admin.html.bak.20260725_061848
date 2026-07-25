@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Dashboard — Wonder World Westgate</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tailwind-admin.css?v=1" />
+<script>
+  // Apply saved theme before paint to avoid flash
+  (function() {
+    const saved = localStorage.getItem('admin_theme');
+    if (saved === 'dark') document.documentElement.classList.add('dark');
+  })();
+</script>
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<script src="https://js.stripe.com/v3/" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+</head>
+<body class="bg-gray-50 dark:bg-gray-950 font-body transition-colors">
+
+<div class="flex h-screen overflow-hidden">
+  <!-- ── Sidebar backdrop (mobile only) ──────────────────────── -->
+  <div id="adminSidebarBackdrop" class="hidden fixed inset-0 bg-black/50 z-40 md:hidden" onclick="closeAdminSidebar()"></div>
+
+  <!-- ── Sidebar ──────────────────────────────────────────── -->
+  <div id="adminSidebar" class="fixed md:static top-0 left-0 z-50 h-screen md:h-auto w-72 md:w-64 max-w-[85vw] bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-0 flex flex-col flex-shrink-0 transition-transform duration-300 -translate-x-full md:translate-x-0">
+    <div class="p-6 border-b border-gray-200 dark:border-gray-800 flex items-center gap-3">
+      <a href="/" class="flex items-center gap-3 flex-1 min-w-0 hover:opacity-80 transition-colors">
+        <img src="wwmascot-64.png?v=3" class="w-8 h-8 rounded-lg" />
+        <div>
+          <div class="font-display font-bold text-lg text-gray-900 dark:text-white">Wonder World</div>
+          <div class="text-gray-400 text-xs">Admin Dashboard</div>
+        </div>
+      </a>
+      <button onclick="closeAdminSidebar()" class="md:hidden w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 text-xl flex-shrink-0">×</button>
+    </div>
+    <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+      <button onclick="showTab('overview')" id="nav-overview" class="admin-nav-btn active w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📊 Overview</button>
+      <button onclick="showTab('bookings')" id="nav-bookings" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">📋 Bookings</button>
+      <button onclick="showTab('payments')" id="nav-payments" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">💳 Payments</button>
+      <button onclick="showTab('customers')" id="nav-customers" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">👥 Customers</button>
+      <button onclick="showTab('today')" id="nav-today" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">🗓️ Today</button>
+      <button onclick="showTab('reviews')" id="nav-reviews" class="admin-nav-btn w-full text-left px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-3">⭐ Reviews</button>
+    </nav>
+    <div class="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex-shrink-0">
+      <div id="adminUserInfo" class="text-gray-500 dark:text-gray-400 text-xs mb-3"></div>
+      <button onclick="toggleAdminTheme()" class="w-full flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors mb-3 px-1">
+        <span id="themeToggleLabel">🌙 Dark mode</span>
+        <span id="themeToggleIcon" class="text-base">🌞</span>
+      </button>
+      <a href="/" class="text-gray-500 dark:text-gray-400 text-xs hover:text-gray-900 dark:hover:text-white transition-colors block mb-2">← Back to site</a>
+      <button onclick="adminSignOut()" class="text-red-500 dark:text-red-400 text-xs hover:text-red-600 dark:hover:text-red-300 transition-colors">Sign out</button>
+    </div>
+  </div>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <div class="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 transition-colors">
+    <div class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-4 md:px-8 py-4 md:py-5 flex items-center justify-between flex-wrap gap-3 transition-colors">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleAdminSidebar()" class="md:hidden w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xl flex-shrink-0" aria-label="Open menu">☰</button>
+        <div>
+          <h1 id="pageTitle" class="font-display font-bold text-xl md:text-2xl text-gray-900 dark:text-white">Overview</h1>
+          <p id="pageSubtitle" class="text-gray-400 text-xs md:text-sm">Wonder World Westgate booking system</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 md:gap-3 flex-wrap w-full md:w-auto">
+        <input id="searchInput" type="text" placeholder="Search..." class="field flex-1 md:w-52 py-2.5 text-sm" oninput="handleSearch(this.value)" />
+        <button onclick="openAddBookingModal()" class="btn-primary py-2.5 px-5 text-sm">+ Add Booking</button>
+        <button onclick="refreshCurrentTab()" class="btn-secondary py-2.5 px-5 text-sm">↻ Refresh</button>
+      </div>
+    </div>
+
+    <!-- ── OVERVIEW TAB ──────────────────────────────────── -->
+    <div id="tab-overview" class="p-8">
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-5 mb-8">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
+          <div class="text-2xl mb-2">📋</div>
+          <div class="font-display font-bold text-3xl text-gray-900 dark:text-white" id="stat-bookings">—</div>
+          <div class="text-gray-400 text-sm">Total Bookings</div>
+          <div class="text-xs text-red-400 mt-1" id="stat-cancelled-note"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors cursor-pointer hover:shadow-lg" onclick="toggleRevenueChart()" id="revenueCard">
+          <div class="flex items-center justify-between">
+            <div class="text-2xl mb-2">💰</div>
+            <div class="text-gray-300 dark:text-gray-600 text-xs" id="revenueChevron">▼</div>
+          </div>
+          <div class="font-display font-bold text-3xl text-indigo-600" id="stat-revenue">—</div>
+          <div class="text-gray-400 text-sm">Total Revenue <span class="text-gray-300">(click to view chart)</span></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
+          <div class="text-2xl mb-2">👥</div>
+          <div class="font-display font-bold text-3xl text-gray-900 dark:text-white" id="stat-customers">—</div>
+          <div class="text-gray-400 text-sm">Customers</div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
+          <div class="text-2xl mb-2">📅</div>
+          <div class="font-display font-bold text-3xl text-teal" id="stat-upcoming">—</div>
+          <div class="text-gray-400 text-sm">Upcoming Parties</div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors">
+          <div class="text-2xl mb-2">📆</div>
+          <div class="font-display font-bold text-2xl text-indigo-600" id="stat-month-revenue">—</div>
+          <div class="text-gray-400 text-sm">This Month <span id="stat-month-vs" class="text-xs font-semibold ml-1"></span></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-soft transition-colors cursor-pointer hover:shadow-lg" onclick="showTab('today')">
+          <div class="text-2xl mb-2">💵</div>
+          <div class="font-display font-bold text-3xl text-amber-500" id="stat-balances-due">—</div>
+          <div class="text-gray-400 text-sm">Balances Due</div>
+        </div>
+      </div>
+
+      <!-- Revenue per day chart (collapsible) -->
+      <div id="revenueChartPanel" class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-8 transition-colors" style="display:none">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">💰 Revenue Per Day</h2>
+          <select id="revenueChartRange" onchange="renderRevenueChart()" class="field py-2 text-sm w-40">
+            <option value="30">Last 30 days</option>
+            <option value="7">Last 7 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="all">All time</option>
+          </select>
+        </div>
+        <div style="height:280px"><canvas id="revenueChartCanvas"></canvas></div>
+      </div>
+
+      <!-- Bookings per day + room popularity -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">📊 Bookings Per Day</h2>
+          <p class="text-gray-400 text-sm mb-4">How many party rooms are booked, by day, this month</p>
+          <div style="height:260px"><canvas id="bookingsDotChartCanvas"></canvas></div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🏆 Most Booked Room</h2>
+          <p class="text-gray-400 text-sm mb-4">Room popularity this month</p>
+          <div style="height:260px"><canvas id="roomPopularityChartCanvas"></canvas></div>
+        </div>
+      </div>
+      <!-- Food prep + weekend capacity -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🍽️ Food Prep</h2>
+          <p class="text-gray-400 text-sm mb-1" id="foodPrepRangeLabel">Total food needed across all parties in range</p>
+          <div class="flex flex-wrap items-end gap-2 mb-4 mt-3">
+            <div>
+              <label class="lbl text-xs">From</label>
+              <input class="field py-1.5 text-sm" id="foodPrepFrom" type="date" onchange="applyFoodPrepRange()" />
+            </div>
+            <div>
+              <label class="lbl text-xs">To</label>
+              <input class="field py-1.5 text-sm" id="foodPrepTo" type="date" onchange="applyFoodPrepRange()" />
+            </div>
+            <button onclick="setFoodPrepQuickRange('thisWeek')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">This Week</button>
+            <button onclick="setFoodPrepQuickRange('nextWeek')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">Next Week</button>
+            <button onclick="setFoodPrepQuickRange('next7')" class="btn-secondary py-1.5 px-3 text-xs whitespace-nowrap">Next 7 Days</button>
+          </div>
+          <div id="overview-food-prep">Loading...</div>
+        </div>
+        <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">📅 Weekend Capacity</h2>
+          <p class="text-gray-400 text-sm mb-4">Slot fill rate for the next 6 weekends (16 slots/day) — confirmed + pending</p>
+          <div id="overview-weekend-capacity">Loading...</div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">Bookings by Date Range</h2>
+            <p class="text-gray-400 text-sm mt-0.5">Filter bookings between two dates</p>
+          </div>
+          <div class="flex items-end gap-3 flex-wrap">
+            <div>
+              <label class="lbl">From</label>
+              <input class="field" id="overviewRangeFrom" type="date" />
+            </div>
+            <div>
+              <label class="lbl">To</label>
+              <input class="field" id="overviewRangeTo" type="date" />
+            </div>
+            <button onclick="applyOverviewDateRange()" class="btn-primary py-2.5 px-5 whitespace-nowrap">Filter</button>
+            <button onclick="clearOverviewDateRange()" class="btn-secondary py-2.5 px-5 whitespace-nowrap">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white" id="upcomingListTitle">Upcoming Bookings (Next 7 Days)</h2>
+          <div class="flex items-center gap-2">
+            <button onclick="document.getElementById('importFileInput').click()" class="text-xs text-indigo-500 hover:text-indigo-600 font-semibold border border-indigo-200 hover:border-indigo-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📥 Import from Excel
+            </button>
+            <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFile(event)" />
+            <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+              📊 Export to Excel
+            </button>
+          </div>
+        </div>
+        <div id="upcoming-bookings-list">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ── IMPORT PREVIEW MODAL ─────────────────────────────── -->
+    <div id="importModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeImportModal()">
+      <div class="modal-box" style="max-width:900px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+          <h2 class="font-display font-bold text-xl md:text-2xl text-gray-900 dark:text-white">📥 Import Bookings Preview</h2>
+          <button onclick="closeImportModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+        </div>
+        <div id="importSummary" class="text-sm text-gray-600 dark:text-gray-300 mb-4"></div>
+        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+          <table class="admin-table" style="font-size:12px">
+            <thead>
+              <tr id="importTableHead"></tr>
+            </thead>
+            <tbody id="importTableBody"></tbody>
+          </table>
+        </div>
+        <div id="importErrors" class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800" style="display:none"></div>
+        <div class="flex gap-3 mt-5">
+          <button onclick="closeImportModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+          <button onclick="confirmImport()" class="btn-primary flex-1 py-3" id="confirmImportBtn">Import Valid Rows</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BOOKINGS TAB ──────────────────────────────────── -->
+    <div id="tab-bookings" class="p-8" style="display:none">
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
+        <!-- Sub-tab header -->
+        <div class="p-5 border-b border-gray-100 dark:border-gray-800">
+          <!-- Row 1: sub-tab pills + action buttons -->
+          <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div class="flex items-center gap-1">
+              <button onclick="switchBookingsSubTab('upcoming')" id="bst-upcoming"
+                class="bookings-sub-tab active px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                Upcoming <span id="upcoming-badge" class="ml-1 inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+              </button>
+              <button onclick="switchBookingsSubTab('past')" id="bst-past"
+                class="bookings-sub-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                Past <span id="past-badge" class="ml-1 inline-block bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+              </button>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button onclick="document.getElementById('importFileInput').click()" class="text-xs text-indigo-500 hover:text-indigo-600 font-semibold border border-indigo-200 hover:border-indigo-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+                📥 Import from Excel
+              </button>
+              <button onclick="exportBookingsToExcel()" class="text-xs text-teal hover:text-teal-700 font-semibold border border-teal-200 hover:border-teal-300 rounded-lg px-3 py-2 transition-colors flex items-center gap-1.5">
+                📊 Export to Excel
+              </button>
+              <button onclick="clearCancelledBookings()" class="text-xs text-red-500 hover:text-red-600 font-semibold border border-red-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
+                🗑️ Clear Cancelled
+              </button>
+            </div>
+          </div>
+          <!-- Row 2: search + filter + sort -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <input id="bookingsSearchInput" type="text" placeholder="Search ref, email, room..."
+              class="field flex-1 min-w-48 py-2 text-sm" oninput="handleBookingsSearch(this.value)" />
+            <select id="bookingStatusFilter" onchange="applyBookingsStatusFilter()" class="field py-2 text-sm w-40">
+              <option value="">All statuses</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="pending">Pending</option>
+            </select>
+            <select id="bookingsSortOrder" onchange="applyBookingsSort()" class="field py-2 text-sm w-52">
+              <option value="party_date_asc">Party Date — Soonest first</option>
+              <option value="party_date_desc">Party Date — Latest first</option>
+              <option value="created_desc">Date Booked — Newest first</option>
+              <option value="created_asc">Date Booked — Oldest first</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="admin-table" id="bookings-table">
+            <thead>
+              <tr>
+                <th>Dates</th><th>Ref</th><th>Customer</th><th>Room</th><th>Guests</th><th>Total</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bookings-tbody">
+              <tr><td colspan="8" class="text-center text-gray-400 py-8">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PAYMENTS TAB ──────────────────────────────────── -->
+    <div id="tab-payments" class="p-8" style="display:none">
+      <!-- Summary banner -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <div class="flex flex-wrap items-end justify-between gap-4 mb-5">
+          <div>
+            <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white" id="payments-summary-title">📊 This Month</h2>
+            <p class="text-gray-400 text-sm mt-0.5" id="payments-summary-subtitle">Payment traffic overview</p>
+          </div>
+          <div class="flex items-end gap-3 flex-wrap">
+            <div>
+              <label class="lbl">From</label>
+              <input class="field" id="paymentsRangeFrom" type="date" />
+            </div>
+            <div>
+              <label class="lbl">To</label>
+              <input class="field" id="paymentsRangeTo" type="date" />
+            </div>
+            <button onclick="applyPaymentsDateRange()" class="btn-primary py-2.5 px-5 whitespace-nowrap">Filter</button>
+            <button onclick="clearPaymentsDateRange()" class="btn-secondary py-2.5 px-5 whitespace-nowrap">Clear</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">💰</div>
+            <div class="font-display font-bold text-2xl text-indigo-600" id="payments-summary-revenue">—</div>
+            <div class="text-gray-400 text-sm">Revenue</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">🧾</div>
+            <div class="font-display font-bold text-2xl text-gray-900 dark:text-white" id="payments-summary-count">—</div>
+            <div class="text-gray-400 text-sm">Successful Payments</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">📈</div>
+            <div class="font-display font-bold text-2xl text-teal" id="payments-summary-avg">—</div>
+            <div class="text-gray-400 text-sm">Average Payment</div>
+          </div>
+          <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-5 transition-colors">
+            <div class="text-2xl mb-2">↩️</div>
+            <div class="font-display font-bold text-2xl text-amber-500" id="payments-summary-refunds">—</div>
+            <div class="text-gray-400 text-sm">Refunded <span id="payments-summary-refund-count" class="text-xs font-normal"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
+        <!-- Sub-tab header -->
+        <div class="p-5 border-b border-gray-100 dark:border-gray-800">
+          <div class="flex items-center gap-1">
+            <button onclick="switchPaymentsSubTab('stripe')" id="pst-stripe"
+              class="bookings-sub-tab active px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              💳 Payments <span id="stripe-payments-badge" class="ml-1 inline-block bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+            </button>
+            <button onclick="switchPaymentsSubTab('manual')" id="pst-manual"
+              class="bookings-sub-tab px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+              ✍️ Manually Added Bookings <span id="manual-payments-badge" class="ml-1 inline-block bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold">—</span>
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="admin-table" id="payments-table">
+            <thead>
+              <tr>
+                <th>Customer</th><th>Email</th><th>Booking Ref</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="payments-tbody">
+              <tr><td colspan="7" class="text-center text-gray-400 py-8">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CUSTOMERS TAB ─────────────────────────────────── -->
+    <div id="tab-customers" class="p-8" style="display:none">
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft overflow-hidden transition-colors">
+        <div class="p-5 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-4 flex-wrap">
+          <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">All Customers <span id="customers-count" class="text-sm font-normal text-gray-400"></span></h2>
+          <button onclick="deleteSelectedCustomers()" id="delete-customers-btn" class="hidden text-xs text-red-500 hover:text-red-600 font-semibold border border-red-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
+            🗑️ Delete Selected
+          </button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="admin-table" id="customers-table">
+            <thead>
+              <tr>
+                <th class="w-8"><input type="checkbox" id="customers-select-all" onchange="toggleSelectAllCustomers(this.checked)" title="Select all" class="cursor-pointer"></th>
+                <th>Name</th><th>Email</th><th>Number</th><th>Bookings</th><th>Price Paid</th><th>Admin</th>
+              </tr>
+            </thead>
+            <tbody id="customers-tbody">
+              <tr><td colspan="7" class="text-center text-gray-400 py-8">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TODAY TAB ──────────────────────────────────── -->
+    <div id="tab-today" class="p-8" style="display:none">
+      <!-- Run Sheet -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+          <div>
+            <h2 class="font-display font-bold text-xl md:text-2xl text-gray-900 dark:text-white">🗓️ Today's Run Sheet</h2>
+            <p class="text-gray-400 text-sm" id="today-date-label"></p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="printRunSheet()" class="btn-secondary py-2 px-4 text-sm">🖨️ Print</button>
+            <button onclick="loadToday()" class="btn-secondary py-2 px-4 text-sm">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="today-runsheet">Loading...</div>
+      </div>
+      <!-- Allergy Alerts -->
+      <div class="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-2xl p-6 mb-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-amber-800 dark:text-amber-300 mb-1">⚠️ Dietary Alerts — Next 14 Days</h2>
+        <p class="text-amber-600 dark:text-amber-400 text-sm mb-4">Bookings with allergy or dietary notes</p>
+        <div id="today-allergy-alerts">Loading...</div>
+      </div>
+      <!-- Balances Due -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">💵 Balances Due</h2>
+        <p class="text-gray-400 text-sm mb-4">Confirmed bookings with outstanding payment</p>
+        <div id="today-balances-due">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ── REVIEWS TAB ──────────────────────────────────── -->
+    <div id="tab-reviews" class="p-8" style="display:none">
+      <!-- Overall Rating -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 mb-6 transition-colors">
+        <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white mb-1">🌟 Overall Rating</h2>
+        <p class="text-gray-400 text-sm mb-4">Shown on the public site (hero badge + stats strip). Set manually — no longer pulled live from Google.</p>
+        <div id="site-rating-display" class="flex items-center gap-6 flex-wrap">Loading...</div>
+        <div id="site-rating-form" class="flex items-end gap-3 flex-wrap mt-4" style="display:none">
+          <div><label class="lbl">Rating (0–5)</label><input class="field w-28" id="sr_rating" type="number" min="0" max="5" step="0.1" /></div>
+          <div><label class="lbl">Review Count</label><input class="field w-32" id="sr_reviewCount" type="number" min="0" step="1" /></div>
+          <button onclick="saveSiteRating()" class="btn-primary py-2.5 px-5 text-sm">Save</button>
+          <button onclick="cancelEditSiteRating()" class="btn-secondary py-2.5 px-5 text-sm">Cancel</button>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-soft p-6 transition-colors">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 class="font-display font-bold text-xl text-gray-900 dark:text-white">⭐ Google Reviews</h2>
+            <p class="text-gray-400 text-sm">5-star reviews auto-fetched daily from Google Places. Hide any you don't want on the public carousel.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="openPasteReviewsModal()" class="btn-secondary py-2.5 px-5 text-sm">📋 Paste Reviews</button>
+            <button onclick="fetchReviewsNow()" id="fetch-reviews-btn" class="btn-secondary py-2.5 px-5 text-sm">🔄 Fetch now</button>
+          </div>
+        </div>
+        <div id="reviews-list">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PASTE REVIEWS MODAL ────────────────────────────────── -->
+<div id="pasteReviewsModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePasteReviewsModal()">
+  <div class="modal-box" style="max-width:900px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-xl md:text-2xl text-gray-900 dark:text-white">📋 Paste Reviews</h2>
+      <button onclick="closePasteReviewsModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+    <div id="pasteReviewsStep1">
+      <p class="text-sm text-gray-500 mb-3">Paste review text copied straight off Google Maps (select a chunk of the reviews panel and copy — it can include multiple reviews, owner replies, "Local Guide" tags, etc., the parser will sort it out). Google doesn't include star ratings in copied text, so every parsed review defaults to 5★ — check the preview and adjust any that shouldn't be.</p>
+      <textarea id="pasteReviewsInput" class="field" style="min-height:220px;font-family:inherit" placeholder="Paste reviews here..."></textarea>
+      <div class="flex gap-3 mt-4">
+        <button onclick="closePasteReviewsModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="parsePastedReviews()" class="btn-primary flex-1 py-3">Parse</button>
+      </div>
+    </div>
+    <div id="pasteReviewsStep2" style="display:none">
+      <div id="pasteReviewsSummary" class="text-sm text-gray-600 dark:text-gray-300 mb-4"></div>
+      <div id="pasteReviewsPreview" class="space-y-3"></div>
+      <div class="flex gap-3 mt-5">
+        <button onclick="backToPasteInput()" class="btn-secondary flex-1 py-3">Back</button>
+        <button onclick="confirmReviewsImport()" class="btn-primary flex-1 py-3" id="confirmReviewsImportBtn">Import Reviews</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Booking Detail Modal ──────────────────────────────── -->
+<div id="bookingDetailModal" class="modal-overlay" style="display:none" onclick="closeBookingModal()">
+  <div class="modal-box" style="max-width:580px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">Booking Details</h2>
+      <button onclick="closeBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+    <div id="bookingDetailContent"></div>
+  </div>
+</div>
+
+<!-- ── Reschedule Modal ───────────────────────────────────── -->
+<div id="rescheduleModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRescheduleModal()">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">Reschedule Time</h2>
+      <button onclick="closeRescheduleModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+    <div id="rescheduleContent"></div>
+  </div>
+</div>
+
+<!-- ── Add Booking Modal ─────────────────────────────────── -->
+<div id="addBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddBookingModal()">
+  <div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">➕ Add Manual Booking</h2>
+      <button onclick="closeAddBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Customer info -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👤 Customer Details</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">First Name</label><input class="field" id="ab_firstName" placeholder="Sarah" /></div>
+          <div><label class="lbl">Last Name</label><input class="field" id="ab_lastName" placeholder="Thompson" /></div>
+        </div>
+        <div><label class="lbl">Email</label><input class="field" id="ab_email" type="email" placeholder="sarah@example.co.nz" /></div>
+        <div><label class="lbl">Phone</label><input class="field" id="ab_phone" placeholder="021 234 5678" /></div>
+      </div>
+
+      <!-- Room -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🎉 Party Room</div>
+        <div>
+          <label class="lbl">Number of Kids</label>
+          <input class="field" id="ab_guests" type="number" min="1" max="24" value="10" onchange="abOnGuestsChange()" />
+        </div>
+        <div id="ab_roomCards" class="space-y-2"></div>
+      </div>
+
+      <!-- Date & Time -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📅 Date & Time</div>
+        <div><label class="lbl">Party Date</label><input class="field" id="ab_date" type="date" onchange="abUpdateTimeSlots()" /></div>
+        <div>
+          <label class="lbl">Available Time Slots</label>
+          <div id="ab_timeSlotGrid" class="grid grid-cols-2 gap-2 mt-1">
+            <div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room and date first</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Food split -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
+        <div class="text-xs text-gray-400">Must add up to <span id="ab_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍗</div>
+            <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
+            <input type="number" min="0" id="ab_nuggetCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
+          </div>
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍔</div>
+            <div class="font-semibold text-xs mb-2">Mini Burger</div>
+            <input type="number" min="0" id="ab_burgerCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
+          </div>
+        </div>
+        <div id="ab_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
+        <div><label class="lbl">Allergy / Notes</label><textarea class="field" id="ab_notes" rows="2" placeholder="Any allergies or special requests..."></textarea></div>
+      </div>
+
+      <!-- Add-ons -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons (optional)</div>
+        <div id="ab_addonsList" class="space-y-2"></div>
+      </div>
+
+      <!-- Admin notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Admin Notes</div>
+        <div class="text-xs text-gray-400">Internal only — not visible to customer</div>
+        <textarea class="field" id="ab_adminNotes" rows="2" placeholder="Internal notes for staff only..."></textarea>
+      </div>
+
+      <!-- Order summary -->
+      <div class="bg-indigo-light rounded-2xl p-4">
+        <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
+        <div id="ab_orderSummary" class="space-y-1.5 text-sm text-indigo-800">
+          <div class="text-indigo-400">Select a room and guests to see pricing</div>
+        </div>
+      </div>
+
+      <!-- Payment -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💰 Payment</div>
+        <div>
+          <label class="lbl">Amount Paid Today ($)</label>
+          <input class="field" id="ab_amountPaid" type="number" min="0" step="0.01" placeholder="Leave blank for full payment" oninput="abUpdateBalanceDue()" />
+          <div id="ab_balanceDue" class="hidden mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold"></div>
+        </div>
+        <div>
+          <label class="lbl">Booking Status</label>
+          <select class="field" id="ab_status">
+            <option value="confirmed">Confirmed</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="addBookingError" class="text-red-500 text-sm hidden"></div>
+
+      <div class="flex gap-3">
+        <button onclick="closeAddBookingModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="submitAddBooking()" class="btn-primary flex-1 py-3" id="addBookingBtn">
+          <span id="addBookingBtnText">Create Booking</span>
+          <span id="addBookingBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Booking Modal ─────────────────────────────────── -->
+<div id="editBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeEditBookingModal()">
+  <div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+      <div>
+        <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">✏️ Edit Booking</h2>
+        <div class="text-xs text-gray-400 font-mono mt-0.5" id="eb_bookingRef"></div>
+      </div>
+      <button onclick="closeEditBookingModal()" class="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 hover:bg-gray-200">×</button>
+    </div>
+
+    <div class="space-y-4">
+      <!-- Customer details -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👤 Customer Details</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">First Name</label><input class="field" id="eb_firstName" placeholder="Sarah" /></div>
+          <div><label class="lbl">Last Name</label><input class="field" id="eb_lastName" placeholder="Thompson" /></div>
+        </div>
+        <div><label class="lbl">Email</label><input class="field" id="eb_email" type="email" placeholder="sarah@example.co.nz" /></div>
+        <div><label class="lbl">Phone</label><input class="field" id="eb_phone" placeholder="021 234 5678" /></div>
+      </div>
+
+      <!-- Guests -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">👥 Number of Kids</div>
+        <input class="field" id="eb_guests" type="number" min="1" max="24" onchange="ebOnGuestsChange()" />
+      </div>
+
+      <!-- Food split -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
+        <div class="text-xs text-gray-400">Must add up to <span id="eb_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍗</div>
+            <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ebChangeFoodSplit('nuggets', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_nuggetCount">0</span>
+              <button onclick="ebChangeFoodSplit('nuggets', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🍔</div>
+            <div class="font-semibold text-xs mb-2">Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ebChangeFoodSplit('burgers', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_burgerCount">0</span>
+              <button onclick="ebChangeFoodSplit('burgers', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+        </div>
+        <div id="eb_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
+      </div>
+
+      <!-- Add-ons -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons</div>
+        <div id="eb_addonsList" class="space-y-2"></div>
+      </div>
+
+      <!-- Notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Allergy / Notes</div>
+        <textarea class="field" id="eb_notes" rows="2" placeholder="Any allergies or special requests..."></textarea>
+      </div>
+
+      <!-- Admin notes -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">📝 Admin Notes</div>
+        <div class="text-xs text-gray-400">Internal only — not visible to customer</div>
+        <textarea class="field" id="eb_adminNotes" rows="2" placeholder="Internal notes for staff only..."></textarea>
+      </div>
+
+      <!-- Payment -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">💳 Payment</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="lbl">Status</label>
+            <select class="field" id="eb_status">
+              <option value="confirmed">Confirmed</option>
+              <option value="pending">Pending</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label class="lbl">Amount Paid ($)</label>
+            <input class="field" id="eb_amountPaid" type="number" min="0" step="0.01" placeholder="0.00" oninput="ebUpdateBalanceDue()" />
+          </div>
+        </div>
+        <div id="eb_balanceDue" class="hidden bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold"></div>
+      </div>
+
+      <!-- Order summary -->
+      <div class="bg-indigo-light rounded-2xl p-4">
+        <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Updated Order Summary</div>
+        <div id="eb_orderSummary" class="space-y-1.5 text-sm text-indigo-800"></div>
+      </div>
+
+      <div id="editBookingError" class="text-red-500 text-sm hidden"></div>
+
+      <div class="flex gap-3">
+        <button onclick="closeEditBookingModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+        <button onclick="submitEditBooking()" class="btn-primary flex-1 py-3" id="editBookingBtn">
+          <span id="editBookingBtnText">Save Changes</span>
+          <span id="editBookingBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Room Photo Lightbox ────────────────────────────────── -->
+<div id="roomPhotoOverlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeRoomPhoto()">
+  <div class="relative w-full" style="max-width:480px" onclick="event.stopPropagation()">
+    <button onclick="closeRoomPhoto()" class="absolute -top-4 -right-4 w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-600 hover:bg-gray-100 shadow-lg text-xl z-10">×</button>
+    <img id="roomPhotoImg" src="" alt="" class="w-full rounded-2xl shadow-2xl" style="max-height:80vh;object-fit:contain;background:#111" />
+    <div id="roomPhotoCaption" class="text-center mt-3 font-display font-semibold text-white"></div>
+  </div>
+</div>
+
+<style>
+  .admin-nav-btn { color: #6B7280; transition: all .2s; }
+  .admin-nav-btn:hover { background: rgba(79,70,229,.08); color: #1F2937; }
+  .admin-nav-btn.active { background: rgba(79,70,229,.12); color: #4F46E5; }
+  html.dark .admin-nav-btn { color: #9CA3AF; }
+  html.dark .admin-nav-btn:hover { background: rgba(255,255,255,.05); color: white; }
+  html.dark .admin-nav-btn.active { background: rgba(79,70,229,.2); color: #A5B4FC; }
+
+  .bookings-sub-tab { color: #6B7280; transition: all .15s; }
+  .bookings-sub-tab:hover { background: rgba(79,70,229,.07); color: #1F2937; }
+  .bookings-sub-tab.active { background: rgba(79,70,229,.1); color: #4F46E5; font-weight: 700; }
+  html.dark .bookings-sub-tab { color: #9CA3AF; }
+  html.dark .bookings-sub-tab:hover { background: rgba(255,255,255,.05); color: white; }
+  html.dark .bookings-sub-tab.active { background: rgba(79,70,229,.2); color: #A5B4FC; }
+
+  @media print {
+    #adminSidebar, .bg-white.border-b, button, input, select { display: none !important; }
+    #tab-today { display: block !important; padding: 0 !important; }
+    #tab-overview, #tab-bookings, #tab-payments, #tab-customers { display: none !important; }
+    .bg-white, .dark\:bg-gray-900 { box-shadow: none !important; }
+    body { background: white !important; }
+  }
+
+  /* ── Mobile sidebar drawer ──────────────────────────────── */
+  #adminSidebar.sidebar-open { transform: translateX(0) !important; }
+
+  /* ── Mobile: responsive card-style tables ───────────────── */
+  @media (max-width: 640px) {
+    .admin-table thead { display: none; }
+    .admin-table, .admin-table tbody, .admin-table tr, .admin-table td { display: block; width: 100%; }
+    .admin-table tr {
+      border: 1px solid #E5E7EB;
+      border-radius: 1rem;
+      margin: 0 0 12px 0;
+      padding: 4px 12px;
+      background: white;
+    }
+    html.dark .admin-table tr { border-color: var(--dk-bg3); background: var(--dk-bg2); }
+    .admin-table td {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      text-align: right;
+      padding: 8px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    html.dark .admin-table td { border-bottom-color: var(--dk-bg3); }
+    .admin-table tr td:last-child { border-bottom: none; }
+    .admin-table td:empty { display: none; }
+    .admin-table td[data-label]::before {
+      content: attr(data-label);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: #9CA3AF;
+      text-align: left;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+    /* Import preview table keeps horizontal scroll instead — dynamic/unknown columns */
+    #importModal .admin-table thead { display: table-header-group; }
+    #importModal .admin-table, #importModal .admin-table tbody, #importModal .admin-table tr, #importModal .admin-table td {
+      display: revert;
+      width: revert;
+    }
+    #importModal .admin-table tr { border: none; margin: 0; padding: 0; background: transparent; }
+    #importModal .admin-table td { display: table-cell; border-bottom: 1px solid #F3F4F6; padding: 8px 10px; text-align: left; }
+    #importModal .admin-table td::before { content: none; }
+  }
+
+  /* ── Mobile: bigger tap targets ──────────────────────────── */
+  @media (max-width: 640px) {
+    .modal-box button.w-7.h-7 { width: 2.25rem; height: 2.25rem; }
+  }
+</style>
+
+<script src="firebase.js" defer></script>
+<script src="admin.js?v=38" defer></script>
+</body>
+</html>

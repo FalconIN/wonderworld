@@ -168,6 +168,37 @@ CREATE TRIGGER set_payments_updated_at
   BEFORE UPDATE ON public.payments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+-- ── 5c. BOOKING_SESSIONS ─────────────────────────────────────
+-- In-progress wizard drafts, keyed by the (Firebase-verified) customer uid.
+-- Lets the wizard resume where a customer left off within a 15-minute window
+-- instead of starting over, and caps them to one active attempt at a time.
+-- Not the source of truth for a booking — that's still `bookings`, only ever
+-- written after payment is verified. `expires_at` is fixed at creation and
+-- never extended, so a session always dies exactly 15 minutes after it opened
+-- regardless of autosave activity.
+CREATE TABLE IF NOT EXISTS public.booking_sessions (
+  id           uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id      text        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  booking_ref  text        NOT NULL UNIQUE,
+  wizard_state jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  status       text        NOT NULL DEFAULT 'active'
+                            CHECK (status IN ('active', 'completed', 'expired')),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at   timestamptz NOT NULL DEFAULT (now() + interval '15 minutes')
+);
+
+-- Enforces "max 1 active attempt per customer" at the DB level.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_booking_sessions_active_user
+  ON public.booking_sessions (user_id) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_booking_sessions_expires
+  ON public.booking_sessions (expires_at) WHERE status = 'active';
+
+DROP TRIGGER IF EXISTS set_booking_sessions_updated_at ON public.booking_sessions;
+CREATE TRIGGER set_booking_sessions_updated_at
+  BEFORE UPDATE ON public.booking_sessions
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 -- ── 6. EMAIL_LOGS ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.email_logs (
   id         uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -195,12 +226,16 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   changed_by         text          NOT NULL REFERENCES public.users(id),
-  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule')),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit')),
   delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
   new_guest_count    integer,
   new_food_choice    text,
   new_addons_summary text,
   payment_intent_id  text,
+  old_party_date     date,
+  old_party_time     text,
+  new_party_date     date,
+  new_party_time     text,
   created_at         timestamptz   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_booking_edits_booking ON public.booking_edits (booking_id);
@@ -216,6 +251,17 @@ CREATE TABLE IF NOT EXISTS public.google_reviews (
   time              bigint        NOT NULL,
   profile_photo_url text,
   visible           boolean       NOT NULL DEFAULT true,
+  is_manual         boolean       NOT NULL DEFAULT false,  -- true for admin-pasted reviews (not from the Places API sync)
   created_at        timestamptz   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_google_reviews_visible_time ON public.google_reviews (visible, time DESC);
+
+-- ── 10. SITE_RATING ─────────────────────────────────────────
+-- Single admin-editable row for the aggregate rating shown on the public site
+-- (replaces a live Google Places lookup — admin sets this manually).
+CREATE TABLE IF NOT EXISTS public.site_rating (
+  id           integer      PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  rating       numeric(2,1) NOT NULL,
+  review_count integer      NOT NULL DEFAULT 0,
+  updated_at   timestamptz  NOT NULL DEFAULT now()
+);

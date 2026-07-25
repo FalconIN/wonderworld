@@ -34,6 +34,8 @@ async function checkAfterPayReturn() {
     addons:          pending.addons || {},
     calculatedTotal: pending.calculatedTotal,
     bookingRef:      pending.bookingRef,
+    sessionId:       pending.sessionId,
+    sessionExpiresAt: pending.sessionExpiresAt,
     slotHoldId:      pending.slotHoldId,
     confirmEmail:    pending.confirmEmail,
     confirmPhone:    pending.confirmPhone,
@@ -218,6 +220,16 @@ async function mountStripeElements() {
   const wrapper = document.getElementById('stripe-payment-wrapper');
   if (!wrapper) return;
 
+  // bookingRef comes from the booking session opened when the wizard started
+  // (resumeOrStartWizard, booking.js) — if it's missing here, the session
+  // never opened and this booking shouldn't proceed silently under a fake
+  // placeholder ref (that's exactly what used to make every PaymentIntent
+  // description read "PENDING" in the Stripe dashboard).
+  if (!state.bookingRef) {
+    wrapper.innerHTML = '<div class="text-red-500 text-sm text-center py-4">Could not start payment — please close and reopen the booking wizard.</div>';
+    return;
+  }
+
   wrapper.innerHTML = '<div class="text-gray-400 text-sm text-center py-6">Loading payment options...</div>';
 
   try {
@@ -227,7 +239,7 @@ async function mountStripeElements() {
       guestCount:    state.guests,
       addonsAmount:  getAddonTotal(),
       currency:      'nzd',
-      bookingRef:    state.bookingRef || 'PENDING',
+      bookingRef:    state.bookingRef,
       customerEmail: state.user?.email || '',
       metadata: {
         room:   state.selectedRoom?.name || '',
@@ -310,6 +322,8 @@ async function processStripePayment() {
     addons:          state.addons,
     calculatedTotal: state.calculatedTotal,
     bookingRef:      state.bookingRef,
+    sessionId:       state.sessionId,
+    sessionExpiresAt: state.sessionExpiresAt,
     slotHoldId:      state.slotHoldId,
     user:            state.user,
     confirmEmail:    state.confirmEmail,

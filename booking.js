@@ -285,12 +285,16 @@ async function createSlotHold(slot) {
   if (!state.partyRoomDbId || !state.selectedDate) return;
 
   try {
-    const { holdId } = await callAPI('slots/hold', {
+    const { holdId, expiresAt } = await callAPI('slots/hold', {
       roomId: state.partyRoomDbId,
       date:   state.selectedDate,
       slot,
     });
     state.slotHoldId = holdId;
+    // The server sets the hold's expiry equal to the booking session's —
+    // refresh our copy from it (the authoritative source) rather than
+    // assuming it still matches what we cached when the session opened.
+    if (expiresAt) startSessionTimer(expiresAt);
     startTimer();
   } catch (err) {
     showFieldError(err.message.includes('just taken')
@@ -308,6 +312,191 @@ async function releaseSlotHold(holdId) {
     await callAPI(`slots/hold/${holdId}`, null, 'DELETE');
   } catch { /* best-effort */ }
   state.slotHoldId = null;
+}
+
+// ---------------------------------------------------------------------------
+// Booking session — resume an in-progress attempt within 15 minutes instead
+// of starting over, and cap customers to one active attempt at a time.
+// Backed by server/routes/bookingSessions.js.
+// ---------------------------------------------------------------------------
+function getWizardStateSnapshot() {
+  return {
+    currentStep:   state.currentStep,
+    guests:        state.guests,
+    selectedRoom:  state.selectedRoom,
+    partyRoomDbId: state.partyRoomDbId,
+    selectedDate:  state.selectedDate,
+    selectedTime:  state.selectedTime,
+    slotHoldId:    state.slotHoldId,
+    isWeekend:     state.isWeekend,
+    selectedFood:  state.selectedFood,
+    foodSplit:     state.foodSplit,
+    allergyNotes:  document.getElementById('allergyNotes')?.value ?? state.allergyNotes,
+    addons:        state.addons,
+    sodaTypes:     state.sodaTypes,
+    nuggetTypes:   state.nuggetTypes,
+    pizzaTypes:    state.pizzaTypes,
+    confirmEmail:  state.confirmEmail,
+    confirmPhone:  state.confirmPhone,
+  };
+}
+
+// Re-paints step DOM from a restored wizard_state blob. Reuses the same
+// render functions the wizard already calls as the customer clicks through
+// (renderRooms, repaintAddons, the soda/nugget/pizza picker updaters) so this
+// stays in sync with however those steps normally render.
+function hydrateWizardUI(saved) {
+  Object.assign(state, saved);
+
+  const gc = document.getElementById('guestCount');
+  if (gc) gc.textContent = state.guests;
+  renderRooms();
+
+  if (state.selectedDate) {
+    const dateInput = document.getElementById('partyDate');
+    if (dateInput) dateInput.value = state.selectedDate;
+    fetchAndRenderSlots(state.selectedDate);
+    subscribeToSlotChanges(state.selectedDate);
+    const step2Next = document.getElementById('step2Next');
+    if (step2Next) step2Next.disabled = !state.selectedTime;
+    if (state.slotHoldId) startTimer();
+  }
+
+  if (state.foodSplit) {
+    const { nuggets = 0, burgers = 0, veges = 0 } = state.foodSplit;
+    const total = nuggets + burgers + veges;
+    const nuggetEl = document.getElementById('nuggetCount');
+    const burgerEl = document.getElementById('burgerCount');
+    const vegeEl   = document.getElementById('vegeCount');
+    if (nuggetEl) nuggetEl.textContent = nuggets;
+    if (burgerEl) burgerEl.textContent = burgers;
+    if (vegeEl)   vegeEl.textContent   = veges;
+    const totalEl = document.getElementById('foodSplitTotal');
+    if (totalEl) totalEl.textContent = `${total} / ${state.guests} selected`;
+    const atMax = total >= state.guests;
+    ['nuggetPlus', 'burgerPlus', 'vegePlus'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) btn.disabled = atMax;
+    });
+  }
+
+  if (typeof repaintAddons === 'function') repaintAddons();
+
+  const allergyNotesEl = document.getElementById('allergyNotes');
+  if (allergyNotesEl) allergyNotesEl.value = state.allergyNotes || '';
+
+  const emailField = document.getElementById('confirmEmail');
+  if (emailField) emailField.value = state.confirmEmail || state.user?.email || '';
+  const phoneField = document.getElementById('confirmPhone');
+  if (phoneField) phoneField.value = state.confirmPhone || '';
+}
+
+// Called from openBooking() once the customer is authenticated — replaces an
+// unconditional resetWizard() with "resume if there's an active attempt,
+// otherwise start fresh."
+async function resumeOrStartWizard() {
+  let result;
+  try {
+    result = await callAPI('booking-sessions/open', null, 'POST');
+  } catch (err) {
+    // Session service unavailable — fall back to today's behavior rather
+    // than blocking the customer from booking at all.
+    console.error('Could not open booking session:', err);
+    resetWizard();
+    return;
+  }
+
+  const { sessionId, bookingRef, resumed, wizardState, expiresAt, holdExpired } = result;
+
+  if (resumed && wizardState && Object.keys(wizardState).length > 0) {
+    for (let i = 0; i <= 6; i++) {
+      const el = document.getElementById('step' + i);
+      if (el) el.style.display = 'none';
+    }
+
+    state.sessionId = sessionId;
+    state.bookingRef = bookingRef;
+    state.sessionExpiresAt = expiresAt;
+    hydrateWizardUI(wizardState);
+
+    if (holdExpired) {
+      showFieldError('Your held time slot expired while you were away — please pick a new one.');
+    }
+
+    const resumeStep = holdExpired ? Math.min(state.currentStep || 1, 2) : (state.currentStep || 1);
+    state.currentStep = 0;
+    goToStep(Math.max(resumeStep, 1));
+  } else {
+    resetWizard();
+    state.sessionId = sessionId;
+    state.bookingRef = bookingRef;
+    state.sessionExpiresAt = expiresAt;
+  }
+
+  startSessionTimer(state.sessionExpiresAt);
+}
+
+// Autosaved on every step transition (see goToStep in app.js) — not on every
+// keystroke, so at most a handful of calls per attempt.
+async function saveSessionState() {
+  if (!state.sessionId) return;
+  try {
+    await callAPI(`booking-sessions/${state.sessionId}`, { wizardState: getWizardStateSnapshot() }, 'PATCH');
+  } catch (err) {
+    if (err.status === 410) {
+      state.sessionId = null;
+      stopSessionTimer();
+      showFieldError('Your booking attempt timed out — starting a fresh attempt.');
+      if (typeof resumeOrStartWizard === 'function') resumeOrStartWizard();
+      else resetWizard();
+    }
+    // Other failures are non-fatal — the next step transition will retry.
+  }
+}
+
+// Single ticking engine for BOTH the "attempt expires in" countdown and the
+// "room hold expires" bar — the server sets a slot hold's hold_expires_at
+// equal to the booking session's expires_at (see POST /api/slots/hold), so
+// there's exactly one deadline for the whole wizard attempt. Both displays
+// are painted from that same `expiresAt` value on every tick instead of
+// running independent countdowns, which is what let them drift apart.
+let sessionTimerInterval = null;
+function startSessionTimer(expiresAt) {
+  stopSessionTimer();
+  if (!expiresAt) return;
+  state.sessionExpiresAt = expiresAt;
+
+  const sessionEl      = document.getElementById('sessionCountdown');
+  const sessionDisplay = document.getElementById('sessionCountdownDisplay');
+  const holdBar        = document.getElementById('timerBar');
+  const holdDisplay     = document.getElementById('timerDisplay');
+
+  const tick = () => {
+    const remainingMs = new Date(expiresAt).getTime() - Date.now();
+    const totalSec = Math.max(0, Math.floor(remainingMs / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    const txt = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+    if (sessionDisplay) sessionDisplay.textContent = txt;
+    if (holdDisplay)    holdDisplay.textContent = txt;
+    if (holdBar)         holdBar.classList.toggle('urgent', totalSec <= 120);
+
+    if (remainingMs <= 0) {
+      stopSessionTimer();
+      handleTimerExpiry();
+    }
+  };
+
+  if (sessionEl) sessionEl.style.display = 'block';
+  tick();
+  sessionTimerInterval = setInterval(tick, 1000);
+}
+
+function stopSessionTimer() {
+  clearInterval(sessionTimerInterval);
+  const el = document.getElementById('sessionCountdown');
+  if (el) el.style.display = 'none';
 }
 
 // ---------------------------------------------------------------------------
@@ -333,11 +522,12 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
   const addonsAmount = getAddonTotal();
   const baseAmount   = amountPaid - addonsAmount;
 
-  const bookingRef = 'WW-' + Math.random().toString(36).slice(2, 8).toUpperCase();
-  state.bookingRef = bookingRef;
-
+  // bookingRef comes from the booking session opened when the wizard started
+  // (see resumeOrStartWizard) — reused as-is so the ref Stripe/POLi saw during
+  // payment matches what lands in the bookings table, instead of minting a
+  // fresh one here that would never match.
   const { bookingId } = await callAPI('bookings', {
-    bookingRef,
+    bookingRef: state.bookingRef,
     roomId:                  state.partyRoomDbId,
     roomSlug:                state.selectedRoom?.id,
     partyDate:               state.selectedDate,
@@ -388,6 +578,11 @@ async function finaliseBooking() {
     // Save confirmed booking
     const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
     state.bookingId = bookingId;
+
+    // Booking succeeded — the server also marks the session completed, but
+    // stop autosaving locally regardless so no further PATCHes fire.
+    state.sessionId = null;
+    stopSessionTimer();
 
     // Trigger Edge Functions: email + SMS
     const addonLines = getAddonSummaryLines();
@@ -457,7 +652,7 @@ const ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
   drinks_soda:     { label: 'Soft Drink', price: 10 },
-  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)', price: 27 },
+  nuggets_extra:   { label: 'Extra Nuggets — 15pc or 10pc + Fries', price: 20 },
 };
 
 function changeAddon(id, delta) {
@@ -487,24 +682,24 @@ function changeAddon(id, delta) {
     updateSodaPickerUI();
   }
 
-  if (id === 'drinks_juice') {
-    const picker = document.getElementById('juiceTypePicker');
+  if (id === 'nuggets_extra') {
+    const picker = document.getElementById('nuggetTypePicker');
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
-      state.juiceTypes = {};
-    } else if (state.juiceTypes) {
+      state.nuggetTypes = {};
+    } else if (state.nuggetTypes) {
       // Trim allocated total down to new qty
-      let total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+      let total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
       let excess = total - next;
-      const types = Object.keys(state.juiceTypes);
+      const types = Object.keys(state.nuggetTypes);
       for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
-        const cut = Math.min(state.juiceTypes[types[i]], excess);
-        state.juiceTypes[types[i]] -= cut;
+        const cut = Math.min(state.nuggetTypes[types[i]], excess);
+        state.nuggetTypes[types[i]] -= cut;
         excess -= cut;
-        if (state.juiceTypes[types[i]] === 0) delete state.juiceTypes[types[i]];
+        if (state.nuggetTypes[types[i]] === 0) delete state.nuggetTypes[types[i]];
       }
     }
-    updateJuicePickerUI();
+    updateNuggetPickerUI();
   }
 
   if (id === 'pizza_11') {
@@ -527,6 +722,28 @@ function changeAddon(id, delta) {
     updatePizzaPickerUI();
   }
 
+  updateAddonSubtotal();
+  renderOrderSummary();
+}
+
+// Repaints every addon counter + sub-picker from state — used when hydrating
+// a resumed booking session, where state is restored programmatically rather
+// than built up one click at a time via changeAddon().
+function repaintAddons() {
+  if (!state.addons) return;
+  Object.keys(ADDON_PRICES).forEach(id => {
+    const el = document.getElementById('addon_' + id);
+    if (el) el.textContent = state.addons[id] || 0;
+  });
+  const pizzaPicker = document.getElementById('pizzaTypePicker');
+  if (pizzaPicker) pizzaPicker.classList.toggle('hidden', !(state.addons.pizza_11 > 0));
+  const sodaPicker = document.getElementById('sodaTypePicker');
+  if (sodaPicker) sodaPicker.classList.toggle('hidden', !(state.addons.drinks_soda > 0));
+  const nuggetPicker = document.getElementById('nuggetTypePicker');
+  if (nuggetPicker) nuggetPicker.classList.toggle('hidden', !(state.addons.nuggets_extra > 0));
+  updatePizzaPickerUI();
+  updateSodaPickerUI();
+  updateNuggetPickerUI();
   updateAddonSubtotal();
   renderOrderSummary();
 }
@@ -561,33 +778,33 @@ function changeSodaType(type, delta) {
   renderOrderSummary();
 }
 
-function updateJuicePickerUI() {
-  if (!state.juiceTypes) state.juiceTypes = {};
-  const qty = state.addons?.drinks_juice || 0;
-  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+function updateNuggetPickerUI() {
+  if (!state.nuggetTypes) state.nuggetTypes = {};
+  const qty = state.addons?.nuggets_extra || 0;
+  const total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
   const atMax = total >= qty;
-  const typeIds = { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
+  const typeIds = { '15pc': '15pc', '10pc + Fries': '10pcFries' };
   Object.entries(typeIds).forEach(([type, id]) => {
-    const qtyEl = document.getElementById('juiceQty_' + id);
-    if (qtyEl) qtyEl.textContent = state.juiceTypes[type] || 0;
-    const plusEl = document.getElementById('juicePlus_' + id);
+    const qtyEl = document.getElementById('nuggetQty_' + id);
+    if (qtyEl) qtyEl.textContent = state.nuggetTypes[type] || 0;
+    const plusEl = document.getElementById('nuggetPlus_' + id);
     if (plusEl) {
       plusEl.classList.toggle('opacity-30', atMax);
       plusEl.classList.toggle('pointer-events-none', atMax);
     }
   });
-  const counter = document.getElementById('juiceTypeCounter');
+  const counter = document.getElementById('nuggetTypeCounter');
   if (counter) counter.textContent = `${total} / ${qty} allocated`;
 }
 
-function changeJuiceType(type, delta) {
-  if (!state.juiceTypes) state.juiceTypes = {};
-  const qty = state.addons?.drinks_juice || 0;
-  const total = Object.values(state.juiceTypes).reduce((s, v) => s + v, 0);
+function changeNuggetType(type, delta) {
+  if (!state.nuggetTypes) state.nuggetTypes = {};
+  const qty = state.addons?.nuggets_extra || 0;
+  const total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
   if (delta > 0 && total >= qty) return;
-  const next = Math.max(0, (state.juiceTypes[type] || 0) + delta);
-  if (next === 0) delete state.juiceTypes[type]; else state.juiceTypes[type] = next;
-  updateJuicePickerUI();
+  const next = Math.max(0, (state.nuggetTypes[type] || 0) + delta);
+  if (next === 0) delete state.nuggetTypes[type]; else state.nuggetTypes[type] = next;
+  updateNuggetPickerUI();
   renderOrderSummary();
 }
 
@@ -658,9 +875,9 @@ function getAddonSummaryLines() {
         const parts = Object.entries(state.sodaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
         label = 'Soft Drink (' + parts.join(', ') + ')';
       }
-      if (id === 'drinks_juice' && state.juiceTypes && Object.keys(state.juiceTypes).length > 0) {
-        const parts = Object.entries(state.juiceTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
-        label = 'Juice Jug (' + parts.join(', ') + ')';
+      if (id === 'nuggets_extra' && state.nuggetTypes && Object.keys(state.nuggetTypes).length > 0) {
+        const parts = Object.entries(state.nuggetTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
+        label = 'Nuggets (' + parts.join(', ') + ')';
       }
       if (id === 'pizza_11' && state.pizzaTypes && Object.keys(state.pizzaTypes).length > 0) {
         const parts = Object.entries(state.pizzaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
@@ -705,52 +922,32 @@ function renderOrderSummary() {
 // ---------------------------------------------------------------------------
 // Timer
 // ---------------------------------------------------------------------------
-let timerInterval = null;
-let timerSeconds  = 15 * 60;
-
+// The room-hold bar's actual ticking is driven by startSessionTimer() above
+// (same shared expiresAt) — this just shows/hides the bar itself.
 function startTimer() {
-  clearInterval(timerInterval);
-  timerSeconds = 15 * 60;
-  document.getElementById('timerContainer').style.display = 'block';
-  updateTimerDisplay();
-  timerInterval = setInterval(() => {
-    timerSeconds--;
-    updateTimerDisplay();
-    if (timerSeconds <= 0) {
-      clearInterval(timerInterval);
-      handleTimerExpiry();
-    }
-  }, 1000);
+  const tc = document.getElementById('timerContainer');
+  if (tc) tc.style.display = 'block';
 }
 
-function updateTimerDisplay() {
-  const m   = Math.floor(timerSeconds / 60);
-  const s   = timerSeconds % 60;
-  const txt = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  const display = document.getElementById('timerDisplay');
-  if (display) display.textContent = txt;
-  const bar = document.getElementById('timerBar');
-  if (bar) {
-    if (timerSeconds <= 120) bar.classList.add('urgent');
-    else bar.classList.remove('urgent');
-  }
-}
-
+// Fires once when the shared deadline (booking session + room hold, always
+// the same instant) passes. The whole attempt is over at that point, not
+// just the room hold, so this reopens a fresh session/hold rather than
+// leaving the customer in a dead wizard with no active session.
 async function handleTimerExpiry() {
   const display = document.getElementById('timerDisplay');
-  if (display) display.textContent = 'Expired';
+  if (display) display.textContent = '00:00';
 
-  // Release hold if any
   if (state.slotHoldId) {
     await releaseSlotHold(state.slotHoldId);
   }
+  state.sessionId = null;
 
-  alert('⏰ Your room hold has expired. Please start your booking again to secure a new slot.');
-  resetWizard();
+  alert('⏰ Your booking attempt has expired. Starting a fresh attempt — please choose your details again.');
+  if (typeof resumeOrStartWizard === 'function') resumeOrStartWizard();
+  else resetWizard();
 }
 
 function stopTimer() {
-  clearInterval(timerInterval);
   if (slotSubscription) { clearInterval(slotSubscription); slotSubscription = null; }
   const tc = document.getElementById('timerContainer');
   if (tc) tc.style.display = 'none';

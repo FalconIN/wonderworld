@@ -1,0 +1,83 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name wonderworldwestgate.co.nz www.wonderworldwestgate.co.nz;
+
+    # Redirect all HTTP to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name wonderworldwestgate.co.nz www.wonderworldwestgate.co.nz;
+
+    ssl_certificate     /etc/letsencrypt/live/wonderworldwestgate.co.nz/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/wonderworldwestgate.co.nz/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Block access to source/config/backup files that must never be served —
+    # the repo root doubles as web root and also contains server code,
+    # schema, scripts, DB/site backups, and git metadata. Deny-by-directory
+    # AND deny-by-extension, since neither alone covers everything found here.
+    location ^~ /.git/          { deny all; return 404; }
+    location ^~ /.codex/        { deny all; return 404; }
+    location ^~ /server/        { deny all; return 404; }
+    location ^~ /backups/       { deny all; return 404; }
+    location ^~ /scripts/       { deny all; return 404; }
+    location ^~ /supabase/      { deny all; return 404; }
+    location ^~ /design-system/ { deny all; return 404; }
+    location ~* \.(sql|md|backup|log|env|example|gz|tar|tgz|dump|sh|ts|toml|conf)$ { deny all; return 404; }
+    location = /package.json      { deny all; return 404; }
+    location = /package-lock.json { deny all; return 404; }
+    location = /ecosystem.config.js { deny all; return 404; }
+    location = /vercel.json         { deny all; return 404; }
+
+    # Serve static assets (JS, CSS, images, fonts) directly from disk
+    location ~* \.(js|css|png|jpg|jpeg|webp|gif|ico|svg|woff|woff2|ttf|eot|map)$ {
+        root /home/claudeuser/wonderworld;
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    # Live booking-notification SSE stream — must not be buffered or cut off
+    # by the default proxy read timeout, or events won't reach the browser.
+    location = /api/notifications/live {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection '';
+        proxy_buffering    off;
+        proxy_cache        off;
+        proxy_read_timeout 1d;
+        chunked_transfer_encoding off;
+    }
+
+    # Everything else (HTML pages, API) goes through Express so config is injected server-side
+    location / {
+        proxy_pass         http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection 'upgrade';
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        client_max_body_size 10M;
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Gzip
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/javascript;
+    gzip_min_length 256;
+}

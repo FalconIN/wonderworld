@@ -20,6 +20,11 @@ html { scroll-behavior: smooth; }
   position: relative;
   background: linear-gradient(to bottom, rgba(15, 23, 42, 0.6) 0%, rgba(15, 23, 42, 0.3) 55%, rgba(255, 255, 255, 0) 80%, #ffffff 100%),
               url('images/hero/ballpit-hero.jpg');
+  /* WebP for browsers that support it; the plain url() above is the fallback
+     (browsers that don't understand image-set() ignore this whole rule). */
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0.6) 0%, rgba(15, 23, 42, 0.3) 55%, rgba(255, 255, 255, 0) 80%, #ffffff 100%),
+              image-set(url('images/hero/ballpit-hero.webp') type('image/webp'),
+                        url('images/hero/ballpit-hero.jpg') type('image/jpeg'));
   background-size: cover;
   background-position: center 42%;
 }

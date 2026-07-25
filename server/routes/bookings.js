@@ -81,14 +81,41 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
       [roomId, date, slot]
     );
 
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    // The room hold shares its expiry with the customer's active booking
+    // session — one deadline for the whole wizard attempt, not two
+    // independently ticking countdowns. A session is always opened before
+    // step 2 (where this is called) is reachable, so this should always find
+    // one; the now()+15min fallback only covers a session having separately
+    // failed to open.
+    const { rows: [session] } = await pool.query(
+      `SELECT expires_at FROM booking_sessions WHERE user_id = $1 AND status = 'active' AND expires_at > now()`,
+      [userId]
+    );
+    const expiresAt = session ? session.expires_at : new Date(Date.now() + 15 * 60 * 1000);
+
+    // Upsert rather than a plain INSERT: the unique constraint on
+    // (room, date, time) means a slot that was ever locked and then released
+    // (e.g. by an admin reschedule moving a booking away from it) leaves a
+    // 'released' row behind instead of a deleted one. A plain INSERT would
+    // hit that row as a duplicate key and permanently 409 every future
+    // customer trying to hold that exact slot again, even though /api/slots
+    // correctly reports it as available. The WHERE guard still refuses to
+    // clobber a live 'confirmed' or unexpired 'held' row.
     const { rows } = await pool.query(
       `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, held_by_user_id, hold_expires_at)
        VALUES ($1, $2, $3, 'held', $4, $5)
+       ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+         SET status = 'held', held_by_user_id = EXCLUDED.held_by_user_id,
+             hold_expires_at = EXCLUDED.hold_expires_at, booking_id = NULL
+         WHERE booking_timeslots.status = 'released'
+            OR (booking_timeslots.status = 'held' AND booking_timeslots.hold_expires_at < now())
        RETURNING id`,
       [roomId, date, slot, userId, expiresAt]
     );
-    res.json({ holdId: rows[0].id });
+    if (rows.length === 0) {
+      return res.status(409).json({ error: 'That slot was just taken — please choose another.' });
+    }
+    res.json({ holdId: rows[0].id, expiresAt });
   } catch (err) {
     if (err.code === '23505') {
       return res.status(409).json({ error: 'That slot was just taken — please choose another.' });
@@ -122,8 +149,11 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
   let verifiedTotalAmount;
   let room;
+  let stripeBillingName = null;
+  let stripeCardBrand = null;
+  let stripeCardLast4 = null;
   try {
-    const pi = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
+    const pi = await stripe.paymentIntents.retrieve(stripePaymentIntentId, { expand: ['payment_method'] });
     if (pi.status !== 'succeeded') {
       return res.status(400).json({ error: 'Payment has not succeeded.' });
     }
@@ -180,23 +210,85 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     }
 
     verifiedTotalAmount = pi.amount / 100;
+    stripeBillingName = pi.payment_method?.billing_details?.name || null;
+    stripeCardBrand = pi.payment_method?.card?.brand || null;
+    stripeCardLast4 = pi.payment_method?.card?.last4 || null;
   } catch (err) {
     if (err.statusCode) return res.status(400).json({ error: 'Could not verify payment: ' + err.message });
     throw err;
   }
 
   try {
+    // Prefer the name Stripe actually captured with the card (set from the
+    // logged-in user's account name at checkout — see payment.js) over the
+    // client-submitted value, which isn't independently verified.
     const bookingId = await createConfirmedBooking({
       bookingRef, uid, room, partyDate, partyTime, guestCount, foodChoice,
       allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount: verifiedTotalAmount,
-      contactEmail, contactPhone, slotHoldId, cardholderName,
+      contactEmail, contactPhone, slotHoldId, cardholderName: stripeBillingName || cardholderName,
+      cardBrand: stripeCardBrand, cardLast4: stripeCardLast4,
       paymentProvider: 'stripe', stripePaymentIntentId,
     });
+
+    // Best-effort — the booking already succeeded above, this is just
+    // bookkeeping so the wizard doesn't offer to "resume" a completed booking.
+    pool.query(
+      `UPDATE booking_sessions SET status = 'completed', updated_at = now() WHERE user_id = $1 AND status = 'active'`,
+      [uid]
+    ).catch(err => console.error('Failed to mark booking_session completed:', err));
+
     res.json({ bookingId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Admin-created bookings (server/routes/admin.js manual/import creation)
+// mint a users row with id = crypto.randomUUID() when no account exists yet
+// for the email given — e.g. a phone booking taken before the customer ever
+// signed up. That id is never a real Firebase UID (Firebase UIDs don't take
+// this shape), which is what lets us tell a "placeholder" account apart from
+// a real one without a schema change. If the email on a placeholder matches
+// this Firebase-verified user's own email, re-point its bookings/payments/
+// timeslot-holds onto the real account and drop the placeholder, so
+// GET /users/bookings (which matches strictly on user_id, never email)
+// picks them up.
+// Gated on req.user.email_verified so someone can't get read/edit access to
+// a phone booking just by signing up with an email they don't own but
+// haven't confirmed — see the ADMIN_PLACEHOLDER_EMAIL guard for the same
+// reason on the shared "blank email" bucket from the manual-booking form.
+const PLACEHOLDER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ADMIN_PLACEHOLDER_EMAIL = 'admin@wonderworldwestgate.co.nz';
+
+// Never allowed to throw — this runs as a side effect of profile
+// read/save, and a failure here must not break either of those.
+async function claimPlaceholderBookings(uid, req) {
+  try {
+    if (!req.user.email || !req.user.email_verified) return;
+    const verifiedEmail = req.user.email.toLowerCase();
+    if (verifiedEmail === ADMIN_PLACEHOLDER_EMAIL) return;
+
+    const { rows: [existing] } = await pool.query(`SELECT id FROM users WHERE email = $1`, [verifiedEmail]);
+    if (!existing || existing.id === uid || !PLACEHOLDER_ID_RE.test(existing.id)) return;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`UPDATE bookings SET user_id = $1 WHERE user_id = $2`, [uid, existing.id]);
+      await client.query(`UPDATE payments SET user_id = $1 WHERE user_id = $2`, [uid, existing.id]);
+      await client.query(`UPDATE booking_timeslots SET held_by_user_id = $1 WHERE held_by_user_id = $2`, [uid, existing.id]);
+      await client.query(`DELETE FROM users WHERE id = $1`, [existing.id]);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error(`Failed to claim placeholder bookings (${existing.id} -> ${uid}):`, err);
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error(`claimPlaceholderBookings lookup failed for uid ${uid}:`, err);
+  }
+}
 
 // GET /api/users/profile — get current user's profile
 router.get('/users/profile', requireAuth, async (req, res) => {
@@ -205,6 +297,10 @@ router.get('/users/profile', requireAuth, async (req, res) => {
       'SELECT id, first_name as "firstName", last_name as "lastName", email, phone, is_admin as "isAdmin" FROM users WHERE id = $1',
       [req.user.uid]
     );
+    // Only attempt this once the account already has a profile row — a
+    // brand new signup hasn't POSTed one yet, and re-pointing a booking onto
+    // a users.id that doesn't exist yet would fail the FK constraint.
+    if (rows[0]) await claimPlaceholderBookings(req.user.uid, req);
     res.json(rows[0] || null);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -228,6 +324,7 @@ router.post('/users/profile', requireAuth, async (req, res) => {
        RETURNING id, first_name as "firstName", last_name as "lastName", email, phone, is_admin as "isAdmin"`,
       [uid, firstName || '', lastName || '', email || req.user.email || '', phone || null]
     );
+    await claimPlaceholderBookings(uid, req);
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -291,13 +388,28 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
     deltaAmount, paymentIntentId, changeType,
   } = req.body;
 
-  const TIME_MAP = { '9:30 AM': '09:30', '11:30 AM': '11:30', '1:30 PM': '13:30', '3:30 PM': '15:30' };
-
   let booking;
   try {
+    // hoursUntilParty is computed in Postgres (which already knows the NZ
+    // calendar via db.js's session `SET TIME ZONE 'Pacific/Auckland'`) rather
+    // than in Node, which runs on a UTC host here — doing the arithmetic in
+    // JS previously templated a raw `date`-typed Date object into a string
+    // (`${booking.party_date}T...`), producing an unparseable string and
+    // silently making this check a no-op (NaN < 24 is always false); doing
+    // it naively in JS even after fixing that would still be off by NZ's
+    // UTC+12/+13 offset since the host isn't in that timezone.
     const { rows } = await pool.query(
       `SELECT b.*, r.base_price_per_child as "pricePerChild", r.max_guests as "roomMaxGuests",
-              r.min_guests as "roomMinGuests"
+              r.min_guests as "roomMinGuests",
+              EXTRACT(EPOCH FROM (
+                (b.party_date + CASE b.party_time
+                   WHEN '9:30 AM'  THEN '09:30'::time
+                   WHEN '11:30 AM' THEN '11:30'::time
+                   WHEN '1:30 PM'  THEN '13:30'::time
+                   WHEN '3:30 PM'  THEN '15:30'::time
+                   ELSE '12:00'::time
+                 END) AT TIME ZONE 'Pacific/Auckland' - now()
+              )) / 3600 as "hoursUntilParty"
        FROM bookings b JOIN party_rooms r ON r.id = b.party_room_id
        WHERE b.id = $1 AND b.user_id = $2 AND b.status = 'confirmed'`,
       [bookingId, uid]
@@ -308,10 +420,8 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
   }
   if (!booking) return res.status(404).json({ error: 'Booking not found or cannot be edited.' });
 
-  // Server-side 48hr/24hr check
-  const t = TIME_MAP[booking.party_time] || '12:00';
-  const partyDt = new Date(`${booking.party_date}T${t}:00`);
-  const hoursUntil = (partyDt - new Date()) / 3600000;
+  // Server-side 24hr check
+  const hoursUntil = parseFloat(booking.hoursUntilParty);
   if (hoursUntil < 24) {
     return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
   }
@@ -326,15 +436,21 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
 
   // Verify payment if there is a charge
   const delta = parseFloat(deltaAmount) || 0;
+  let editCardBrand = null;
+  let editCardLast4 = null;
+  let editCardholderName = null;
   if (delta > 0) {
     if (!paymentIntentId) return res.status(400).json({ error: 'Payment required for this edit.' });
     try {
-      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['payment_method'] });
       if (pi.status !== 'succeeded') return res.status(400).json({ error: 'Payment has not succeeded.' });
       const expectedCents = Math.round(delta * 100);
       if (Math.abs(pi.amount - expectedCents) > 2) {
         return res.status(400).json({ error: 'Payment amount mismatch.' });
       }
+      editCardBrand = pi.payment_method?.card?.brand || null;
+      editCardLast4 = pi.payment_method?.card?.last4 || null;
+      editCardholderName = pi.payment_method?.billing_details?.name || null;
     } catch (err) {
       return res.status(400).json({ error: 'Could not verify payment: ' + err.message });
     }
@@ -370,9 +486,10 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
 
     if (delta > 0 && paymentIntentId) {
       await client.query(
-        `INSERT INTO payments (booking_id, user_id, stripe_payment_intent_id, amount, currency, status)
-         VALUES ($1, $2, $3, $4, 'nzd', 'succeeded')`,
-        [bookingId, uid, paymentIntentId, delta]
+        `INSERT INTO payments (booking_id, user_id, stripe_payment_intent_id, amount, currency, status,
+                                cardholder_name, card_brand, card_last4)
+         VALUES ($1, $2, $3, $4, 'nzd', 'succeeded', $5, $6, $7)`,
+        [bookingId, uid, paymentIntentId, delta, editCardholderName, editCardBrand, editCardLast4]
       );
     }
 

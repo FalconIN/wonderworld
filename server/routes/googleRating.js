@@ -1,43 +1,16 @@
 const express = require('express');
 const router  = express.Router();
-const { placesDetailsRequest } = require('../services/placesApi');
+const pool    = require('../db');
 
-let cache     = null;
-let cacheTime = 0;
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
-async function fetchFromPlacesAPI(apiKey, placeId) {
-  const result = await placesDetailsRequest(apiKey, placeId, 'rating,user_ratings_total');
-  return {
-    rating:           result.rating,
-    userRatingsTotal: result.user_ratings_total,
-  };
-}
-
-// GET /api/google-rating
+// GET /api/google-rating — the aggregate rating shown on the public site.
+// Admin-set (see /api/admin/site-rating), not a live Google Places lookup.
 router.get('/', async (req, res) => {
-  const apiKey  = process.env.GOOGLE_PLACES_API_KEY;
-  const placeId = process.env.GOOGLE_PLACE_ID;
-
-  if (!apiKey || !placeId) {
-    return res.status(503).json({ error: 'GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID not configured' });
-  }
-
-  const now = Date.now();
-  if (cache && (now - cacheTime) < CACHE_TTL) {
-    return res.json({ ...cache, cached: true });
-  }
-
   try {
-    const data = await fetchFromPlacesAPI(apiKey, placeId);
-    cache     = data;
-    cacheTime = now;
-    return res.json({ ...data, cached: false });
+    const { rows } = await pool.query('SELECT rating, review_count as "userRatingsTotal" FROM site_rating WHERE id = 1');
+    if (!rows[0]) return res.status(404).json({ error: 'Rating not set yet' });
+    res.json({ rating: parseFloat(rows[0].rating), userRatingsTotal: rows[0].userRatingsTotal });
   } catch (err) {
-    console.error('Google Places fetch failed:', err.message);
-    // Serve stale cache rather than a hard error
-    if (cache) return res.json({ ...cache, cached: true, stale: true });
-    return res.status(502).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

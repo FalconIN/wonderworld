@@ -71,6 +71,11 @@ router.get('/bookings-list', async (req, res) => {
 router.get('/bookings', async (req, res) => {
   const { status, limit = 200 } = req.query;
   try {
+    // minutesPastDue computed in Postgres against NZ wall-clock time (see the
+    // matching comment in bookings.js's edit-window check) — the admin's
+    // browser timezone is untrustworthy for this, so the Upcoming/Past split
+    // in admin.js relies on this field instead of comparing party_date to a
+    // client-side "today".
     let q = `SELECT b.id, b.booking_ref as "bookingRef", b.party_date as "partyDate",
                     b.party_time as "partyTime", b.guest_count as "guestCount",
                     b.food_choice as "foodChoice", b.total_amount as "totalAmount",
@@ -84,7 +89,16 @@ router.get('/bookings', async (req, res) => {
                     b.created_at as "createdAt",
                     r.name as "roomName", r.emoji as "roomEmoji",
                     u.first_name as "firstName", u.last_name as "lastName",
-                    COALESCE(pay.amount_paid, 0) as "amountPaid"
+                    COALESCE(pay.amount_paid, 0) as "amountPaid",
+                    EXTRACT(EPOCH FROM (
+                      now() - (b.party_date + CASE b.party_time
+                        WHEN '9:30 AM'  THEN '09:30'::time
+                        WHEN '11:30 AM' THEN '11:30'::time
+                        WHEN '1:30 PM'  THEN '13:30'::time
+                        WHEN '3:30 PM'  THEN '15:30'::time
+                        ELSE '12:00'::time
+                      END) AT TIME ZONE 'Pacific/Auckland'
+                    )) / 60 as "minutesPastDue"
              FROM bookings b
              JOIN party_rooms r ON r.id = b.party_room_id
              LEFT JOIN users u ON u.id = b.user_id
@@ -217,6 +231,9 @@ router.patch('/bookings/:id', async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const { rows: [before] } = await client.query(`SELECT total_amount FROM bookings WHERE id = $1`, [req.params.id]);
+    if (!before) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found' }); }
+
     const allowedStatuses = ['confirmed', 'pending', 'cancelled'];
     const newStatus = allowedStatuses.includes(bookingStatus) ? bookingStatus : null;
 
@@ -235,10 +252,30 @@ router.patch('/bookings/:id', async (req, res) => {
            admin_notes = $10,
            ${statusClause} updated_at = now()
        WHERE id = $${idIdx}
-       RETURNING user_id`,
+       RETURNING user_id, party_room_id as "partyRoomId", party_date as "partyDate", party_time as "partyTime"`,
       baseParams
     );
     if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found' }); }
+
+    // Cancelling here (rather than via the dedicated cancel button) used to
+    // leave the timeslot locked forever — this mirrors the release the
+    // dedicated PATCH /bookings/:id/cancel endpoint does, so a slot cancelled
+    // through the edit-details form doesn't stay permanently ghost-locked.
+    if (newStatus === 'cancelled') {
+      await client.query(
+        `DELETE FROM booking_timeslots
+         WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
+        [booking.partyRoomId, booking.partyDate, booking.partyTime]
+      );
+    }
+
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, new_guest_count, new_food_choice, new_addons_summary)
+       VALUES ($1, $2, 'admin_edit', $3, $4, $5, $6)`,
+      [req.params.id, req.user.uid, (parseFloat(totalAmount) || 0) - parseFloat(before.total_amount || 0),
+       guestCount, foodChoice || null, addonsSummary || null]
+    );
 
     if (booking.user_id) {
       // Check if this user is shared across other bookings
@@ -296,7 +333,8 @@ router.delete('/bookings/cancelled', async (req, res) => {
     const ids = rows.map(r => r.id);
     if (!ids.length) { await client.query('ROLLBACK'); return res.json({ deleted: 0 }); }
 
-    await client.query(`DELETE FROM payments WHERE booking_id = ANY($1::uuid[])`, [ids]);
+    // payments.booking_id is ON DELETE SET NULL — deleting the booking preserves
+    // the payment row (financial/accounting record) instead of destroying it.
     await client.query(`DELETE FROM bookings WHERE id = ANY($1::uuid[])`, [ids]);
     await client.query('COMMIT');
     res.json({ deleted: ids.length });
@@ -308,39 +346,97 @@ router.delete('/bookings/cancelled', async (req, res) => {
   }
 });
 
-// POST /api/admin/customers/bulk-delete — bulk delete non-admin users by ID array
+// POST /api/admin/customers/bulk-delete — bulk delete non-admin users by ID array.
+// Users with existing bookings are skipped rather than attempted (bookings.user_id
+// is ON DELETE RESTRICT, so including even one such id would previously fail the
+// entire batch with a raw FK-violation error and no indication of which id blocked it).
 router.post('/customers/bulk-delete', async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'No IDs provided' });
   }
   try {
-    const { rowCount } = await pool.query(
-      `DELETE FROM users WHERE id = ANY($1::text[]) AND is_admin = false`,
+    const { rows: withBookings } = await pool.query(
+      `SELECT DISTINCT user_id FROM bookings WHERE user_id = ANY($1::text[])`,
       [ids]
     );
-    res.json({ deleted: rowCount });
+    const blockedIds = new Set(withBookings.map(r => r.user_id));
+    const deletableIds = ids.filter(id => !blockedIds.has(id));
+
+    let deleted = 0;
+    if (deletableIds.length) {
+      const result = await pool.query(
+        `DELETE FROM users WHERE id = ANY($1::text[]) AND is_admin = false`,
+        [deletableIds]
+      );
+      deleted = result.rowCount;
+    }
+    res.json({ deleted, skipped: blockedIds.size });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/admin/payments?limit=
+// GET /api/admin/payments?limit=&from=&to=
 router.get('/payments', async (req, res) => {
-  const { limit = 200 } = req.query;
+  const { from, to } = req.query;
+  const hasRange = from && to;
+  const limit = parseInt(req.query.limit) || (hasRange ? 1000 : 200);
   try {
+    const dateClause = hasRange ? `WHERE p.created_at::date BETWEEN $1 AND $2` : '';
+    const params = hasRange ? [from, to, limit] : [limit];
     const { rows } = await pool.query(
       `SELECT p.id, p.stripe_payment_intent_id as "stripePaymentIntentId",
-              p.amount, p.currency, p.status,
+              p.amount, p.currency, p.status, p.payment_method as "paymentMethod",
               p.card_brand as "cardBrand", p.card_last4 as "cardLast4",
               p.cardholder_name as "cardholderName",
               p.created_at as "createdAt", p.error_message as "errorMessage",
-              b.booking_ref as "bookingRef", b.contact_email as "contactEmail"
-       FROM payments p LEFT JOIN bookings b ON b.id = p.booking_id
-       ORDER BY p.created_at DESC LIMIT $1`,
-      [parseInt(limit)]
+              b.id as "bookingId", b.booking_ref as "bookingRef", b.contact_email as "contactEmail",
+              u.first_name as "userFirstName"
+       FROM payments p
+       LEFT JOIN bookings b ON b.id = p.booking_id
+       LEFT JOIN users u ON u.id = COALESCE(p.user_id, b.user_id)
+       ${dateClause}
+       ORDER BY p.created_at DESC LIMIT $${hasRange ? 3 : 1}`,
+      params
     );
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/payments/summary?from=&to= — defaults to the current month
+router.get('/payments/summary', async (req, res) => {
+  const { from, to } = req.query;
+  const hasRange = from && to;
+  try {
+    const dateClause = hasRange
+      ? `WHERE created_at::date BETWEEN $1 AND $2`
+      : `WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
+    const { rows } = await pool.query(
+      `SELECT
+         COALESCE(SUM(amount) FILTER (WHERE status = 'succeeded'), 0) as revenue,
+         COUNT(*) FILTER (WHERE status = 'succeeded') as "successCount",
+         COALESCE(SUM(amount) FILTER (WHERE status = 'refunded'), 0) as "refundedAmount",
+         COUNT(*) FILTER (WHERE status = 'refunded') as "refundedCount",
+         COUNT(*) FILTER (WHERE status = 'pending') as "pendingCount",
+         COUNT(*) FILTER (WHERE status = 'failed') as "failedCount",
+         COUNT(*) FILTER (WHERE payment_method = 'manual' AND status = 'succeeded') as "manualCount"
+       FROM payments
+       ${dateClause}`,
+      hasRange ? [from, to] : []
+    );
+    const r = rows[0];
+    res.json({
+      revenue:        parseFloat(r.revenue),
+      successCount:   parseInt(r.successCount),
+      refundedAmount: parseFloat(r.refundedAmount),
+      refundedCount:  parseInt(r.refundedCount),
+      pendingCount:   parseInt(r.pendingCount),
+      failedCount:    parseInt(r.failedCount),
+      manualCount:    parseInt(r.manualCount),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -368,7 +464,7 @@ router.post('/payments/:id/refund', async (req, res) => {
 
 // GET /api/admin/customers?limit=
 router.get('/customers', async (req, res) => {
-  const { limit = 200 } = req.query;
+  const { limit = 5000 } = req.query;
   try {
     const { rows: users } = await pool.query(
       `SELECT id, first_name as "firstName", last_name as "lastName",
@@ -447,7 +543,9 @@ router.get('/room-popularity', async (req, res) => {
 // GET /api/admin/rooms — for room slug lookup (import tool)
 router.get('/rooms', async (req, res) => {
   try {
-    const { rows } = await pool.query(`SELECT id, slug, name FROM party_rooms WHERE is_active = true`);
+    const { rows } = await pool.query(
+      `SELECT id, slug, name, min_guests as "minGuests", max_guests as "maxGuests" FROM party_rooms WHERE is_active = true`
+    );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -465,6 +563,17 @@ router.post('/bookings/import', async (req, res) => {
     try {
       await client.query('BEGIN');
 
+      // Validate guest count against the room's capacity (mirrors the check
+      // in the customer-facing booking flow, which this admin path bypasses).
+      const { rows: [room] } = await client.query(
+        `SELECT min_guests as "minGuests", max_guests as "maxGuests" FROM party_rooms WHERE id = $1`,
+        [r.matchedRoomId]
+      );
+      if (!room) throw new Error('Room not found.');
+      if (!r.guests || r.guests < room.minGuests || r.guests > room.maxGuests) {
+        throw new Error(`Guest count ${r.guests} is outside this room's allowed range (${room.minGuests}-${room.maxGuests}).`);
+      }
+
       // Upsert user
       let userId;
       const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [r.email]);
@@ -479,12 +588,24 @@ router.post('/bookings/import', async (req, res) => {
         userId = newId;
       }
 
-      // Check slot
+      // Check slot — clear this slot's own expired hold first so a stale hold
+      // doesn't block a legitimate import, then block on anything still live
+      // (a 'confirmed' booking or an active customer checkout hold) so this
+      // admin path can't silently steal a slot out from under a customer
+      // mid-checkout (previously only 'confirmed' was checked, so a 'held'
+      // row was invisible here and got clobbered when the customer's payment
+      // completed, leaving the admin's booking with no slot lock at all).
+      await client.query(
+        `DELETE FROM booking_timeslots
+         WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
+           AND status = 'held' AND hold_expires_at < now()`,
+        [r.matchedRoomId, r.date, r.time]
+      );
       const { rows: slot } = await client.query(
         `SELECT id, status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
         [r.matchedRoomId, r.date, r.time]
       );
-      if (slot[0]?.status === 'confirmed') throw new Error(`Slot already booked: ${r.date} ${r.time}`);
+      if (slot[0] && slot[0].status !== 'released') throw new Error(`Slot already booked: ${r.date} ${r.time}`);
 
       const bookingRef = 'WW-IMP-' + Math.random().toString(36).slice(2, 7).toUpperCase();
       const { rows: [booking] } = await client.query(
@@ -530,42 +651,92 @@ router.post('/bookings/manual', async (req, res) => {
     amountPaid, status = 'confirmed', adminNotes,
   } = req.body;
 
+  // Blank name/email on an admin-created (e.g. phone) booking used to save as
+  // blank/null, which read as broken data in the booking lists. Default them
+  // instead. Email specifically defaults to a real address (not the literal
+  // "ADMIN") because users.email is validated elsewhere in the app against
+  // /^[^@]+@[^@]+\.[^@]+$/ and must stay unique/non-null in the DB.
+  const ADMIN_PLACEHOLDER_EMAIL = 'admin@wonderworldwestgate.co.nz';
+  const resolvedFirstName = (firstName || '').trim() || 'ADMIN';
+  const resolvedLastName = (lastName || '').trim();
+  const resolvedEmail = (email || '').trim().toLowerCase();
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Check slot
+    // Validate guest count against the room's capacity (mirrors the check
+    // in the customer-facing booking flow, which this admin path bypasses).
+    const { rows: [room] } = await client.query(
+      `SELECT min_guests as "minGuests", max_guests as "maxGuests" FROM party_rooms WHERE id = $1`,
+      [roomId]
+    );
+    if (!room) throw new Error('Selected room not found.');
+    if (!guests || guests < room.minGuests || guests > room.maxGuests) {
+      throw new Error(`${roomName} requires between ${room.minGuests} and ${room.maxGuests} guests.`);
+    }
+
+    // Check slot — clear this slot's own expired hold first so a stale hold
+    // doesn't block a legitimate manual booking, then block on anything still
+    // live (a 'confirmed' booking or an active customer checkout hold) so this
+    // admin path can't silently steal a slot out from under a customer
+    // mid-checkout (previously only 'confirmed' was checked, so a 'held' row
+    // was invisible here and got clobbered when the customer's payment
+    // completed, leaving the admin's booking with no slot lock at all).
+    await client.query(
+      `DELETE FROM booking_timeslots
+       WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
+         AND status = 'held' AND hold_expires_at < now()`,
+      [roomId, date, time]
+    );
     const { rows: slot } = await client.query(
       `SELECT id, status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
       [roomId, date, time]
     );
-    if (slot[0]?.status === 'confirmed') throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
+    if (slot[0] && slot[0].status !== 'released') throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
 
-    // Upsert user (email optional — if blank, always create a new record)
+    // Upsert user. A real email keeps its own account, looked up/created by
+    // that email as before. A blank email is NOT given a fresh random row
+    // each time (users.email is UNIQUE NOT NULL, so a second blank-email
+    // booking would previously crash on a duplicate-key error) — instead it
+    // reuses one shared "ADMIN" placeholder account. Note: because bookings
+    // has no name column of its own (only users.first_name/last_name via
+    // user_id), this placeholder's name is shared across every blank-email
+    // booking — if you type different names on two different blank-email
+    // bookings, only the most recent one will display for both.
     let userId;
-    if (email) {
-      const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    if (resolvedEmail) {
+      const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [resolvedEmail]);
       if (existing[0]) {
         userId = existing[0].id;
         await client.query(
           `UPDATE users SET first_name=$1, last_name=$2, phone=COALESCE($3,phone), updated_at=now() WHERE id=$4`,
-          [firstName || '', lastName || '', phone || null, userId]
+          [resolvedFirstName, resolvedLastName, phone || null, userId]
         );
       } else {
         const newId = require('crypto').randomUUID();
         await client.query(
           `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
-          [newId, firstName || '', lastName || '', email, phone || null]
+          [newId, resolvedFirstName, resolvedLastName, resolvedEmail, phone || null]
         );
         userId = newId;
       }
     } else {
-      const newId = require('crypto').randomUUID();
-      await client.query(
-        `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
-        [newId, firstName || '', lastName || '', '', phone || null]
-      );
-      userId = newId;
+      const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [ADMIN_PLACEHOLDER_EMAIL]);
+      if (existing[0]) {
+        userId = existing[0].id;
+        await client.query(
+          `UPDATE users SET first_name=$1, last_name=$2, phone=COALESCE($3,phone), updated_at=now() WHERE id=$4`,
+          [resolvedFirstName, resolvedLastName, phone || null, userId]
+        );
+      } else {
+        const newId = require('crypto').randomUUID();
+        await client.query(
+          `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
+          [newId, resolvedFirstName, resolvedLastName, ADMIN_PLACEHOLDER_EMAIL, phone || null]
+        );
+        userId = newId;
+      }
     }
 
     const bookingRef = 'WW-' + Date.now().toString(36).toUpperCase();
@@ -577,7 +748,7 @@ router.post('/bookings/manual', async (req, res) => {
        RETURNING id`,
       [userId, roomId, bookingRef, date, time, guests, foodChoice, notes || '',
        addonsSummary || '', baseAmount, addonsAmount || 0, totalAmount,
-       status, email || '', phone || null, adminNotes || '']
+       status, resolvedEmail || ADMIN_PLACEHOLDER_EMAIL, phone || null, adminNotes || '']
     );
 
     if (slot[0]) {
@@ -789,7 +960,7 @@ router.get('/month-revenue', async (req, res) => {
 router.post('/bookings/:id/resend-confirmation', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT b.id, b.booking_ref as "bookingRef",
+      `SELECT b.id, b.booking_ref as "bookingRef", b.status,
               b.party_date as "partyDate", b.party_time as "partyTime",
               b.guest_count as "guestCount", b.food_choice as "foodChoice",
               b.addons_summary as "addonsSummary", b.total_amount as "totalAmount",
@@ -804,6 +975,9 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
     );
     if (!rows.length) return res.status(404).json({ error: 'Booking not found' });
     const b = rows[0];
+    if (b.status !== 'confirmed') {
+      return res.status(400).json({ error: `Only confirmed bookings can have their confirmation resent (this one is ${b.status}).` });
+    }
 
     const results = { email: null, sms: null };
 
@@ -885,17 +1059,39 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
   }
 });
 
-// GET /api/admin/bookings/:id/reschedule-slots
+const RESCHEDULE_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+
+// YYYY-MM-DD, and a real calendar date (rejects e.g. 2026-02-30)
+function isValidDateStr(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+// GET /api/admin/bookings/:id/reschedule-slots?date=YYYY-MM-DD
 // No time restrictions for admins — they can reschedule any booking at any time.
+// `date` is the date being considered for the new slot; defaults to the
+// booking's current party_date so the picker can pre-populate itself.
 router.get('/bookings/:id/reschedule-slots', async (req, res) => {
   try {
+    // to_char avoids handing a JS Date object (pg's default parser for `date`)
+    // back to the client or into further string comparisons — see bookings.js
+    // edit-window bug for what goes wrong when a Date object gets templated
+    // into a string instead of formatted explicitly.
     const { rows: [booking] } = await pool.query(
-      `SELECT b.party_date, b.party_time, b.party_room_id
+      `SELECT b.party_room_id, b.party_time,
+              to_char(b.party_date, 'YYYY-MM-DD') as party_date
        FROM bookings b
        WHERE b.id = $1 AND b.status = 'confirmed'`,
       [req.params.id]
     );
     if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    const requestedDate = req.query.date || booking.party_date;
+    if (!isValidDateStr(requestedDate)) {
+      return res.status(400).json({ error: 'Invalid date.' });
+    }
 
     // Expire stale holds
     await pool.query(
@@ -914,32 +1110,44 @@ router.get('/bookings/:id/reschedule-slots', async (req, res) => {
        WHERE party_room_id = $1 AND slot_date = $2
          AND status IN ('confirmed', 'held')
          AND ($3::uuid IS NULL OR id != $3::uuid)`,
-      [booking.party_room_id, booking.party_date, ownSlotId]
+      [booking.party_room_id, requestedDate, ownSlotId]
     );
 
     const takenSlots = takenRows.map(r => r.slot_time);
-    const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+    const isCurrentDate = requestedDate === booking.party_date;
 
-    const slots = ALL_SLOTS.map(time => ({
-      time,
-      isCurrent:  time === booking.party_time,
-      isTaken:    takenSlots.includes(time) && time !== booking.party_time,
-      available: !takenSlots.includes(time) && time !== booking.party_time,
-    }));
+    const slots = RESCHEDULE_ALL_SLOTS.map(time => {
+      const isCurrent = isCurrentDate && time === booking.party_time;
+      return {
+        time,
+        isCurrent,
+        isTaken:   !isCurrent && takenSlots.includes(time),
+        available: !isCurrent && !takenSlots.includes(time),
+      };
+    });
 
-    res.json({ currentTime: booking.party_time, partyDate: booking.party_date, slots });
+    res.json({
+      currentDate:    booking.party_date,
+      currentTime:    booking.party_time,
+      requestedDate,
+      slots,
+      anyAvailable:   slots.some(s => s.available),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST /api/admin/bookings/:id/reschedule
-// Admins have no time restriction — they can reschedule at any point.
+// Admins have no time restriction — they can reschedule at any point, to any
+// date and time, including today or within the next hour.
 router.post('/bookings/:id/reschedule', async (req, res) => {
-  const { newTime } = req.body;
-  const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+  const { newDate, newTime } = req.body;
 
-  if (!ALL_SLOTS.includes(newTime)) {
+  if (!isValidDateStr(newDate)) {
+    return res.status(400).json({ error: 'Invalid date.' });
+  }
+  if (!RESCHEDULE_ALL_SLOTS.includes(newTime)) {
     return res.status(400).json({ error: 'Invalid time slot.' });
   }
 
@@ -949,13 +1157,15 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: [booking] } = await client.query(
-      `SELECT b.id, b.booking_ref, b.party_date, b.party_time, b.party_room_id,
+      `SELECT b.id, b.booking_ref, b.party_time, b.party_room_id,
               b.contact_email, b.contact_phone, b.user_id,
+              to_char(b.party_date, 'YYYY-MM-DD') as party_date,
               u.first_name, r.name as room_name
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
        LEFT JOIN users u ON u.id = b.user_id
-       WHERE b.id = $1 AND b.status = 'confirmed'`,
+       WHERE b.id = $1 AND b.status = 'confirmed'
+       FOR UPDATE OF b`,
       [req.params.id]
     );
 
@@ -963,67 +1173,74 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Booking not found or not confirmed.' });
     }
-    if (booking.party_time === newTime) {
+    if (booking.party_date === newDate && booking.party_time === newTime) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'That is already the current time slot.' });
+      return res.status(400).json({ error: 'That is already the current date and time.' });
     }
 
-    // Check the target slot isn't already taken by another booking
-    const { rows: taken } = await client.query(
-      `SELECT id FROM booking_timeslots
-       WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
-         AND status IN ('confirmed', 'held')`,
-      [booking.party_room_id, booking.party_date, newTime]
+    const oldDate = booking.party_date;
+    const oldTime = booking.party_time;
+
+    // Atomically claim the target slot: the INSERT..ON CONFLICT and its WHERE
+    // guard are evaluated together under the row lock Postgres takes for the
+    // conflicting row, so two concurrent reschedules racing for the same
+    // target slot serialize instead of one silently clobbering the other's
+    // lock (the previous version checked "is it taken" and then upserted as
+    // two separate statements, which left a window for exactly that race).
+    // A plain 'released' row, or a 'held' row whose hold has expired, is fair
+    // game to claim; a live 'confirmed' or 'held' row is not.
+    const { rows: claimed } = await client.query(
+      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
+       VALUES ($1, $2, $3, 'confirmed', $4)
+       ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+         SET status = 'confirmed', booking_id = EXCLUDED.booking_id, held_by_user_id = NULL, hold_expires_at = NULL
+         WHERE booking_timeslots.status = 'released'
+            OR (booking_timeslots.status = 'held' AND booking_timeslots.hold_expires_at < now())
+       RETURNING id`,
+      [booking.party_room_id, newDate, newTime, booking.id]
     );
-    if (taken.length > 0) {
+    if (claimed.length === 0) {
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'That time slot is already taken.' });
     }
 
-    const oldTime = booking.party_time;
-
-    // Release any existing timeslot row for this booking (regardless of status)
+    // Release the booking's old timeslot row (regardless of status) now that
+    // the new one is safely claimed.
     await client.query(
       `UPDATE booking_timeslots SET status = 'released', booking_id = NULL
-       WHERE booking_id = $1`,
-      [booking.id]
-    );
-
-    // Lock the new slot — upsert handles the case where a 'released' row already
-    // exists for this slot (e.g. a previous booking was rescheduled away from it)
-    await client.query(
-      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
-       VALUES ($1, $2, $3, 'confirmed', $4)
-       ON CONFLICT (party_room_id, slot_date, slot_time)
-       DO UPDATE SET status = 'confirmed', booking_id = EXCLUDED.booking_id`,
-      [booking.party_room_id, booking.party_date, newTime, booking.id]
+       WHERE booking_id = $1 AND id != $2`,
+      [booking.id, claimed[0].id]
     );
 
     await client.query(
-      `UPDATE bookings SET party_time = $1, updated_at = now() WHERE id = $2`,
-      [newTime, booking.id]
+      `UPDATE bookings SET party_date = $1, party_time = $2, updated_at = now() WHERE id = $3`,
+      [newDate, newTime, booking.id]
+    );
+
+    // Log the reschedule to booking_edits inside the same transaction, so the
+    // audit row is guaranteed to exist whenever the reschedule itself succeeds.
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount,
+          old_party_date, old_party_time, new_party_date, new_party_time)
+       VALUES ($1, $2, 'reschedule', 0, $3, $4, $5, $6)`,
+      [booking.id, req.user.uid, oldDate, oldTime, newDate, newTime]
     );
 
     await client.query('COMMIT');
 
-    // Log the reschedule to booking_edits (best-effort, doesn't block the response)
-    pool.query(
-      `INSERT INTO booking_edits
-         (booking_id, changed_by, change_type, delta_amount, new_food_choice)
-       VALUES ($1, $2, 'reschedule', 0, $3)`,
-      [booking.id, req.user.uid, `${oldTime} → ${newTime}`]
-    ).catch(logErr => console.warn('booking_edits log failed (schema may need migration):', logErr.message));
-
     res.json({
       ok: true,
+      oldDate,
       oldTime,
+      newDate,
       newTime,
       bookingRef:   booking.booking_ref,
       contactEmail: booking.contact_email,
       contactPhone: booking.contact_phone,
       firstName:    booking.first_name,
       roomName:     booking.room_name,
-      partyDate:    booking.party_date,
+      partyDate:    newDate,
     });
   } catch (err) {
     if (client) await client.query('ROLLBACK').catch(() => {});
@@ -1038,7 +1255,7 @@ router.get('/reviews', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, author_name as "authorName", rating, text, time,
-              profile_photo_url as "profilePhotoUrl", visible, created_at as "createdAt"
+              profile_photo_url as "profilePhotoUrl", visible, is_manual as "isManual", created_at as "createdAt"
        FROM google_reviews
        ORDER BY time DESC`
     );
@@ -1048,11 +1265,20 @@ router.get('/reviews', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/reviews/:id — show/hide a review on the public carousel
+// PATCH /api/admin/reviews/:id — show/hide, or edit the text/author/rating of a review
 router.patch('/reviews/:id', async (req, res) => {
-  const { visible } = req.body;
+  const { visible, authorName, rating, text } = req.body;
+  const sets = [];
+  const params = [];
+  if (visible !== undefined) { params.push(!!visible); sets.push(`visible = $${params.length}`); }
+  if (authorName !== undefined) { params.push(authorName); sets.push(`author_name = $${params.length}`); }
+  if (rating !== undefined) { params.push(parseInt(rating)); sets.push(`rating = $${params.length}`); }
+  if (text !== undefined) { params.push(text); sets.push(`text = $${params.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+
+  params.push(req.params.id);
   try {
-    await pool.query('UPDATE google_reviews SET visible = $1 WHERE id = $2', [!!visible, req.params.id]);
+    await pool.query(`UPDATE google_reviews SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1064,6 +1290,73 @@ router.post('/reviews/fetch-now', async (req, res) => {
   try {
     const result = await fetchAndStoreReviews();
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/reviews/manual — bulk-add reviews pasted/parsed in the admin UI.
+// Skips any row that already exists (same author_name + text) so re-pasting the
+// same batch twice is harmless.
+router.post('/reviews/manual', async (req, res) => {
+  const { reviews } = req.body;
+  if (!Array.isArray(reviews) || reviews.length === 0) {
+    return res.status(400).json({ error: 'No reviews provided' });
+  }
+  let inserted = 0, skipped = 0;
+  try {
+    for (const r of reviews) {
+      const authorName = (r.authorName || '').trim();
+      const text = (r.text || '').trim();
+      const rating = parseInt(r.rating);
+      const time = parseInt(r.time);
+      if (!authorName || !text || !rating || rating < 1 || rating > 5 || !time) {
+        skipped++;
+        continue;
+      }
+      const { rows: existing } = await pool.query(
+        `SELECT id FROM google_reviews WHERE author_name = $1 AND text = $2`,
+        [authorName, text]
+      );
+      if (existing.length) { skipped++; continue; }
+
+      await pool.query(
+        `INSERT INTO google_reviews (author_name, rating, text, time, visible, is_manual)
+         VALUES ($1, $2, $3, $4, true, true)`,
+        [authorName, rating, text, time]
+      );
+      inserted++;
+    }
+    res.json({ inserted, skipped });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/site-rating — the admin-set aggregate rating shown on the public site
+router.get('/site-rating', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT rating, review_count as "reviewCount", updated_at as "updatedAt" FROM site_rating WHERE id = 1');
+    res.json(rows[0] || null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/site-rating — set/update it
+router.put('/site-rating', async (req, res) => {
+  const rating = parseFloat(req.body.rating);
+  const reviewCount = parseInt(req.body.reviewCount) || 0;
+  if (!rating || rating < 0 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 0 and 5' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO site_rating (id, rating, review_count, updated_at) VALUES (1, $1, $2, now())
+       ON CONFLICT (id) DO UPDATE SET rating = $1, review_count = $2, updated_at = now()`,
+      [rating, reviewCount]
+    );
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

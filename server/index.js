@@ -72,6 +72,7 @@ const googleRatingRouter     = require('./routes/googleRating');
 const reviewsRouter          = require('./routes/reviews');
 const poliRouter              = require('./routes/poli');
 const authRouter              = require('./routes/auth');
+const bookingSessionsRouter   = require('./routes/bookingSessions');
 
 app.use('/api', bookingsRouter);
 app.use('/api/payments', paymentsRouter);
@@ -82,6 +83,7 @@ app.use('/api/google-rating', googleRatingRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/poli', poliRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/booking-sessions', bookingSessionsRouter);
 
 // ---------------------------------------------------------------------------
 // Scheduled jobs

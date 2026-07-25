@@ -3,7 +3,7 @@ module.exports = {
     {
       name:        'wonderworld',
       script:      './server/index.js',
-      cwd:         '/home/claudeuser/wonderworld',
+      cwd:         '/var/www/wonderworldwestgate',
       instances:   1,
       autorestart: true,
       watch:       false,

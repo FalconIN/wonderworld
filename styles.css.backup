@@ -1,0 +1,500 @@
+/* ── Design System: Claymorphism · Blue/Orange · Fredoka/Nunito ── */
+:root {
+  --primary:    #1E3A8A;
+  --secondary:  #3B82F6;
+  --cta:        #F97316;
+  --cta-dark:   #EA6000;
+  --bg:         #EFF6FF;
+  --text:       #1E40AF;
+  --border:     #BFDBFE;
+}
+
+/* ── Base ─────────────────────────────────────────── */
+* { box-sizing: border-box; }
+body { font-family: 'Nunito', sans-serif; background: var(--bg); color: #1F2937; margin: 0; }
+h1, h2, h3, h4 { font-family: 'Fredoka', sans-serif; }
+html { scroll-behavior: smooth; }
+
+/* ── Hero Background ─────────────────────────────── */
+.hero-bg {
+  position: relative;
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.93) 0%, rgba(59, 130, 246, 0.88) 100%),
+              url('wonder.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: multiply;
+}
+
+/* ── Confetti dots pattern ───────────────────────── */
+.dots-pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+/* ── Step indicator ──────────────────────────────── */
+.step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; transition: all .3s; }
+.step-dot.active { background: var(--secondary); color: #fff; box-shadow: 0 0 0 4px rgba(59,130,246,0.25), inset 0 1px 0 rgba(255,255,255,0.3); }
+.step-dot.done { background: #0E9F6E; color: #fff; box-shadow: 0 2px 8px rgba(14,159,110,0.3); }
+.step-dot.pending { background: #E5E7EB; color: #9CA3AF; }
+.step-line { flex: 1; height: 3px; background: #DBEAFE; transition: background .3s; border-radius: 99px; }
+.step-line.done { background: #0E9F6E; }
+
+/* ── Clay card base ──────────────────────────────── */
+.clay-card {
+  background: white;
+  border: 3px solid var(--border);
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px rgba(30,58,138,0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* ── Room cards ──────────────────────────────────── */
+.room-card {
+  border: 3px solid #DBEAFE;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: all .25s ease-out;
+  background: white;
+  box-shadow: 0 6px 20px rgba(30,58,138,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.room-card:hover {
+  border-color: var(--secondary);
+  box-shadow: 0 12px 36px rgba(59,130,246,0.18), inset 0 1px 0 rgba(255,255,255,0.9);
+  transform: translateY(-3px);
+}
+.room-card.selected {
+  border-color: var(--secondary);
+  background: #EFF6FF;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.2), 0 8px 24px rgba(59,130,246,0.15), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* ── Food cards ──────────────────────────────────── */
+.food-card {
+  border: 3px solid #DBEAFE;
+  border-radius: 1.25rem;
+  cursor: pointer;
+  transition: all .2s ease-out;
+  background: white;
+  user-select: none;
+  box-shadow: 0 4px 14px rgba(30,58,138,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.food-card:hover { border-color: var(--cta); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(249,115,22,0.15); }
+.food-card.selected { border-color: var(--cta); background: #FFF7ED; box-shadow: 0 0 0 3px rgba(249,115,22,0.2), 0 6px 18px rgba(249,115,22,0.12); }
+
+/* ── Time slots ──────────────────────────────────── */
+.time-slot {
+  border: 3px solid #DBEAFE;
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: all .2s ease-out;
+  background: white;
+  text-align: center;
+  padding: 10px 12px;
+  box-shadow: 0 3px 10px rgba(30,58,138,0.07), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.time-slot:hover:not(.unavailable) { border-color: var(--secondary); background: #EFF6FF; }
+.time-slot.selected { border-color: var(--secondary); background: var(--secondary); color: white; box-shadow: 0 6px 18px rgba(59,130,246,0.3); }
+.time-slot.unavailable { opacity: 0.4; cursor: not-allowed; background: #F3F4F6; }
+.time-slot.held { border-color: var(--cta); background: #FFF7ED; color: #C2410C; cursor: not-allowed; opacity: 0.7; }
+
+/* ── Modal ───────────────────────────────────────── */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); backdrop-filter: blur(8px); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-box {
+  background: white;
+  border: 3px solid var(--border);
+  border-radius: 1.75rem;
+  width: 100%;
+  max-width: 460px;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 32px 80px rgba(30,58,138,0.2), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* ── Countdown timer ─────────────────────────────── */
+.timer-bar { background: linear-gradient(90deg, var(--primary), var(--secondary)); padding: 10px 20px; border-radius: 1rem; display: flex; align-items: center; gap: 10px; color: white; box-shadow: 0 4px 14px rgba(30,58,138,0.25); }
+.timer-bar.urgent { background: linear-gradient(90deg, #EF4444, #DC2626); animation: timerPulse 1s infinite; }
+@keyframes timerPulse { 0%,100% { opacity: 1; } 50% { opacity: .8; } }
+
+/* ── Input style ─────────────────────────────────── */
+.field {
+  width: 100%;
+  border: 2.5px solid #DBEAFE;
+  border-radius: .875rem;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: 'Nunito', sans-serif;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+  background: white;
+  box-shadow: inset 0 2px 6px rgba(30,58,138,0.05);
+}
+.field:focus { border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(59,130,246,0.15), inset 0 2px 6px rgba(30,58,138,0.05); }
+label.lbl { display: block; font-weight: 700; font-size: 13px; color: #4B5563; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── Stripe Element override ─────────────────────── */
+#stripe-card-element.field { padding: 14px 16px; }
+.StripeElement--focus { border-color: var(--secondary) !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important; }
+
+/* ── CTA button ──────────────────────────────────── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--cta), var(--cta-dark));
+  color: white;
+  font-weight: 800;
+  font-size: 16px;
+  border: none;
+  border-radius: 1.125rem;
+  padding: 15px 32px;
+  cursor: pointer;
+  transition: all .2s ease-out;
+  font-family: 'Fredoka', sans-serif;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 6px 20px rgba(249,115,22,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(249,115,22,0.4), inset 0 1px 0 rgba(255,255,255,0.2); }
+.btn-primary:active { transform: translateY(1px); box-shadow: 0 3px 10px rgba(249,115,22,0.25); transition: all .1s ease-out; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-secondary {
+  background: white;
+  color: var(--primary);
+  font-weight: 700;
+  border: 3px solid var(--border);
+  border-radius: 1.125rem;
+  padding: 12px 28px;
+  cursor: pointer;
+  transition: all .2s ease-out;
+  font-family: 'Fredoka', sans-serif;
+  box-shadow: 0 4px 14px rgba(30,58,138,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+.btn-secondary:hover { border-color: var(--secondary); background: #EFF6FF; box-shadow: 0 6px 18px rgba(59,130,246,0.15); }
+
+/* ── Confetti animation ──────────────────────────── */
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(-15px) rotate(0deg); }
+  80%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(340px) rotate(620deg); }
+}
+.confetti-piece { position: absolute; animation: confettiFall 1.4s ease forwards; }
+
+/* ── Page transitions (now handled via JS direction classes) ── */
+.step-panel { animation: none; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Allergy checkbox ────────────────────────────── */
+.allergy-check { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border: 2.5px solid #DBEAFE; border-radius: .875rem; cursor: pointer; transition: all .2s; background: white; }
+.allergy-check:has(input:checked) { border-color: #0E9F6E; background: #D1FAE5; }
+.allergy-check input[type=checkbox] { width: 18px; height: 18px; accent-color: #0E9F6E; cursor: pointer; }
+
+/* ── Success checkmark ───────────────────────────── */
+@keyframes scaleIn { 0% { transform: scale(0); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.success-icon { animation: scaleIn .5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+/* ── Navbar ──────────────────────────────────────── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(239,246,255,0.92);
+  backdrop-filter: blur(14px);
+  border-bottom: 2px solid rgba(191,219,254,0.6);
+}
+
+/* ── Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #EFF6FF; }
+::-webkit-scrollbar-thumb { background: #93C5FD; border-radius: 999px; }
+
+/* ── Spinner ─────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* ── Loading overlay ─────────────────────────────── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(239,246,255,0.85);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 18px;
+  color: var(--primary);
+}
+
+/* ── Admin table ─────────────────────────────────── */
+.admin-table { width: 100%; border-collapse: collapse; }
+.admin-table th { background: #F3F4F6; text-align: left; padding: 12px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #6B7280; font-weight: 700; }
+.admin-table td { padding: 14px 16px; border-bottom: 1px solid #F3F4F6; font-size: 14px; color: #374151; }
+.admin-table tr:hover td { background: #F9FAFB; }
+
+/* ── Status badges ───────────────────────────────── */
+.badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge-green { background: #D1FAE5; color: #065F46; }
+.badge-yellow { background: #FEF3C7; color: #B45309; }
+.badge-red { background: #FEE2E2; color: #991B1B; }
+.badge-gray { background: #F3F4F6; color: #6B7280; }
+.badge-blue { background: #DBEAFE; color: #1E40AF; }
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 640px) {
+  .modal-box { padding: 1.75rem 1.25rem; }
+}
+
+/* ── Mobile fixes ────────────────────────────────── */
+@media (max-width: 640px) {
+  #bookingBox {
+    margin: 0.5rem;
+    border-radius: 1.25rem;
+  }
+  .step-panel {
+    padding: 1.25rem !important;
+  }
+  .room-card, .food-card {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  .addon-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .addon-row .font-bold.text-indigo-600 {
+    min-width: 3rem;
+  }
+}
+
+/* Ensure text wraps everywhere */
+* {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── Admin Dashboard Dark Mode ───────────────────────────────
+   Scoped under html.dark so it never affects the customer site ── */
+html.dark {
+  --dk-bg1:        #111827;
+  --dk-bg2:        #1F2937;
+  --dk-bg3:        #374151;
+  --dk-text1:      #F3F4F6;
+  --dk-text2:      #E5E7EB;
+  --dk-text3:      #D1D5DB;
+  --dk-text4:      #9CA3AF;
+  --dk-text5:      #6B7280;
+  --dk-indigo:     #4F46E5;
+  --dk-indigo-lt:  #A5B4FC;
+  --dk-indigo-hov: #312E81;
+  --dk-indigo-foc: #6366F1;
+}
+
+html.dark .modal-overlay { background: rgba(0,0,0,.7); }
+html.dark .modal-box { background: var(--dk-bg1); color: var(--dk-text1); box-shadow: 0 24px 80px rgba(0,0,0,.5); border-color: var(--dk-bg3); }
+html.dark .field { background: var(--dk-bg2); border-color: var(--dk-bg3); color: var(--dk-text1); }
+html.dark .field::placeholder { color: var(--dk-text5); }
+html.dark .field:focus { border-color: var(--dk-indigo-foc); box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+html.dark label.lbl { color: var(--dk-text4); }
+html.dark .btn-secondary { background: var(--dk-bg2); color: var(--dk-indigo-lt); border-color: var(--dk-indigo); }
+html.dark .btn-secondary:hover { background: var(--dk-indigo-hov); }
+html.dark .admin-table th { background: var(--dk-bg2); color: var(--dk-text4); }
+html.dark .admin-table td { color: var(--dk-text3); border-bottom-color: var(--dk-bg2); }
+html.dark .admin-table tr:hover td { background: var(--dk-bg2); }
+html.dark .badge-green { background: #064E3B; color: #6EE7B7; }
+html.dark .badge-yellow { background: #78350F; color: #FCD34D; }
+html.dark .badge-red { background: #7F1D1D; color: #FCA5A5; }
+html.dark .badge-gray { background: var(--dk-bg3); color: var(--dk-text3); }
+html.dark nav { background: transparent; backdrop-filter: none; border-bottom: none; }
+html.dark #adminSidebar { background: var(--dk-bg1); border-right-color: transparent; }
+html.dark #adminSidebar a:hover { background: rgba(255,255,255,0.05); }
+html.dark .modal-box .bg-gray-50 { background: var(--dk-bg2); }
+html.dark .modal-box .bg-white { background: var(--dk-bg2); }
+html.dark .modal-box .bg-gray-100 { background: var(--dk-bg3); color: var(--dk-text2); }
+html.dark .modal-box .text-gray-800 { color: var(--dk-text1); }
+html.dark .modal-box .text-gray-700 { color: var(--dk-text2); }
+html.dark .modal-box .border-gray-200 { border-color: var(--dk-bg3); }
+html.dark .modal-box .border-gray-100 { border-color: var(--dk-bg2); }
+html.dark .ab-card { background: var(--dk-bg2) !important; border-color: var(--dk-bg3) !important; color: var(--dk-text1); }
+
+/* ── Directional step transitions ────────────────────────────── */
+.step-enter-forward { animation: stepSlideInRight .38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.step-enter-back    { animation: stepSlideInLeft  .38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes stepSlideInRight {
+  from { opacity: 0; transform: translateX(32px) scale(0.985); }
+  to   { opacity: 1; transform: translateX(0)    scale(1);     }
+}
+@keyframes stepSlideInLeft {
+  from { opacity: 0; transform: translateX(-32px) scale(0.985); }
+  to   { opacity: 1; transform: translateX(0)     scale(1);     }
+}
+
+/* ── Room card enhancements ──────────────────────────────────── */
+.room-card {
+  transition: all .32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+.room-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 28%, rgba(255,255,255,0.48) 50%, transparent 72%);
+  transform: translateX(-130%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.room-card:hover::after { transform: translateX(130%); }
+.room-card:hover {
+  transform: translateY(-5px) scale(1.014);
+  box-shadow: 0 20px 52px rgba(59,130,246,0.2), inset 0 1px 0 rgba(255,255,255,0.95);
+  border-color: var(--secondary);
+}
+.room-card.selected {
+  background: linear-gradient(140deg, #EFF6FF 0%, #F4F8FF 60%, #fff 100%);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.28), 0 16px 44px rgba(59,130,246,0.2), inset 0 1px 0 rgba(255,255,255,0.95);
+  animation: roomCardPop .45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes roomCardPop {
+  0%   { transform: scale(1); }
+  42%  { transform: scale(1.026); }
+  100% { transform: scale(1); }
+}
+
+/* ── Time slot enhancements ──────────────────────────────────── */
+.time-slot {
+  transition: all .26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  padding: 14px 12px;
+}
+.time-slot:hover:not(.unavailable) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(59,130,246,0.18);
+  border-color: var(--secondary);
+  background: linear-gradient(140deg, #EFF6FF 0%, #fff 100%);
+}
+.time-slot:active:not(.unavailable) {
+  transform: scale(0.92);
+  transition: all .1s ease-out;
+}
+.time-slot.selected {
+  background: linear-gradient(135deg, #1D4ED8, var(--secondary));
+  color: white;
+  border-color: #1D4ED8;
+  box-shadow: 0 10px 32px rgba(59,130,246,0.42), inset 0 1px 0 rgba(255,255,255,0.2);
+  animation: slotBounce .45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes slotBounce {
+  0%   { transform: scale(1); }
+  36%  { transform: scale(1.1); }
+  64%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+.time-slot.unavailable { opacity: 0.36; cursor: not-allowed; background: #F3F4F6; }
+.time-slot.held { border-color: var(--cta); background: #FFF7ED; color: #C2410C; cursor: not-allowed; opacity: 0.65; }
+
+/* ── Button shimmer ──────────────────────────────────────────── */
+.btn-primary { position: relative; overflow: hidden; }
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%);
+  transform: translateX(-130%);
+  transition: transform 0.52s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.btn-primary:not(:disabled):hover::after { transform: translateX(130%); }
+
+/* ── Guest counter bounce ────────────────────────────────────── */
+@keyframes countBounce {
+  0%   { transform: scale(1); }
+  28%  { transform: scale(1.55); color: var(--secondary); }
+  60%  { transform: scale(0.88); }
+  82%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.count-bounce { animation: countBounce .44s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* ── Step indicator enhancements ─────────────────────────────── */
+.step-dot { transition: all .35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.step-dot.done { animation: dotPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes dotPop {
+  0%   { transform: scale(0.55); }
+  55%  { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+.step-line { transition: background .45s ease; }
+.step-line.done { background: linear-gradient(90deg, #0E9F6E, #34D399); }
+
+/* ── Modal entrance animation ────────────────────────────────── */
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.972); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);     }
+}
+.modal-animate { animation: modalSlideUp .44s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Celebration screen ──────────────────────────────────────── */
+.celebration-ring {
+  width: 96px; height: 96px;
+  background: linear-gradient(135deg, #059669, #0E9F6E, #34D399);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto;
+  box-shadow: 0 0 0 10px rgba(14,159,110,0.16), 0 0 0 22px rgba(14,159,110,0.08), 0 22px 56px rgba(14,159,110,0.3);
+  animation: ringPop .55s cubic-bezier(0.34, 1.56, 0.64, 1) .05s both;
+}
+@keyframes ringPop {
+  0%   { transform: scale(0) rotate(-25deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg);   opacity: 1; }
+}
+.celebration-check { width: 54px; height: 54px; }
+.check-circle { stroke: rgba(255,255,255,0.22); stroke-width: 1.5; fill: none; }
+.check-path {
+  fill: none; stroke: white; stroke-width: 3.5;
+  stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 54; stroke-dashoffset: 54;
+  animation: drawCheck .42s ease .62s forwards;
+}
+@keyframes drawCheck { to { stroke-dashoffset: 0; } }
+
+/* Staggered content reveals for celebration */
+.stagger-1 { animation: staggerFadeUp .45s ease .18s both; }
+.stagger-2 { animation: staggerFadeUp .45s ease .32s both; }
+.stagger-3 { animation: staggerFadeUp .45s ease .46s both; }
+.stagger-4 { animation: staggerFadeUp .45s ease .60s both; }
+.stagger-5 { animation: staggerFadeUp .45s ease .74s both; }
+.stagger-6 { animation: staggerFadeUp .45s ease .88s both; }
+@keyframes staggerFadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Selected room checkmark badge ───────────────────────────── */
+.room-check-badge { animation: dotPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ── Navbar scroll glass effect ──────────────────────────────── */
+nav.scrolled {
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 4px 24px rgba(30,58,138,0.08);
+  border-bottom-color: rgba(191,219,254,0.45);
+}
+
+/* ── Food card spring on selection ───────────────────────────── */
+.food-card:active { transform: scale(0.95); transition: all .1s ease-out; }
+.food-card.selected { animation: roomCardPop .38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ── Scrollbar polish ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #BFDBFE; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #93C5FD; }

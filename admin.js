@@ -124,10 +124,10 @@ function splitTopLevelCommas(str) {
 // to their label (mirrors TYPE_PICKER_IDS) — other catalog labels can contain
 // their own literal parentheses (e.g. "Kids Party Platter (48pcs)") that must
 // NOT be mistaken for a variant breakdown.
-const FOOD_PREP_VARIANT_BASE_NAMES = new Set(['11-inch Pizza', 'Soft Drink', 'Juice Jug']);
+const FOOD_PREP_VARIANT_BASE_NAMES = new Set(['11-inch Pizza', 'Soft Drink', 'Nuggets']);
 
 // Tallies one booking's addons_summary into a running totals map, splitting
-// typed variants (pizza/soda/juice) out into their own named entries so
+// typed variants (pizza/soda/nuggets) out into their own named entries so
 // "11-inch Pizza (Salami & Cheese ×2)" counts as 2 of that specific variant,
 // not 2 generic pizzas.
 function tallyAddonsSummary(addonsSummary, totals) {
@@ -322,7 +322,7 @@ function showTab(tab) {
   if (tab === 'payments')   loadPayments();
   if (tab === 'customers')  loadCustomers();
   if (tab === 'today')      loadToday();
-  if (tab === 'reviews')    loadReviews();
+  if (tab === 'reviews')    { loadReviews(); loadSiteRating(); }
 }
 
 function refreshCurrentTab() { showTab(currentTab); }
@@ -554,6 +554,9 @@ function parseImportRow(row, colMap, index) {
   if (!matchedRoom) errors.push(`Room "${roomText}" not recognized`);
   if (!date) errors.push(`Date "${dateRaw}" could not be parsed`);
   if (!guests || guests < 1) errors.push('Missing/invalid guest count');
+  else if (matchedRoom && (guests < matchedRoom.minGuests || guests > matchedRoom.maxGuests)) {
+    errors.push(`${guests} guests is outside ${matchedRoom.name}'s allowed range (${matchedRoom.minGuests}-${matchedRoom.maxGuests})`);
+  }
   if (!time) errors.push('Missing time');
 
   return {
@@ -1124,7 +1127,7 @@ async function loadReviews() {
     list.innerHTML = reviews.map(r => `
       <div class="flex items-start justify-between gap-4 py-3 border-b border-gray-100 last:border-0 ${r.visible ? '' : 'opacity-50'}">
         <div class="flex-1">
-          <div class="text-amber-500 text-sm mb-1">${'★'.repeat(r.rating)}</div>
+          <div class="text-amber-500 text-sm mb-1">${'★'.repeat(r.rating)}${r.isManual ? ' <span class="text-gray-400 text-xs font-normal">· pasted manually</span>' : ''}</div>
           <p class="text-sm text-gray-700 dark:text-gray-300">"${escapeHtml(r.text)}"</p>
           <div class="text-xs text-gray-400 mt-1">${escapeHtml(r.authorName)} · ${new Date(r.time * 1000).toLocaleDateString('en-NZ')}</div>
         </div>
@@ -1161,6 +1164,241 @@ async function fetchReviewsNow() {
     alert('Fetch failed: ' + err.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔄 Fetch now'; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Overall rating (admin-set, replaces the old live Google Places pull)
+// ---------------------------------------------------------------------------
+let currentSiteRating = null;
+
+async function loadSiteRating() {
+  const display = document.getElementById('site-rating-display');
+  try {
+    currentSiteRating = await callAPI('admin/site-rating', null, 'GET');
+    renderSiteRatingDisplay();
+  } catch (err) {
+    display.innerHTML = `<p class="text-red-400 text-sm">Failed to load: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderSiteRatingDisplay() {
+  const display = document.getElementById('site-rating-display');
+  if (!currentSiteRating) {
+    display.innerHTML = `
+      <p class="text-gray-400 text-sm">Not set yet — the public site is showing a hardcoded placeholder rating.</p>
+      <button onclick="editSiteRating()" class="btn-primary py-2 px-4 text-sm">Set Rating</button>`;
+    return;
+  }
+  display.innerHTML = `
+    <div class="text-3xl font-display font-bold text-gray-900 dark:text-white">${parseFloat(currentSiteRating.rating).toFixed(1)} <span class="text-amber-500 text-xl">★</span></div>
+    <div class="text-sm text-gray-400">${currentSiteRating.reviewCount || 0} reviews</div>
+    <button onclick="editSiteRating()" class="btn-secondary py-2 px-4 text-sm">✏️ Edit</button>`;
+}
+
+function editSiteRating() {
+  document.getElementById('site-rating-display').style.display = 'none';
+  document.getElementById('site-rating-form').style.display = 'flex';
+  document.getElementById('sr_rating').value = currentSiteRating ? currentSiteRating.rating : '';
+  document.getElementById('sr_reviewCount').value = currentSiteRating ? currentSiteRating.reviewCount : '';
+}
+
+function cancelEditSiteRating() {
+  document.getElementById('site-rating-display').style.display = 'flex';
+  document.getElementById('site-rating-form').style.display = 'none';
+}
+
+async function saveSiteRating() {
+  const rating = parseFloat(document.getElementById('sr_rating').value);
+  const reviewCount = parseInt(document.getElementById('sr_reviewCount').value) || 0;
+  if (!rating || rating < 0 || rating > 5) { alert('Enter a rating between 0 and 5.'); return; }
+  try {
+    await callAPI('admin/site-rating', { rating, reviewCount }, 'PUT');
+    document.getElementById('site-rating-display').style.display = 'flex';
+    document.getElementById('site-rating-form').style.display = 'none';
+    await loadSiteRating();
+  } catch (err) {
+    alert('Failed to save: ' + err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Paste Reviews — parse review text copied from Google Maps and bulk-import
+// ---------------------------------------------------------------------------
+let parsedReviews = [];
+
+function openPasteReviewsModal() {
+  document.getElementById('pasteReviewsInput').value = '';
+  document.getElementById('pasteReviewsStep1').style.display = 'block';
+  document.getElementById('pasteReviewsStep2').style.display = 'none';
+  document.getElementById('pasteReviewsModal').style.display = 'flex';
+}
+
+function closePasteReviewsModal() {
+  document.getElementById('pasteReviewsModal').style.display = 'none';
+  parsedReviews = [];
+}
+
+function backToPasteInput() {
+  document.getElementById('pasteReviewsStep1').style.display = 'block';
+  document.getElementById('pasteReviewsStep2').style.display = 'none';
+}
+
+// Estimates a unix-seconds timestamp from Google's relative time text
+// ("a month ago", "3 weeks ago", etc.) — approximate, editable in the preview.
+function estimateTimeFromAgo(str) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const m = (str || '').toLowerCase().match(/(a|\d+)\s+(day|days|week|weeks|month|months|year|years)\s+ago/);
+  if (!m) return nowSec;
+  const n = m[1] === 'a' ? 1 : parseInt(m[1]);
+  const unit = m[2];
+  let secs;
+  if (unit.startsWith('day'))   secs = n * 86400;
+  else if (unit.startsWith('week'))  secs = n * 7 * 86400;
+  else if (unit.startsWith('month')) secs = n * 30 * 86400;
+  else /* year */                    secs = n * 365 * 86400;
+  return nowSec - secs;
+}
+
+// Parses a raw block of text copied from Google Maps' reviews panel. The
+// panel's star-rating icons never survive copy/paste as text, so rating is
+// not recoverable here — every parsed review defaults to 5★ and is editable
+// in the preview. Review blocks are found by locating each standalone
+// "<N> <unit> ago" line (the one reliable anchor Google always renders as
+// its own line) and walking outward from there: backward for the review-count
+// line ("Local Guide · N reviews · M photos") and author name, forward for
+// the body text up to the next "Like\n...\nShare" marker (which also strips
+// any trailing "+N" photo-count line and, between blocks, any "Response from
+// the owner" reply text — that reply's own inline "... ago" mention is never
+// mistaken for the anchor because it's not on a standalone line).
+function parseReviewsBlob(blob) {
+  const TIME_AGO_RE = /^(?:(?:new|edited)\s+)?(?:a|\d+)\s+(?:day|days|week|weeks|month|months|year|years)\s+ago$/i;
+  const COUNT_LINE_RE = /^(?:local guide\s*·\s*)?\d+\s+reviews?\b/i;
+  const PLUS_PHOTOS_RE = /^\+\d+$/;
+
+  const segments = blob.replace(/\r\n/g, '\n').split(/\n\s*Like\s*\n\s*Share\s*\n?/i);
+  const results = [];
+
+  segments.forEach(seg => {
+    const rawLines = seg.split('\n').map(l => l.trim());
+    const nonEmpty = [];
+    rawLines.forEach((l, i) => { if (l) nonEmpty.push(i); });
+
+    let anchorPos = -1;
+    for (let i = nonEmpty.length - 1; i >= 0; i--) {
+      if (TIME_AGO_RE.test(rawLines[nonEmpty[i]])) { anchorPos = i; break; }
+    }
+    if (anchorPos === -1) return; // no recognizable review block in this chunk
+
+    let bodyStart = anchorPos + 1;
+    if (bodyStart < nonEmpty.length && /^new$/i.test(rawLines[nonEmpty[bodyStart]])) bodyStart++;
+
+    let bodyEnd = nonEmpty.length;
+    if (bodyEnd > bodyStart && PLUS_PHOTOS_RE.test(rawLines[nonEmpty[bodyEnd - 1]])) bodyEnd--;
+
+    const text = nonEmpty.slice(bodyStart, bodyEnd).map(i => rawLines[i]).join('\n').trim();
+
+    let p = anchorPos - 1;
+    let authorName = '';
+    if (p >= 0 && COUNT_LINE_RE.test(rawLines[nonEmpty[p]])) p--;
+    if (p >= 0) authorName = rawLines[nonEmpty[p]];
+
+    const timeAgoRaw = rawLines[nonEmpty[anchorPos]];
+
+    results.push({
+      authorName,
+      rating: 5,
+      text,
+      timeAgoRaw,
+      time: estimateTimeFromAgo(timeAgoRaw),
+    });
+  });
+
+  return results;
+}
+
+function parsePastedReviews() {
+  const blob = document.getElementById('pasteReviewsInput').value;
+  if (!blob.trim()) { alert('Paste some review text first.'); return; }
+
+  parsedReviews = parseReviewsBlob(blob);
+  if (!parsedReviews.length) {
+    alert('Could not find any reviews in that text. Make sure each review still has its "X ago" line (e.g. "a month ago") intact.');
+    return;
+  }
+
+  document.getElementById('pasteReviewsStep1').style.display = 'none';
+  document.getElementById('pasteReviewsStep2').style.display = 'block';
+  renderReviewsPreview();
+}
+
+function reviewIsValid(r) {
+  return !!(r.authorName && r.authorName.trim() && r.text && r.text.trim());
+}
+
+function renderReviewsPreview() {
+  const validCount = parsedReviews.filter(reviewIsValid).length;
+  document.getElementById('pasteReviewsSummary').innerHTML =
+    `Found <strong>${parsedReviews.length}</strong> review${parsedReviews.length === 1 ? '' : 's'}. ` +
+    `<span class="text-green-600 font-semibold">${validCount} ready to import</span>` +
+    (validCount < parsedReviews.length ? `, <span class="text-red-500 font-semibold">${parsedReviews.length - validCount} missing an author name or text</span> (usually means the paste started or ended mid-review — fix the name below or re-paste including it).` : '.') +
+    ` Google doesn't include star ratings in copied text — check each rating below.`;
+
+  document.getElementById('pasteReviewsPreview').innerHTML = parsedReviews.map((r, i) => `
+    <div class="border ${reviewIsValid(r) ? 'border-gray-200 dark:border-gray-700' : 'border-red-300 bg-red-50 dark:bg-red-950/20'} rounded-xl p-4">
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 mb-2">
+        <div>
+          <label class="lbl">Author</label>
+          <input class="field py-2 text-sm" value="${escapeHtml(r.authorName)}" placeholder="Missing — enter a name" oninput="updateParsedReview(${i}, 'authorName', this.value)" />
+        </div>
+        <div>
+          <label class="lbl">Rating</label>
+          <select class="field py-2 text-sm w-24" onchange="updateParsedReview(${i}, 'rating', parseInt(this.value))">
+            ${[5,4,3,2,1].map(n => `<option value="${n}" ${r.rating === n ? 'selected' : ''}>${n}★</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Date <span class="text-gray-400 font-normal">(${escapeHtml(r.timeAgoRaw || 'unknown')})</span></label>
+          <input class="field py-2 text-sm" type="date" value="${new Date(r.time * 1000).toISOString().slice(0,10)}" onchange="updateParsedReview(${i}, 'time', Math.floor(new Date(this.value + 'T12:00:00').getTime() / 1000))" />
+        </div>
+      </div>
+      <label class="lbl">Review text</label>
+      <textarea class="field text-sm" style="min-height:70px" oninput="updateParsedReview(${i}, 'text', this.value)">${escapeHtml(r.text)}</textarea>
+      ${!reviewIsValid(r) ? '<p class="text-xs text-red-500 mt-1">Won\'t be imported until it has both an author name and review text.</p>' : ''}
+    </div>`).join('');
+}
+
+function updateParsedReview(index, field, value) {
+  parsedReviews[index][field] = value;
+  // Only re-render the summary counts/validity, not the inputs themselves —
+  // a full re-render would blow away whatever the admin is mid-typing.
+  const validCount = parsedReviews.filter(reviewIsValid).length;
+  document.getElementById('pasteReviewsSummary').innerHTML =
+    `Found <strong>${parsedReviews.length}</strong> review${parsedReviews.length === 1 ? '' : 's'}. ` +
+    `<span class="text-green-600 font-semibold">${validCount} ready to import</span>` +
+    (validCount < parsedReviews.length ? `, <span class="text-red-500 font-semibold">${parsedReviews.length - validCount} missing an author name or text</span>.` : '.');
+}
+
+async function confirmReviewsImport() {
+  const validReviews = parsedReviews.filter(reviewIsValid);
+  if (!validReviews.length) { alert('No valid reviews to import.'); return; }
+
+  const btn = document.getElementById('confirmReviewsImportBtn');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  try {
+    const { inserted, skipped } = await callAPI('admin/reviews/manual', {
+      reviews: validReviews.map(r => ({ authorName: r.authorName.trim(), rating: r.rating, text: r.text.trim(), time: r.time })),
+    }, 'POST');
+    alert(`✅ Imported ${inserted} review${inserted === 1 ? '' : 's'}.${skipped ? `\n⚠️ Skipped ${skipped} (duplicate or invalid).` : ''}`);
+    closePasteReviewsModal();
+    loadReviews();
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import Reviews';
   }
 }
 
@@ -1346,10 +1584,13 @@ async function loadBookings() {
     allBookings = await callAPI('admin/bookings?limit=500', null, 'GET');
   } catch (err) { console.error(err); return; }
 
-  // Split by today's date in NZ timezone
-  const today = nzDateStr();
-  upcomingBookings = allBookings.filter(b => (b.partyDate || '').slice(0, 10) >= today);
-  pastBookings     = allBookings.filter(b => (b.partyDate || '').slice(0, 10) <  today);
+  // A booking moves to Past once 90 minutes have elapsed since its actual
+  // party_date + party_time (minutesPastDue is computed server-side against
+  // NZ wall-clock time — see server/routes/admin.js), not merely once the
+  // calendar date has rolled over.
+  const isPast = b => parseFloat(b.minutesPastDue) > 90;
+  upcomingBookings = allBookings.filter(b => !isPast(b));
+  pastBookings     = allBookings.filter(isPast);
 
   // Update count badges
   const upEl = document.getElementById('upcoming-badge');
@@ -1486,9 +1727,10 @@ async function viewBooking(bookingId) {
         </button>
       </div>` : ''}
       <div class="flex gap-3 mt-2">
+        ${booking.status === 'confirmed' ? `
         <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
           ✉️ Resend Confirmation
-        </button>
+        </button>` : ''}
         ${booking.status !== 'cancelled' ? `
         <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
           Cancel Booking
@@ -1503,9 +1745,17 @@ function closeBookingModal() {
   document.getElementById('bookingDetailModal').style.display = 'none';
 }
 
+let rescheduleState = { bookingId: null, currentDate: null, currentTime: null, selectedDate: null, selectedTime: null, lastData: null };
+
+function rescheduleDateLabel(dateStr) {
+  const [y, m, d] = (dateStr || '').slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 async function openRescheduleModal(bookingId) {
   const modal = document.getElementById('rescheduleModal');
   const content = document.getElementById('rescheduleContent');
+  rescheduleState = { bookingId, currentDate: null, currentTime: null, selectedDate: null, selectedTime: null, lastData: null };
   content.innerHTML = '<p class="text-center text-gray-400 py-6">Loading available slots…</p>';
   modal.style.display = 'flex';
 
@@ -1517,56 +1767,100 @@ async function openRescheduleModal(bookingId) {
     return;
   }
 
-  const { currentTime, partyDate, slots } = data;
-  const availableSlots = slots.filter(s => s.available);
-
-  const dateStr = (() => {
-    const [y, m, d] = (partyDate || '').slice(0, 10).split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  })();
-
-  if (availableSlots.length === 0) {
-    content.innerHTML = `
-      <p class="text-sm text-gray-600 mb-3">Current time: <strong>${escapeHtml(currentTime)}</strong> on ${escapeHtml(dateStr)}</p>
-      <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-        No other time slots are available on this date. Rescheduling is not possible.
-      </div>
-      <button onclick="closeRescheduleModal()" class="btn-secondary w-full mt-4 py-3 text-sm">Close</button>`;
-    return;
-  }
-
-  const slotBtns = slots.map(s => {
-    if (s.isCurrent) {
-      return `<div class="px-4 py-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold text-sm text-center">
-        ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(current)</span>
-      </div>`;
-    }
-    if (s.isTaken) {
-      return `<div class="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 font-semibold text-sm text-center cursor-not-allowed">
-        ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(taken)</span>
-      </div>`;
-    }
-    return `<button onclick="confirmReschedule('${bookingId}', '${escapeHtml(s.time)}')"
-      class="px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-brand-orange hover:bg-orange-50 font-semibold text-sm text-center transition-all w-full">
-      ${escapeHtml(s.time)}
-    </button>`;
-  }).join('');
-
-  content.innerHTML = `
-    <p class="text-sm text-gray-600 mb-4">Select a new time for <strong>${escapeHtml(dateStr)}</strong>.<br>
-    The date cannot be changed.</p>
-    <div class="grid grid-cols-2 gap-3 mb-4">${slotBtns}</div>
-    <p class="text-xs text-gray-400">Selecting a new time will immediately release the current slot and send a notification email to the customer.</p>`;
+  rescheduleState.currentDate = data.currentDate;
+  rescheduleState.currentTime = data.currentTime;
+  rescheduleState.lastData = data;
+  renderRescheduleContent(data);
 }
 
-async function confirmReschedule(bookingId, newTime) {
+// Picking a slot only stages it — the reschedule doesn't happen until the
+// admin explicitly clicks the Confirm button below the grid. A prior version
+// fired the reschedule straight off the slot click (behind a native
+// confirm() popup), which was easy to misfire or dismiss without the admin
+// realizing nothing had actually happened.
+function renderRescheduleContent(data) {
   const content = document.getElementById('rescheduleContent');
-  if (!confirm(`Reschedule this booking to ${newTime}?\n\nA notification email will be sent to the customer.`)) return;
+  const { currentDate, currentTime, requestedDate, slots, anyAvailable } = data;
+  const isSelected = t => rescheduleState.selectedDate === requestedDate && rescheduleState.selectedTime === t;
 
+  const slotsHtml = anyAvailable ? `
+    <div id="rescheduleSlotGrid" class="grid grid-cols-2 gap-3 mb-2">
+      ${slots.map(s => {
+        if (s.isCurrent) {
+          return `<div class="px-4 py-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold text-sm text-center">
+            ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(current)</span>
+          </div>`;
+        }
+        if (s.isTaken) {
+          return `<div class="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 font-semibold text-sm text-center cursor-not-allowed">
+            ${escapeHtml(s.time)} <span class="text-xs font-normal ml-1">(taken)</span>
+          </div>`;
+        }
+        const selected = isSelected(s.time);
+        return `<button onclick="selectRescheduleSlot('${requestedDate}', '${escapeHtml(s.time)}')"
+          class="px-4 py-3 rounded-xl border-2 font-semibold text-sm text-center transition-all w-full ${selected ? 'border-brand-orange bg-orange-50 ring-2 ring-brand-orange' : 'border-gray-200 hover:border-brand-orange hover:bg-orange-50'}">
+          ${escapeHtml(s.time)}${selected ? ' <span class="text-xs font-normal ml-1">✓ selected</span>' : ''}
+        </button>`;
+      }).join('')}
+    </div>`
+    : `<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+        No time slots available on this date.
+      </div>`;
+
+  const canConfirm = !!(rescheduleState.selectedDate && rescheduleState.selectedTime);
+  const confirmBtn = `
+    <button id="rescheduleConfirmBtn" onclick="doConfirmReschedule()" ${canConfirm ? '' : 'disabled'}
+      class="btn-primary w-full py-3 text-sm mt-3 ${canConfirm ? '' : 'opacity-40 cursor-not-allowed'}">
+      ${canConfirm ? `Confirm reschedule to ${escapeHtml(rescheduleState.selectedTime)} on ${escapeHtml(rescheduleDateLabel(rescheduleState.selectedDate))}` : 'Select a new time slot'}
+    </button>
+    <p class="text-xs text-gray-400 mt-2">Confirming will immediately release the current slot, book the new one, and email the customer.</p>`;
+
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 mb-3">Current: <strong>${escapeHtml(currentTime)}</strong> on ${escapeHtml(rescheduleDateLabel(currentDate))}</p>
+    <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">New date</label>
+    <input type="date" id="reschedule_date_input" class="field mb-4" value="${requestedDate}" min="${nzDateStr()}" onchange="onRescheduleDateChange()" />
+    <div id="rescheduleSlotsWrap">${slotsHtml}</div>
+    ${confirmBtn}`;
+}
+
+function selectRescheduleSlot(date, time) {
+  rescheduleState.selectedDate = date;
+  rescheduleState.selectedTime = time;
+  renderRescheduleContent(rescheduleState.lastData);
+}
+
+async function onRescheduleDateChange() {
+  const dateVal = document.getElementById('reschedule_date_input').value;
+  if (!dateVal) return;
+
+  // Changing the date invalidates any slot already staged on the old date.
+  rescheduleState.selectedDate = null;
+  rescheduleState.selectedTime = null;
+
+  const wrap = document.getElementById('rescheduleSlotsWrap');
+  wrap.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">Checking availability…</p>';
+
+  let data;
+  try {
+    data = await callAPI(`admin/bookings/${rescheduleState.bookingId}/reschedule-slots?date=${dateVal}`, null, 'GET');
+  } catch (err) {
+    wrap.innerHTML = `<p class="text-red-500 text-sm">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  rescheduleState.lastData = data;
+  renderRescheduleContent(data);
+}
+
+async function doConfirmReschedule() {
+  const { bookingId, selectedDate: newDate, selectedTime: newTime } = rescheduleState;
+  if (!newDate || !newTime) return;
+
+  const content = document.getElementById('rescheduleContent');
+  const dateLabel = rescheduleDateLabel(newDate);
   content.innerHTML = '<p class="text-center text-gray-400 py-6">Rescheduling…</p>';
 
   try {
-    const result = await callAPI(`admin/bookings/${bookingId}/reschedule`, { newTime }, 'POST');
+    const result = await callAPI(`admin/bookings/${bookingId}/reschedule`, { newDate, newTime }, 'POST');
 
     try {
       await callAPI('notifications/booking-rescheduled', {
@@ -1576,7 +1870,8 @@ async function confirmReschedule(bookingId, newTime) {
         phone:        result.contactPhone,
         firstName:    result.firstName,
         roomName:     result.roomName,
-        partyDate:    result.partyDate,
+        partyDate:    result.newDate,
+        oldDate:      result.oldDate,
         oldTime:      result.oldTime,
         newTime:      result.newTime,
       });
@@ -1586,7 +1881,7 @@ async function confirmReschedule(bookingId, newTime) {
 
     closeRescheduleModal();
     closeBookingModal();
-    alert(`✅ Booking rescheduled to ${newTime}. Customer has been notified.`);
+    alert(`✅ Booking rescheduled to ${newTime} on ${dateLabel}. Customer has been notified.`);
     await loadBookings();
   } catch (err) {
     content.innerHTML = `<p class="text-red-500 text-sm mb-3">${escapeHtml(err.message)}</p>
@@ -1669,14 +1964,124 @@ async function clearCancelledBookings() {
 // ---------------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------------
+let paymentsSubTab = 'stripe';
+let paymentsRange = { from: null, to: null };
+
 async function loadPayments() {
   const tbody = document.getElementById('payments-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
+  let endpoint = 'admin/payments?limit=200';
+  if (paymentsRange.from && paymentsRange.to) {
+    endpoint = `admin/payments?from=${paymentsRange.from}&to=${paymentsRange.to}`;
+  }
+
   try {
-    allPayments = await callAPI('admin/payments?limit=200', null, 'GET');
+    allPayments = await callAPI(endpoint, null, 'GET');
   } catch (err) { console.error(err); return; }
-  renderPaymentsTable(allPayments);
+  renderCurrentPaymentsSubTab();
+  loadPaymentsSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Payments — summary banner + date range
+// ---------------------------------------------------------------------------
+async function loadPaymentsSummary() {
+  const titleEl = document.getElementById('payments-summary-title');
+  const subtitleEl = document.getElementById('payments-summary-subtitle');
+
+  let endpoint = 'admin/payments/summary';
+  if (paymentsRange.from && paymentsRange.to) {
+    endpoint += `?from=${paymentsRange.from}&to=${paymentsRange.to}`;
+    if (titleEl) titleEl.textContent = `📊 ${paymentsRange.from} → ${paymentsRange.to}`;
+    if (subtitleEl) subtitleEl.textContent = 'Payment traffic for the selected range';
+  } else {
+    if (titleEl) titleEl.textContent = '📊 This Month';
+    if (subtitleEl) subtitleEl.textContent = 'Payment traffic overview';
+  }
+
+  let data;
+  try {
+    data = await callAPI(endpoint, null, 'GET');
+  } catch (err) { console.error('payments summary load failed', err); return; }
+
+  document.getElementById('payments-summary-revenue').textContent = '$' + data.revenue.toFixed(2);
+  document.getElementById('payments-summary-count').textContent = data.successCount;
+  const avg = data.successCount > 0 ? data.revenue / data.successCount : 0;
+  document.getElementById('payments-summary-avg').textContent = '$' + avg.toFixed(2);
+  document.getElementById('payments-summary-refunds').textContent = '$' + data.refundedAmount.toFixed(2);
+  const refundCountEl = document.getElementById('payments-summary-refund-count');
+  if (refundCountEl) refundCountEl.textContent = data.refundedCount > 0 ? `(${data.refundedCount})` : '';
+}
+
+function applyPaymentsDateRange() {
+  const from = document.getElementById('paymentsRangeFrom').value;
+  const to = document.getElementById('paymentsRangeTo').value;
+  if (!from || !to) {
+    alert('Please select both a from and to date.');
+    return;
+  }
+  if (from > to) {
+    alert('The "from" date must be before the "to" date.');
+    return;
+  }
+  paymentsRange = { from, to };
+  loadPayments();
+}
+
+function clearPaymentsDateRange() {
+  document.getElementById('paymentsRangeFrom').value = '';
+  document.getElementById('paymentsRangeTo').value = '';
+  paymentsRange = { from: null, to: null };
+  loadPayments();
+}
+
+// ---------------------------------------------------------------------------
+// Payments — sub-tab management
+// ---------------------------------------------------------------------------
+function switchPaymentsSubTab(tab) {
+  paymentsSubTab = tab;
+  document.getElementById('pst-stripe')?.classList.toggle('active', tab === 'stripe');
+  document.getElementById('pst-manual')?.classList.toggle('active', tab === 'manual');
+  renderCurrentPaymentsSubTab();
+}
+
+function renderCurrentPaymentsSubTab() {
+  const stripePayments = allPayments.filter(p => p.paymentMethod !== 'manual');
+  const manualPayments = allPayments.filter(p => p.paymentMethod === 'manual');
+
+  const stripeBadge = document.getElementById('stripe-payments-badge');
+  if (stripeBadge) stripeBadge.textContent = stripePayments.length;
+  const manualBadge = document.getElementById('manual-payments-badge');
+  if (manualBadge) manualBadge.textContent = manualPayments.length;
+
+  renderPaymentsTable(paymentsSubTab === 'manual' ? manualPayments : stripePayments);
+}
+
+// Cardholder first name for the Payments tab, in priority order:
+//   1) Stripe billing_details.name captured at checkout (payments.cardholder_name)
+//   2) the name on the linked booking's account (users.first_name)
+//   3) parsed from the contact email's local part, capitalized
+//   4) '—'
+function cardholderFirstName(p) {
+  const fromStripe = (p.cardholderName || '').trim().split(/\s+/)[0];
+  if (fromStripe) return fromStripe;
+
+  const fromUser = (p.userFirstName || '').trim().split(/\s+/)[0];
+  if (fromUser) return fromUser;
+
+  const localPart = (p.contactEmail || '').split('@')[0];
+  if (localPart) return localPart.charAt(0).toUpperCase() + localPart.slice(1).toLowerCase();
+
+  return null;
+}
+
+function paymentStatusBadgeClass(status) {
+  return status === 'succeeded' ? 'badge-green'
+       : status === 'failed'    ? 'badge-red'
+       : status === 'refunded'  ? 'badge-yellow'
+       : status === 'pending'   ? 'badge-gray'
+       : 'badge-gray';
 }
 
 function renderPaymentsTable(payments) {
@@ -1691,22 +2096,28 @@ function renderPaymentsTable(payments) {
   tbody.innerHTML = payments.map(p => {
     const cardInfo = (p.cardBrand && p.cardLast4)
       ? `${p.cardBrand.toUpperCase()} •••• ${p.cardLast4}`
-      : '—';
+      : null;
+    const bookingRefHtml = p.bookingRef
+      ? (p.bookingId
+          ? `<span class="font-mono text-sm text-indigo-600 hover:underline cursor-pointer" onclick="viewBooking('${p.bookingId}')">${escapeHtml(p.bookingRef)}</span>`
+          : `<span class="font-mono text-sm text-indigo-600">${escapeHtml(p.bookingRef)}</span>`)
+      : '<span class="text-gray-400">—</span>';
+
     return `
     <tr>
-      <td data-label="Cardholder / Card">
-        <div class="font-semibold text-sm">${escapeHtml(p.cardholderName) || '—'}</div>
-        <div class="text-xs text-gray-400">${cardInfo}</div>
+      <td data-label="Customer">
+        <div class="font-semibold text-sm text-gray-900">${escapeHtml(cardholderFirstName(p)) || '—'}</div>
+        ${cardInfo ? `<div class="text-xs text-gray-400 mt-0.5">${cardInfo}</div>` : ''}
       </td>
       <td data-label="Email">
-        <div class="text-xs text-gray-400">${escapeHtml(p.contactEmail) || '—'}</div>
+        <div class="text-sm text-gray-500">${escapeHtml(p.contactEmail) || '—'}</div>
       </td>
-      <td data-label="Booking Ref"><span class="font-mono text-xs text-indigo-600">${p.bookingRef || '—'}</span></td>
-      <td data-label="Amount" class="font-bold">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
-      <td data-label="Status"><span class="badge ${p.status === 'succeeded' ? 'badge-green' : p.status === 'failed' ? 'badge-red' : 'badge-yellow'}">${p.status}</span></td>
-      <td data-label="Date" class="text-xs text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
-      <td data-label="Actions">
-        ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-xs text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
+      <td data-label="Booking Ref">${bookingRefHtml}</td>
+      <td data-label="Amount" class="font-bold text-gray-900">$${parseFloat(p.amount || 0).toFixed(2)} ${(p.currency || 'nzd').toUpperCase()}</td>
+      <td data-label="Status"><span class="badge ${paymentStatusBadgeClass(p.status)}">${p.status}</span></td>
+      <td data-label="Date" class="text-sm text-gray-500">${new Date(p.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</td>
+      <td data-label="Action">
+        ${p.status === 'succeeded' ? `<button onclick="refundPayment('${p.id}', '${p.stripePaymentIntentId}', ${p.amount})" class="text-sm text-red-500 hover:underline font-semibold">Refund</button>` : '—'}
       </td>
     </tr>`;
   }).join('');
@@ -1735,7 +2146,7 @@ async function loadCustomers() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Loading...</td></tr>';
 
   try {
-    allCustomers = await callAPI('admin/customers?limit=200', null, 'GET');
+    allCustomers = await callAPI('admin/customers?limit=5000', null, 'GET');
   } catch (err) { console.error(err); return; }
   renderCustomersTable(allCustomers);
 }
@@ -1743,6 +2154,9 @@ async function loadCustomers() {
 function renderCustomersTable(customers) {
   const tbody = document.getElementById('customers-tbody');
   if (!tbody) return;
+
+  const countEl = document.getElementById('customers-count');
+  if (countEl) countEl.textContent = customers && customers.length ? `(${customers.length})` : '';
 
   if (!customers || customers.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">No customers found.</td></tr>';
@@ -1807,10 +2221,12 @@ async function deleteSelectedCustomers() {
   const checked = [...document.querySelectorAll('.customer-checkbox:checked')];
   if (!checked.length) return;
   const ids = checked.map(cb => cb.dataset.id);
-  if (!confirm(`Permanently delete ${ids.length} customer record${ids.length === 1 ? '' : 's'}? This cannot be undone.`)) return;
+  if (!confirm(`Permanently delete ${ids.length} customer record${ids.length === 1 ? '' : 's'}? This cannot be undone.\n\nCustomers with existing bookings will be skipped, since their booking history must be preserved.`)) return;
   try {
-    const { deleted } = await callAPI('admin/customers/bulk-delete', { ids });
-    alert(`✅ Deleted ${deleted} customer${deleted === 1 ? '' : 's'}.`);
+    const { deleted, skipped } = await callAPI('admin/customers/bulk-delete', { ids });
+    let msg = `✅ Deleted ${deleted} customer${deleted === 1 ? '' : 's'}.`;
+    if (skipped) msg += `\n⚠️ Skipped ${skipped} customer${skipped === 1 ? '' : 's'} with existing bookings.`;
+    alert(msg);
     await loadCustomers();
   } catch (err) {
     alert('Delete failed: ' + err.message);
@@ -1880,7 +2296,10 @@ function handleSearch(query) {
     ));
   }
   if (currentTab === 'payments') {
-    renderPaymentsTable(allPayments.filter(p =>
+    const subtabPayments = allPayments.filter(p =>
+      paymentsSubTab === 'manual' ? p.paymentMethod === 'manual' : p.paymentMethod !== 'manual'
+    );
+    renderPaymentsTable(subtabPayments.filter(p =>
       (p.bookingRef || '').toLowerCase().includes(q) ||
       (p.contactEmail || '').toLowerCase().includes(q) ||
       (p.cardholderName || '').toLowerCase().includes(q)
@@ -1960,7 +2379,7 @@ const AB_ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',     price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28 pcs)',   price: 42.90 },
   drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
-  drinks_juice:    { label: 'OJ / Apple Juice (1 Jug)',        price: 27 },
+  nuggets_extra:   { label: 'Extra Nuggets — 15pc or 10pc + Fries', price: 20 },
 };
 
 // Local state for the manual booking modal
@@ -1972,12 +2391,12 @@ let abState = {
   selectedTime: null,
   addons: {},
   sodaTypes: {},
-  juiceTypes: {},
+  nuggetTypes: {},
   pizzaTypes: {},
 };
 
 function openAddBookingModal() {
-  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, juiceTypes: {}, pizzaTypes: {} };
+  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, nuggetTypes: {}, pizzaTypes: {} };
 
   const today = nzDateStr();
   document.getElementById('ab_date').min = today;
@@ -2186,19 +2605,19 @@ function abOnFoodInput() {
 
 // ── Shared type-picker helpers (used by both ab_ and eb_ forms) ──────────────
 
-const TYPE_PICKER_IDS = new Set(['drinks_soda', 'drinks_juice', 'pizza_11']);
+const TYPE_PICKER_IDS = new Set(['drinks_soda', 'nuggets_extra', 'pizza_11']);
 
 function getAddonTypeMap(addonId) {
-  if (addonId === 'drinks_soda')  return { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
-  if (addonId === 'drinks_juice') return { 'Orange Juice': 'OrangeJuice', 'Apple Juice': 'AppleJuice' };
-  if (addonId === 'pizza_11')     return { 'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese', 'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza' };
+  if (addonId === 'drinks_soda')    return { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  if (addonId === 'nuggets_extra')  return { '15pc': '15pc', '10pc + Fries': '10pcFries' };
+  if (addonId === 'pizza_11')       return { 'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese', 'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza' };
   return {};
 }
 
 function getAddonTypeStateKey(addonId) {
-  if (addonId === 'drinks_soda')  return 'sodaTypes';
-  if (addonId === 'drinks_juice') return 'juiceTypes';
-  if (addonId === 'pizza_11')     return 'pizzaTypes';
+  if (addonId === 'drinks_soda')   return 'sodaTypes';
+  if (addonId === 'nuggets_extra') return 'nuggetTypes';
+  if (addonId === 'pizza_11')      return 'pizzaTypes';
   return null;
 }
 
@@ -2270,9 +2689,9 @@ function getAddonLabelWithTypes(id, addonState) {
   const stateKey = getAddonTypeStateKey(id);
   if (!stateKey || !addonState[stateKey] || !Object.keys(addonState[stateKey]).length) return a.label;
   const parts = Object.entries(addonState[stateKey]).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
-  if (id === 'drinks_soda')  return `Soft Drink (${parts.join(', ')})`;
-  if (id === 'drinks_juice') return `Juice Jug (${parts.join(', ')})`;
-  if (id === 'pizza_11')     return `11-inch Pizza (${parts.join(', ')})`;
+  if (id === 'drinks_soda')    return `Soft Drink (${parts.join(', ')})`;
+  if (id === 'nuggets_extra')  return `Nuggets (${parts.join(', ')})`;
+  if (id === 'pizza_11')       return `11-inch Pizza (${parts.join(', ')})`;
   return a.label;
 }
 
@@ -2414,7 +2833,9 @@ async function submitAddBooking() {
   const burgers = parseInt(document.getElementById('ab_burgerCount').value) || 0;
 
   // Validate
-  if (!firstName) { errEl.textContent = 'First name is required.'; errEl.classList.remove('hidden'); document.getElementById('ab_firstName').focus(); return; }
+  // (First name/email are allowed blank here for phone bookings taken
+  // without full details yet — the server defaults them to "ADMIN" /
+  // admin@wonderworldwestgate.co.nz so they never save as blank/null.)
   if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
   if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
   if (!time)   { errEl.textContent = 'Please select a time slot.'; errEl.classList.remove('hidden'); return; }
@@ -2424,7 +2845,7 @@ async function submitAddBooking() {
     return;
   }
 
-  // Pizza / soda / juice type validation
+  // Pizza / soda / nuggets type validation
   const pizzaQty = abState.addons['pizza_11'] || 0;
   if (pizzaQty > 0) {
     const picked = Object.values(abState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
@@ -2445,13 +2866,13 @@ async function submitAddBooking() {
       return;
     }
   }
-  const juiceQty = abState.addons['drinks_juice'] || 0;
-  if (juiceQty > 0) {
-    const picked = Object.values(abState.juiceTypes || {}).reduce((s, v) => s + v, 0);
-    if (picked < juiceQty) {
-      errEl.textContent = `Please choose a flavour for all ${juiceQty} juice jug(s) before saving.`;
+  const nuggetQty = abState.addons['nuggets_extra'] || 0;
+  if (nuggetQty > 0) {
+    const picked = Object.values(abState.nuggetTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < nuggetQty) {
+      errEl.textContent = `Please choose a type for all ${nuggetQty} nugget order(s) before saving.`;
       errEl.classList.remove('hidden');
-      document.getElementById('ab_typePicker_drinks_juice')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById('ab_typePicker_nuggets_extra')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
   }
@@ -2508,7 +2929,7 @@ let editBookingState = {
   guests: 10,
   addons: {},
   sodaTypes: {},
-  juiceTypes: {},
+  nuggetTypes: {},
   pizzaTypes: {},
   roomMin: 1,
   roomMax: 24,
@@ -2534,9 +2955,9 @@ function parseAddonsSummary(summary) {
 
   // Typed items have variant names embedded in the label, so match on the base prefix only
   const flexMatchers = {
-    drinks_soda:  /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
-    drinks_juice: /Juice Jug(?:\s*\([^)]*\))?\s*×(\d+)/i,
-    pizza_11:     /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
+    drinks_soda:    /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
+    nuggets_extra:  /Nuggets(?:\s*\([^)]*\))?\s*×(\d+)/i,
+    pizza_11:       /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
   };
   Object.entries(flexMatchers).forEach(([id, pattern]) => {
     const m = summary.match(pattern);
@@ -2556,9 +2977,9 @@ function parseAddonsSummary(summary) {
 function parseTypesFromSummary(summary, addonId) {
   if (!summary) return {};
   const basePatterns = {
-    drinks_soda:  /Soft Drink\s*\(([^)]+)\)/i,
-    drinks_juice: /Juice Jug\s*\(([^)]+)\)/i,
-    pizza_11:     /11-inch Pizza\s*\(([^)]+)\)/i,
+    drinks_soda:    /Soft Drink\s*\(([^)]+)\)/i,
+    nuggets_extra:  /Nuggets\s*\(([^)]+)\)/i,
+    pizza_11:       /11-inch Pizza\s*\(([^)]+)\)/i,
   };
   const pattern = basePatterns[addonId];
   if (!pattern) return {};
@@ -2586,7 +3007,7 @@ function openEditBookingModal(bookingId) {
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
   editBookingState.pizzaTypes = parseTypesFromSummary(booking.addonsSummary, 'pizza_11');
   editBookingState.sodaTypes  = parseTypesFromSummary(booking.addonsSummary, 'drinks_soda');
-  editBookingState.juiceTypes = parseTypesFromSummary(booking.addonsSummary, 'drinks_juice');
+  editBookingState.nuggetTypes = parseTypesFromSummary(booking.addonsSummary, 'nuggets_extra');
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -2783,13 +3204,13 @@ async function submitEditBooking() {
       return;
     }
   }
-  const juiceQty = editBookingState.addons['drinks_juice'] || 0;
-  if (juiceQty > 0) {
-    const picked = Object.values(editBookingState.juiceTypes || {}).reduce((s, v) => s + v, 0);
-    if (picked < juiceQty) {
-      errEl.textContent = `Please choose a flavour for all ${juiceQty} juice jug(s) before saving.`;
+  const nuggetQty = editBookingState.addons['nuggets_extra'] || 0;
+  if (nuggetQty > 0) {
+    const picked = Object.values(editBookingState.nuggetTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < nuggetQty) {
+      errEl.textContent = `Please choose a type for all ${nuggetQty} nugget order(s) before saving.`;
       errEl.classList.remove('hidden');
-      document.getElementById('eb_typePicker_drinks_juice')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById('eb_typePicker_nuggets_extra')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
   }

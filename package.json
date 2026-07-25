@@ -1,0 +1,14 @@
+{
+  "name": "wonderworld-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build tooling for the Wonder World Westgate static site (public pages + admin dashboard)",
+  "scripts": {
+    "build:css": "npm run build:css:public && npm run build:css:admin",
+    "build:css:public": "tailwindcss -c tailwind.config.js -i ./tailwind-input.css -o ./tailwind.css --minify",
+    "build:css:admin": "tailwindcss -c tailwind.admin.config.js -i ./tailwind-input.css -o ./tailwind-admin.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
+  }
+}

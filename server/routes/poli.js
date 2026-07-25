@@ -35,6 +35,7 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
   const uid = req.user.uid;
 
   if (!slotHoldId) return res.status(400).json({ error: 'Missing slot hold.' });
+  if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
 
   try {
     const { rows: [room] } = await pool.query(
@@ -129,6 +130,13 @@ async function verifyAndConfirm(token) {
   });
 
   await pool.query('DELETE FROM poli_pending_bookings WHERE poli_token = $1', [token]);
+
+  // Best-effort — the booking already succeeded above, this is just
+  // bookkeeping so the wizard doesn't offer to "resume" a completed booking.
+  pool.query(
+    `UPDATE booking_sessions SET status = 'completed', updated_at = now() WHERE user_id = $1 AND status = 'active'`,
+    [p.uid]
+  ).catch(err => console.error('Failed to mark booking_session completed:', err));
 
   // Unlike Stripe/Afterpay, the browser may never come back to trigger this
   // client-side — send it now, server-side, since we already have everything.

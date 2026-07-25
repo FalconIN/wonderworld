@@ -10,7 +10,7 @@ const { roomDisplayName } = require('../roomDisplayNames');
 async function createConfirmedBooking({
   bookingRef, uid, room, partyDate, partyTime, guestCount, foodChoice,
   allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
-  contactEmail, contactPhone, slotHoldId, cardholderName,
+  contactEmail, contactPhone, slotHoldId, cardholderName, cardBrand, cardLast4,
   paymentProvider, stripePaymentIntentId, poliTransactionToken, poliTransactionRef,
 }) {
   const client = await pool.connect();
@@ -39,10 +39,11 @@ async function createConfirmedBooking({
     await client.query(
       `INSERT INTO payments
          (booking_id, user_id, stripe_payment_intent_id, amount, currency, status, cardholder_name,
-          payment_provider, poli_transaction_token, poli_transaction_ref)
-       VALUES ($1,$2,$3,$4,'nzd','succeeded',$5,$6,$7,$8)`,
+          card_brand, card_last4, payment_provider, poli_transaction_token, poli_transaction_ref)
+       VALUES ($1,$2,$3,$4,'nzd','succeeded',$5,$6,$7,$8,$9,$10)`,
       [booking.id, uid, stripePaymentIntentId || null, totalAmount, cardholderName || null,
-       paymentProvider || 'stripe', poliTransactionToken || null, poliTransactionRef || null]
+       cardBrand || null, cardLast4 || null, paymentProvider || 'stripe',
+       poliTransactionToken || null, poliTransactionRef || null]
     );
 
     await client.query('COMMIT');

@@ -35,6 +35,7 @@ const state = {
   slotHoldId:     null,
   isWeekend:      false,
   selectedFood:   null,
+  foodSplit:      null,
   allergyNotes:   '',
   allergies:      [],
   addons:         {},
@@ -42,6 +43,8 @@ const state = {
   confirmEmail:   '',
   confirmPhone:   '',
   bookingRef:     '',
+  sessionId:      null,
+  sessionExpiresAt: null,
   bookingId:      null,
   stripePaymentIntentId: null,
   calculatedTotal: 0,
@@ -106,6 +109,10 @@ async function goToStep(n) {
       banner.classList.toggle('hidden', hrs <= 48);
     }
   }
+
+  // Autosave wizard progress against the booking session (no-ops if there
+  // isn't one, e.g. still on step 0 or already past a completed booking).
+  if (n >= 1 && n <= 5 && typeof saveSessionState === 'function') saveSessionState();
 
   // Scroll to top of modal
   const box = document.getElementById('bookingBox');
@@ -211,19 +218,19 @@ async function validateStep(n) {
     const sodaErr = document.getElementById('sodaTypeError');
     if (sodaErr) sodaErr.classList.add('hidden');
 
-    // Juice type validation
-    const juiceQty = state.addons?.drinks_juice || 0;
-    if (juiceQty > 0) {
-      const juicePicked = state.juiceTypes ? Object.values(state.juiceTypes).reduce((s, v) => s + v, 0) : 0;
-      if (juicePicked < juiceQty) {
-        const errEl = document.getElementById('juiceTypeError');
+    // Nugget type validation
+    const nuggetQty = state.addons?.nuggets_extra || 0;
+    if (nuggetQty > 0) {
+      const nuggetPicked = state.nuggetTypes ? Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0) : 0;
+      if (nuggetPicked < nuggetQty) {
+        const errEl = document.getElementById('nuggetTypeError');
         if (errEl) { errEl.classList.remove('hidden'); errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-        showFieldError('Please choose a flavour of juice before continuing.');
+        showFieldError('Please choose a type for your nuggets before continuing.');
         return false;
       }
     }
-    const juiceErr = document.getElementById('juiceTypeError');
-    if (juiceErr) juiceErr.classList.add('hidden');
+    const nuggetErr = document.getElementById('nuggetTypeError');
+    if (nuggetErr) nuggetErr.classList.add('hidden');
 
     const waiver = document.getElementById('liabilityWaiver');
     if (waiver && !waiver.checked) {
@@ -284,7 +291,14 @@ function openBooking() {
     void box.offsetWidth;
     box.classList.add('modal-animate');
   }
-  resetWizard();
+
+  // Authenticated customers resume an in-progress attempt (if any) instead
+  // of always starting fresh — see resumeOrStartWizard() in booking.js.
+  if (state.isAuthenticated && typeof resumeOrStartWizard === 'function') {
+    resumeOrStartWizard();
+  } else {
+    resetWizard();
+  }
 }
 
 function closeBooking() {
@@ -292,11 +306,13 @@ function closeBooking() {
   if (overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
   stopTimer();
+  if (typeof stopSessionTimer === 'function') stopSessionTimer();
 
-  // Release slot hold if exists
-  if (state.slotHoldId) {
-    releaseSlotHold(state.slotHoldId);
-  }
+  // The slot hold is intentionally NOT released here — it shares its
+  // deadline with the booking session (see POST /api/slots/hold), so it
+  // should survive close/reopen exactly like the rest of the session does,
+  // rather than being torn down early just because the modal closed. It
+  // still expires naturally at the same shared expires_at either way.
 }
 
 function handleOverlayClick(event) {
@@ -332,6 +348,7 @@ function resetWizard() {
     slotHoldId: null,
     isWeekend: false,
     selectedFood: null,
+    foodSplit: null,
     allergyNotes: '',
     allergies: [],
     addons: {},
@@ -342,6 +359,8 @@ function resetWizard() {
     bookingId: null,
     stripePaymentIntentId: null,
     calculatedTotal: 0,
+    sessionId: null,
+    sessionExpiresAt: null,
   });
 
   // Restore auth state (don't reset if already logged in)
@@ -488,7 +507,7 @@ function renderHours() {
 // FAQ accordion
 // ---------------------------------------------------------------------------
 const FAQ_DATA = [
-  { q: "What's included in the party package?", a: "Every party includes exclusive use of your chosen room for 90 minutes, a dedicated party host, tableware, decorations, and your choice of food for all guests." },
+  { q: "What's included in the party package?", a: "Every party includes exclusive use of your chosen room for 90 minutes, tableware, and your choice of food for all guests." },
   { q: "Can I bring my own birthday cake?", a: "Absolutely! You're welcome to bring your own cake. We'll provide plates and napkins — just let us know in advance if you need any special arrangements for cutting and serving." },
   { q: "How far in advance should I book?", a: "We recommend booking at least 3–4 weeks ahead, especially for weekend slots which fill up quickly. Holiday periods (school holidays, Christmas, Easter) can book out 6–8 weeks in advance, so get in early!" },
   { q: "What's the cancellation or rescheduling policy?", a: "Cancellations made more than 14 days before your party date receive a full refund. Cancellations made 7–14 days before receive a 50% refund. Cancellations made less than 7 days before are non-refundable. No-shows on the day are non-refundable. Contact us early and we'll always do our best to help." },
@@ -716,6 +735,8 @@ function changeFoodSplit(type, delta) {
     if (btn) btn.disabled = atMax;
   });
 
+  state.foodSplit = { nuggets: n, burgers: b, veges: v };
+
   if (newTotal === total) {
     const parts = [];
     if (n > 0) parts.push(n + ' Nuggets');
@@ -827,7 +848,7 @@ const editState = {
   newGuestCount: 0,
   editNuggets: 0, editBurgers: 0, editVeges: 0,
   newAddons: {},
-  newPizzaTypes: {}, newSodaTypes: {}, newJuiceTypes: {},
+  newPizzaTypes: {}, newSodaTypes: {}, newNuggetTypes: {},
   savedCard: null,
   deltaAmount: 0,
   editElements: null,
@@ -929,7 +950,7 @@ function closeEditBooking() {
   Object.assign(editState, {
     booking: null, newGuestCount: 0,
     editNuggets: 0, editBurgers: 0, editVeges: 0,
-    newAddons: {}, newPizzaTypes: {}, newSodaTypes: {}, newJuiceTypes: {},
+    newAddons: {}, newPizzaTypes: {}, newSodaTypes: {}, newNuggetTypes: {},
     savedCard: null, deltaAmount: 0, paymentMode: 'new',
   });
 }
@@ -943,7 +964,7 @@ function renderEditStep1(booking, savedCardInfo) {
   editState.booking = booking;
   editState.newGuestCount = booking.guestCount;
   editState.newAddons = {};
-  editState.newPizzaTypes = {}; editState.newSodaTypes = {}; editState.newJuiceTypes = {};
+  editState.newPizzaTypes = {}; editState.newSodaTypes = {}; editState.newNuggetTypes = {};
   editState.editNuggets = 0; editState.editBurgers = 0; editState.editVeges = 0;
   editState.savedCard = savedCardInfo?.hasSavedCard ? savedCardInfo : null;
   editState.paymentMode = editState.savedCard ? 'saved' : 'new';
@@ -1070,7 +1091,7 @@ function buildEditAddonsHtml() {
     { id: 'sushi_kids48',    emoji: '🍣', name: 'Kids Party Platter (48 pcs)', sub: 'Salmon, Teriyaki, Katsu, Tuna Mayo, Crab Stick, Avocado',               price: 49.90 },
     { id: 'sushi_garden28',  emoji: '🥗', name: 'Green Garden Platter (28 pcs)', sub: 'Garden Veggie Roll, Avocado Roll, Tofu Veggie, Avo Nigiri',           price: 42.90 },
     { id: 'drinks_soda',     emoji: '🥤', name: 'Soft Drink',               sub: 'Coke · Sprite · Fanta · L&P — per bottle',                                  price: 10,   hasPicker: 'soda' },
-    { id: 'drinks_juice',    emoji: '🍊', name: 'Orange / Apple Juice Jug', sub: '1 Jug',                                                                     price: 27,   hasPicker: 'juice' },
+    { id: 'nuggets_extra',   emoji: '🍗', name: 'Extra Nuggets',            sub: '15pc · or 10pc + Fries',                                                    price: 20,   hasPicker: 'nugget' },
   ];
 
   return addonDefs.map(a => {
@@ -1117,22 +1138,22 @@ function buildEditAddonsHtml() {
             ).join('')}
           </div>
         </div>`;
-    } else if (a.hasPicker === 'juice') {
+    } else if (a.hasPicker === 'nugget') {
       pickerHtml = `
-        <div id="editJuicePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+        <div id="editNuggetPicker" class="hidden mt-3 pt-3 border-t border-gray-200">
           <div class="flex justify-between mb-2">
-            <span class="text-xs text-gray-500 font-semibold">Which flavour(s)?</span>
-            <span id="editJuiceCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</span>
+            <span class="text-xs text-gray-500 font-semibold">Which type(s)?</span>
+            <span id="editNuggetCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</span>
           </div>
-          <div id="editJuiceTypeError" class="text-red-500 text-xs mb-2 hidden">Please choose a flavour of juice before continuing.</div>
+          <div id="editNuggetTypeError" class="text-red-500 text-xs mb-2 hidden">Please choose a type for your nuggets before continuing.</div>
           <div class="space-y-1.5">
-            ${['Orange Juice','Apple Juice'].map(t =>
+            ${['15pc','10pc + Fries'].map(t =>
               `<div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-gray-700">${t}</span>
                 <div class="flex items-center gap-1">
-                  <button type="button" onclick="changeEditJuiceType('${t}',-1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-5 text-center text-xs font-bold" id="editJuiceQty_${t.replace(/[^a-z]/gi,'')}"}>0</span>
-                  <button type="button" onclick="changeEditJuiceType('${t}',1)" id="editJuicePlus_${t.replace(/[^a-z]/gi,'')}" class="edit-juice-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  <button type="button" onclick="changeEditNuggetType('${t}',-1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-5 text-center text-xs font-bold" id="editNuggetQty_${t.replace(/[^a-z]/gi,'')}"}>0</span>
+                  <button type="button" onclick="changeEditNuggetType('${t}',1)" id="editNuggetPlus_${t.replace(/[^a-z]/gi,'')}" class="edit-nugget-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>`
             ).join('')}
@@ -1263,15 +1284,15 @@ function changeEditAddon(id, delta) {
       updateEditSodaPickerUI();
     }
   }
-  if (id === 'drinks_juice') {
-    const picker = document.getElementById('editJuicePicker');
+  if (id === 'nuggets_extra') {
+    const picker = document.getElementById('editNuggetPicker');
     if (picker) picker.classList.toggle('hidden', next === 0);
     if (next === 0) {
-      editState.newJuiceTypes = {};
-      updateEditJuicePickerUI();
+      editState.newNuggetTypes = {};
+      updateEditNuggetPickerUI();
     } else {
-      trimEditTypeAllocation(editState.newJuiceTypes, next);
-      updateEditJuicePickerUI();
+      trimEditTypeAllocation(editState.newNuggetTypes, next);
+      updateEditNuggetPickerUI();
     }
   }
   updateEditDelta();
@@ -1305,13 +1326,13 @@ function changeEditSodaType(type, delta) {
   updateEditSodaPickerUI();
 }
 
-function changeEditJuiceType(type, delta) {
-  const qty = editState.newAddons.drinks_juice || 0;
-  const total = Object.values(editState.newJuiceTypes).reduce((s,v)=>s+v,0);
+function changeEditNuggetType(type, delta) {
+  const qty = editState.newAddons.nuggets_extra || 0;
+  const total = Object.values(editState.newNuggetTypes).reduce((s,v)=>s+v,0);
   if (delta > 0 && total >= qty) return;
-  const next = Math.max(0, (editState.newJuiceTypes[type] || 0) + delta);
-  if (next === 0) delete editState.newJuiceTypes[type]; else editState.newJuiceTypes[type] = next;
-  updateEditJuicePickerUI();
+  const next = Math.max(0, (editState.newNuggetTypes[type] || 0) + delta);
+  if (next === 0) delete editState.newNuggetTypes[type]; else editState.newNuggetTypes[type] = next;
+  updateEditNuggetPickerUI();
 }
 
 function updateEditPizzaPickerUI() {
@@ -1342,17 +1363,17 @@ function updateEditSodaPickerUI() {
   if (cEl) cEl.textContent = `${total} / ${qty} allocated`;
 }
 
-function updateEditJuicePickerUI() {
-  const qty = editState.newAddons.drinks_juice || 0;
-  const total = Object.values(editState.newJuiceTypes).reduce((s,v)=>s+v,0);
+function updateEditNuggetPickerUI() {
+  const qty = editState.newAddons.nuggets_extra || 0;
+  const total = Object.values(editState.newNuggetTypes).reduce((s,v)=>s+v,0);
   const atMax = total >= qty;
-  [['Orange Juice','OrangeJuice'],['Apple Juice','AppleJuice']].forEach(([t,id]) => {
-    const qEl = document.getElementById('editJuiceQty_' + t.replace(/[^a-z]/gi,''));
-    if (qEl) qEl.textContent = editState.newJuiceTypes[t] || 0;
-    const pEl = document.getElementById('editJuicePlus_' + t.replace(/[^a-z]/gi,''));
+  ['15pc','10pc + Fries'].forEach((t) => {
+    const qEl = document.getElementById('editNuggetQty_' + t.replace(/[^a-z]/gi,''));
+    if (qEl) qEl.textContent = editState.newNuggetTypes[t] || 0;
+    const pEl = document.getElementById('editNuggetPlus_' + t.replace(/[^a-z]/gi,''));
     if (pEl) { pEl.classList.toggle('opacity-30', atMax); pEl.classList.toggle('pointer-events-none', atMax); }
   });
-  const cEl = document.getElementById('editJuiceCounter');
+  const cEl = document.getElementById('editNuggetCounter');
   if (cEl) cEl.textContent = `${total} / ${qty} allocated`;
 }
 
@@ -1372,9 +1393,9 @@ function getEditAddonSummaryLines() {
         const parts = Object.entries(editState.newSodaTypes).filter(([,n])=>n>0).map(([t,n])=>n>1?`${t} x${n}`:t);
         label = 'Soft Drink (' + parts.join(', ') + ')';
       }
-      if (id === 'drinks_juice' && Object.keys(editState.newJuiceTypes).length) {
-        const parts = Object.entries(editState.newJuiceTypes).filter(([,n])=>n>0).map(([t,n])=>n>1?`${t} x${n}`:t);
-        label = 'Juice Jug (' + parts.join(', ') + ')';
+      if (id === 'nuggets_extra' && Object.keys(editState.newNuggetTypes).length) {
+        const parts = Object.entries(editState.newNuggetTypes).filter(([,n])=>n>0).map(([t,n])=>n>1?`${t} x${n}`:t);
+        label = 'Nuggets (' + parts.join(', ') + ')';
       }
       return { label, qty, price: a.price, subtotal: a.price * qty };
     });
@@ -1444,19 +1465,19 @@ function proceedEditToReview() {
   const sodaErrEl = document.getElementById('editSodaTypeError');
   if (sodaErrEl) sodaErrEl.classList.add('hidden');
 
-  // Validate juice types
-  const juiceQty = editState.newAddons.drinks_juice || 0;
-  if (juiceQty > 0) {
-    const picked = Object.values(editState.newJuiceTypes).reduce((s,v)=>s+v,0);
-    if (picked < juiceQty) {
-      const errEl = document.getElementById('editJuiceTypeError');
+  // Validate nugget types
+  const nuggetQty = editState.newAddons.nuggets_extra || 0;
+  if (nuggetQty > 0) {
+    const picked = Object.values(editState.newNuggetTypes).reduce((s,v)=>s+v,0);
+    if (picked < nuggetQty) {
+      const errEl = document.getElementById('editNuggetTypeError');
       if (errEl) { errEl.classList.remove('hidden'); errEl.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
-      showFieldError('Please choose a flavour of juice before continuing.');
+      showFieldError('Please choose a type for your nuggets before continuing.');
       return;
     }
   }
-  const juiceErrEl = document.getElementById('editJuiceTypeError');
-  if (juiceErrEl) juiceErrEl.classList.add('hidden');
+  const nuggetErrEl = document.getElementById('editNuggetTypeError');
+  if (nuggetErrEl) nuggetErrEl.classList.add('hidden');
 
   // No changes made
   if (editState.newGuestCount === booking.guestCount && getEditAddonTotal() === 0) {

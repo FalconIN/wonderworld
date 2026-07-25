@@ -29,6 +29,7 @@ async function resolveStripeCustomer(uid, email) {
 router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
   const { roomId, roomSlug, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
   const uid = req.user.uid;
+  if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
   try {
     const { rows: [room] } = await pool.query(
       'SELECT base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
@@ -192,6 +193,25 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         `UPDATE payments SET status = 'succeeded', updated_at = now()
          WHERE stripe_payment_intent_id = $1`,
         [pi.id]
+      );
+    }
+
+    // Booking confirmation itself doesn't depend on this webhook — the
+    // frontend confirms payment client-side, then calls POST /api/bookings,
+    // which independently re-verifies the charge via paymentIntents.retrieve
+    // before writing anything. That's the source of truth. This handler (and
+    // succeeded, above) is a redundant reconciliation pass, and today it's
+    // usually a no-op for failures specifically: a `payments` row is only
+    // ever inserted after a booking is confirmed, so a PaymentIntent that
+    // fails before that point has no row here to update yet. Kept anyway so
+    // this self-heals if that ever changes, and for admin visibility via
+    // `error_message`.
+    if (event.type === 'payment_intent.payment_failed') {
+      const pi = event.data.object;
+      await pool.query(
+        `UPDATE payments SET status = 'failed', error_message = $2, updated_at = now()
+         WHERE stripe_payment_intent_id = $1`,
+        [pi.id, pi.last_payment_error?.message || null]
       );
     }
 
