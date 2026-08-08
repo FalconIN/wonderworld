@@ -619,18 +619,74 @@ function renderStep3ForRoom() {
     const alcoholEl = document.getElementById('noAlcoholAck');
     if (alcoholEl) alcoholEl.checked = !!state.noAlcoholAck;
     onCateringChoiceChange();
+  } else {
+    placeAddonsBlock(false);
   }
+}
+
+// Tracks the Add-Ons block's original spot in the ordinary-room markup so it
+// can be moved back after being relocated into the whole-venue catering
+// section (see placeAddonsBlock) — captured once, on first use.
+let addonsHomeParent = null;
+let addonsHomeNextSibling = null;
+
+// The Add-Ons list (#addonsBlock) is a single shared DOM node — for
+// whole-venue hire's "venue menu" option we relocate it (rather than
+// duplicating the markup, which would create duplicate ids) into
+// #wholeVenueMenuSlot and retitle it "Menu", since venue-menu items are
+// purchased individually rather than including a free per-child meal like
+// the ordinary rooms' top-3 nuggets/burger/vege-burger picker does.
+function placeAddonsBlock(showAsMenu) {
+  const block = document.getElementById('addonsBlock');
+  if (!block) return;
+  if (!addonsHomeParent) {
+    addonsHomeParent = block.parentNode;
+    addonsHomeNextSibling = block.nextSibling;
+  }
+
+  const icon = document.getElementById('addonsHeadingIcon');
+  const label = document.getElementById('addonsHeadingLabel');
+  const suffix = document.getElementById('addonsHeadingSuffix');
+  const subheading = document.getElementById('addonsSubheadingText');
+
+  if (showAsMenu === null) {
+    block.classList.add('hidden');
+    return;
+  }
+
+  if (showAsMenu) {
+    const slot = document.getElementById('wholeVenueMenuSlot');
+    if (slot && block.parentNode !== slot) slot.appendChild(block);
+    if (icon) icon.textContent = '🍽️';
+    if (label) label.textContent = 'Menu';
+    if (suffix) suffix.textContent = '';
+    if (subheading) subheading.textContent = "Choose what you'd like to order — priced per item, added to your total.";
+  } else {
+    if (addonsHomeParent && block.parentNode !== addonsHomeParent) {
+      addonsHomeParent.insertBefore(block, addonsHomeNextSibling);
+    }
+    if (icon) icon.textContent = '➕';
+    if (label) label.textContent = 'Add-Ons';
+    if (suffix) suffix.textContent = '(optional extras)';
+    if (subheading) subheading.textContent = 'Prices are per item — added to your total.';
+  }
+  block.classList.remove('hidden');
 }
 
 function onCateringChoiceChange() {
   const checked = document.querySelector('input[name="cateringChoice"]:checked');
   const note = document.getElementById('cateringChoiceNote');
   if (!note) return;
-  if (!checked) { note.classList.add('hidden'); return; }
+  if (!checked) {
+    note.classList.add('hidden');
+    placeAddonsBlock(null);
+    return;
+  }
   note.classList.remove('hidden');
   note.innerHTML = checked.value === 'venue_menu'
-    ? '🍽️ No outside food or drink is permitted — birthday cake is always the exception. Our team will follow up to arrange your venue menu order.'
+    ? '🍽️ No outside food or drink is permitted — birthday cake is always the exception. Choose your items from the menu below.'
     : '🍽️ You&rsquo;re bringing your own food & drink — birthday cake and everything else is up to you.';
+  placeAddonsBlock(checked.value === 'venue_menu' ? true : null);
 }
 
 // ---------------------------------------------------------------------------

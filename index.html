@@ -571,6 +571,8 @@
           </div>
           <div id="cateringChoiceNote" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-3 mb-5 text-xs text-blue-700"></div>
 
+          <div id="wholeVenueMenuSlot"></div>
+
           <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-5 mb-2">
             <div class="flex items-center gap-2 mb-2">
               <span class="text-xl">🚫</span>
@@ -629,10 +631,10 @@
           <div id="foodSplitTotal" class="mt-2 text-xs text-center text-gray-400">0 / <span id="foodSplitOf">10</span> selected</div>
         </div>
 
-        <!-- Add-ons -->
-        <div class="mb-6">
-          <div class="font-display font-bold text-base text-gray-900 mb-1">➕ Add-Ons <span class="text-gray-400 font-normal text-sm">(optional extras)</span></div>
-          <p class="text-xs text-gray-400 mb-3">Prices are per item — added to your total.</p>
+        <!-- Add-ons / Menu (shared block — also used, retitled, for whole-venue's venue-menu catering option; see placeAddonsBlock()) -->
+        <div class="mb-6" id="addonsBlock">
+          <div class="font-display font-bold text-base text-gray-900 mb-1"><span id="addonsHeadingIcon">➕</span> <span id="addonsHeadingLabel">Add-Ons</span> <span id="addonsHeadingSuffix" class="text-gray-400 font-normal text-sm">(optional extras)</span></div>
+          <p class="text-xs text-gray-400 mb-3" id="addonsSubheadingText">Prices are per item — added to your total.</p>
           <div class="space-y-2" id="addonList">
 
             <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
