@@ -32,7 +32,7 @@ router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
   if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
   try {
     const { rows: [room] } = await pool.query(
-      'SELECT base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      'SELECT base_price_per_child, min_guests, max_guests, pricing_model, flat_price FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
       [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
@@ -42,7 +42,11 @@ router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
       return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
     }
 
-    const baseAmount = parseFloat(room.base_price_per_child) * guests;
+    // 'flat' rooms (whole-venue hire) charge a fixed rental price regardless
+    // of guest count — see room.pricing_model.
+    const baseAmount = room.pricing_model === 'flat'
+      ? parseFloat(room.flat_price)
+      : parseFloat(room.base_price_per_child) * guests;
     const amount = Math.round((baseAmount + parseFloat(addonsAmount || 0)) * 100);
     if (!amount || amount < 100) return res.status(400).json({ error: 'Invalid booking amount.' });
 

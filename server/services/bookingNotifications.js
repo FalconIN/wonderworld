@@ -21,8 +21,25 @@ async function sendBookingConfirmation({
   bookingRef, bookingId, email, phone,
   firstName, lastName, roomName,
   partyDate, partyTime, guestCount, foodChoice, addonsSummary, totalAmount,
+  cateringChoice, noAlcoholAck,
 }) {
   const results = { email: null, sms: null };
+
+  // Only whole-venue hire bookings carry a catering choice — every ordinary
+  // per-child room booking leaves this null, so the block below is skipped.
+  const cateringLabel = cateringChoice === 'venue_menu' ? 'Venue menu'
+    : cateringChoice === 'self_catering' ? 'Self-catering (you bring your own food/drink)'
+    : null;
+  const cateringBlock = cateringLabel ? `
+          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;color:#1E3A8A">
+            <strong>🍽️ Catering:</strong> ${cateringLabel}<br>
+            ${cateringChoice === 'venue_menu'
+              ? 'No outside food or drink is permitted with the venue menu — birthday cake is always the exception. 🎂'
+              : 'You&rsquo;re organising your own food/drink for this event. Birthday cake is welcome either way! 🎂'}
+          </div>
+          <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;color:#991B1B">
+            <strong>🚫 No alcohol:</strong> Alcohol is not permitted on the premises under any circumstances, for either catering option.
+          </div>` : '';
 
   // ── Email via Resend ─────────────────────────────────────
   try {
@@ -50,12 +67,14 @@ async function sendBookingConfirmation({
               <tr><td style="padding:6px 0;color:#6B7280;width:40%">Room</td><td style="font-weight:600">${roomName}</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Date &amp; Time</td><td style="font-weight:600">${fmtDate(partyDate)} at ${partyTime}</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Guests</td><td style="font-weight:600">${guestCount} kids</td></tr>
-              <tr><td style="padding:6px 0;color:#6B7280">Food</td><td style="font-weight:600">${foodChoice || '—'}</td></tr>
+              ${cateringLabel ? '' : `<tr><td style="padding:6px 0;color:#6B7280">Food</td><td style="font-weight:600">${foodChoice || '—'}</td></tr>`}
               ${addonsSummary ? `<tr><td style="padding:6px 0;color:#6B7280">Add-ons</td><td style="font-weight:600">${addonsSummary}</td></tr>` : ''}
               <tr><td style="padding:10px 0 6px;color:#6B7280;border-top:1px solid #E5E7EB">Total Paid</td><td style="padding-top:10px;font-weight:700;font-size:16px;color:#4F46E5;border-top:1px solid #E5E7EB">$${parseFloat(totalAmount).toFixed(2)} NZD</td></tr>
               <tr><td style="padding:6px 0;color:#6B7280">Receipt to</td><td style="font-weight:600">${email}</td></tr>
             </table>
           </div>
+
+          ${cateringBlock}
 
           <div style="background:#FEF3C7;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px">
             <strong>📌 Good to know:</strong><br>
@@ -96,7 +115,7 @@ async function sendBookingConfirmation({
       const msg = await client.messages.create({
         from: process.env.TWILIO_PHONE_NUMBER,
         to:   nzPhone,
-        body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${fmtDate(partyDate)} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}. See you soon!`,
+        body: `Wonder World Westgate: Hi ${firstName}! Your party is confirmed 🎉 Ref: ${bookingRef}. ${roomName} on ${fmtDate(partyDate)} @ ${partyTime}. Total: $${parseFloat(totalAmount).toFixed(2)}.${cateringLabel ? ` Catering: ${cateringLabel}. No alcohol permitted on-site.` : ''} See you soon!`,
       });
 
       results.sms = 'sent';

@@ -494,41 +494,34 @@
               <div class="flex items-start gap-3 mb-2">
                 <div class="text-2xl flex-shrink-0">🍗</div>
                 <div class="flex-1 min-w-0">
-                  <div class="font-semibold text-sm text-gray-800">Extra Nuggets</div>
-                  <div class="text-xs text-gray-400">15pc · or 10pc + Fries</div>
+                  <div class="font-semibold text-sm text-gray-800">Chicken Nuggets (15pc)</div>
+                  <div class="text-xs text-gray-400">15 pieces</div>
                 </div>
               </div>
               <div class="flex items-center justify-between pl-1">
                 <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$20</span>
                 <div class="flex items-center gap-1">
-                  <button onclick="changeAddon('nuggets_extra', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_nuggets_extra">0</span>
-                  <button onclick="changeAddon('nuggets_extra', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  <button onclick="changeAddon('nuggets_15pc', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_nuggets_15pc">0</span>
+                  <button onclick="changeAddon('nuggets_15pc', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
-              <div id="nuggetTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
-                <div class="flex items-center justify-between mb-2">
-                  <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
-                  <div id="nuggetTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
+            </div>
+
+            <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+              <div class="flex items-start gap-3 mb-2">
+                <div class="text-2xl flex-shrink-0">🍟</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-sm text-gray-800">Large Fries</div>
+                  <div class="text-xs text-gray-400">Large serving</div>
                 </div>
-                <div id="nuggetTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a type for all nugget order(s) before continuing.</div>
-                <div class="space-y-1.5">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold text-gray-700">15pc</span>
-                    <div class="flex items-center gap-1">
-                      <button type="button" onclick="changeNuggetType('15pc', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                      <span class="w-5 text-center text-xs font-bold" id="nuggetQty_15pc">0</span>
-                      <button type="button" onclick="changeNuggetType('15pc', 1)" id="nuggetPlus_15pc" class="nugget-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
-                    </div>
-                  </div>
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold text-gray-700">10pc + Fries</span>
-                    <div class="flex items-center gap-1">
-                      <button type="button" onclick="changeNuggetType('10pc + Fries', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
-                      <span class="w-5 text-center text-xs font-bold" id="nuggetQty_10pcFries">0</span>
-                      <button type="button" onclick="changeNuggetType('10pc + Fries', 1)" id="nuggetPlus_10pcFries" class="nugget-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
-                    </div>
-                  </div>
+              </div>
+              <div class="flex items-center justify-between pl-1">
+                <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$20</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="changeAddon('fries_large', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                  <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_fries_large">0</span>
+                  <button onclick="changeAddon('fries_large', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
                 </div>
               </div>
             </div>

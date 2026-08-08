@@ -12,6 +12,7 @@ async function createConfirmedBooking({
   allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
   contactEmail, contactPhone, slotHoldId, cardholderName, cardBrand, cardLast4,
   paymentProvider, stripePaymentIntentId, poliTransactionToken, poliTransactionRef,
+  cateringChoice, noAlcoholAck,
 }) {
   const client = await pool.connect();
   try {
@@ -21,12 +22,14 @@ async function createConfirmedBooking({
       `INSERT INTO bookings
          (booking_ref, user_id, party_room_id, party_date, party_time, guest_count,
           food_choice, allergy_notes, addons_summary, base_amount, addons_amount,
-          total_amount, status, contact_email, contact_phone, stripe_payment_intent_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15)
+          total_amount, status, contact_email, contact_phone, stripe_payment_intent_id,
+          catering_choice, no_alcohol_ack)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'confirmed',$13,$14,$15,$16,$17)
        RETURNING id`,
       [bookingRef, uid, room.id, partyDate, partyTime, guestCount,
        foodChoice, allergyNotes, addonsSummary, baseAmount, addonsAmount,
-       totalAmount, contactEmail, contactPhone, stripePaymentIntentId || null]
+       totalAmount, contactEmail, contactPhone, stripePaymentIntentId || null,
+       cateringChoice || null, !!noAlcoholAck]
     );
 
     if (slotHoldId) {

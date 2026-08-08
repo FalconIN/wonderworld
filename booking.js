@@ -43,6 +43,15 @@ const ROOMS = [
     badge: 'BEST VALUE',
     image: 'images/rooms/big.jpg',
   },
+  {
+    id: 'whole-venue', name: 'Whole Venue Hire', emoji: '🏛️', color: 'slate',
+    tagLine: 'Exclusive Full-Venue Buyout · Evenings Only',
+    minGuests: 1, maxGuests: 300,
+    pricingModel: 'flat', flatPrice: 2899,
+    allowedDaysOfWeek: [0, 1, 2], // Sunday, Monday, Tuesday
+    description: 'The entire venue, exclusively yours, 5:30–8:30 PM. Venue rental only — choose self-catering or our venue menu at checkout. Sunday, Monday or Tuesday only.',
+    badge: 'EXCLUSIVE',
+  },
 ];
 
 const ROOM_COLOR_MAP = {
@@ -50,10 +59,21 @@ const ROOM_COLOR_MAP = {
   yellow: { border: 'border-yellow-200', bg: 'bg-yellow-50', badge: 'bg-yellow-400', text: 'text-yellow-700' },
   purple: { border: 'border-purple-200', bg: 'bg-purple-50', badge: 'bg-purple-500', text: 'text-purple-600' },
   green:  { border: 'border-green-200',  bg: 'bg-green-50',  badge: 'bg-green-500',  text: 'text-green-600' },
+  slate:  { border: 'border-slate-300',  bg: 'bg-slate-50',  badge: 'bg-slate-600',  text: 'text-slate-700' },
 };
 
-// Official party room booking times (from poster)
-const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+// Official party room booking times (from poster). '5:30 PM' is the new
+// evening slot — Friday & Saturday only, see RESTRICTED_SLOT_DAYS below
+// (mirrors server/services/bookingRules.js, the actual source of truth —
+// this copy is UI-only, greying out the option; the server independently
+// rejects it on any other day).
+const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
+const RESTRICTED_SLOT_DAYS = { '5:30 PM': [5, 6] }; // Friday & Saturday
+
+// Whole-venue hire has exactly one time option, distinct from the ordinary
+// rooms' 5:30 PM slot (that one ends 7:00 PM; this one runs to 8:30 PM) —
+// given its own label so receipts/emails never conflate the two.
+const WHOLE_VENUE_SLOTS = ['5:30 PM – 8:30 PM'];
 
 // Slot end times for display
 const SLOT_END_TIMES = {
@@ -61,7 +81,23 @@ const SLOT_END_TIMES = {
   '11:30 AM': { one: '1:00 PM',  two: '1:30 PM'  },
   '1:30 PM':  { one: '3:00 PM',  two: '3:30 PM'  },
   '3:30 PM':  { one: '5:00 PM',  two: '5:30 PM'  },
+  '5:30 PM':  { one: '7:00 PM',  two: '7:00 PM'  },
 };
+
+function slotsForRoom(room) {
+  return room && room.pricingModel === 'flat' ? WHOLE_VENUE_SLOTS : ALL_SLOTS;
+}
+
+// day-of-week int (0=Sun..6=Sat) from a 'YYYY-MM-DD' string, without going
+// through the browser's local timezone (matches nzGetDay's NZ-calendar
+// semantics for a value that's already an NZ wall-clock date).
+function dayOfWeekFromDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function describeDays(days) { return days.map(d => DAY_NAMES[d]).join('/'); }
 
 // Tracks our slot polling interval (replaces Supabase realtime)
 let slotSubscription = null;
@@ -69,8 +105,9 @@ let slotSubscription = null;
 // ---------------------------------------------------------------------------
 // Guest count adjustment
 // ---------------------------------------------------------------------------
+const GUEST_STEPPER_MAX = Math.max(...ROOMS.map(r => r.maxGuests));
 function adjustGuests(delta) {
-  state.guests = Math.max(1, Math.min(24, state.guests + delta));
+  state.guests = Math.max(1, Math.min(GUEST_STEPPER_MAX, state.guests + delta));
   const el = document.getElementById('guestCount');
   el.textContent = state.guests;
   el.classList.remove('count-bounce');
@@ -134,7 +171,7 @@ function buildRoomCard(room, dimmed) {
           </div>
           <div class="text-xs text-gray-400 leading-snug">${room.minGuests}–${room.maxGuests} kids · ${room.tagLine}</div>
           <div class="flex items-center justify-between mt-1.5 flex-wrap gap-1">
-            <div class="${c.text} font-display font-bold text-sm">$${room.basePricePerChild}/child</div>
+            <div class="${c.text} font-display font-bold text-sm">${room.pricingModel === 'flat' ? `$${room.flatPrice.toLocaleString()} flat (venue only)` : `$${room.basePricePerChild}/child`}</div>
             ${selected ? '<div class="text-blue-500 text-xs font-semibold flex items-center gap-1">✓ Selected</div>' : ''}
           </div>
         </div>
@@ -146,9 +183,23 @@ function buildRoomCard(room, dimmed) {
 function selectRoom(id) {
   state.selectedRoom = ROOMS.find(r => r.id === id);
   renderRooms();
+  updateStep2SlotsHint();
   const nextBtn = document.getElementById('step1Next');
   nextBtn.disabled = false;
   nextBtn.style.opacity = '1';
+}
+
+// Step 2's hint line describes whichever slot(s) apply to the selected
+// room — the ordinary 5-slot list, or whole-venue's single evening slot.
+function updateStep2SlotsHint() {
+  const hint = document.getElementById('step2SlotsHint');
+  if (!hint) return;
+  const room = state.selectedRoom;
+  if (room && room.pricingModel === 'flat') {
+    hint.textContent = `${room.name} sessions: 5:30 PM – 8:30 PM · available ${describeDays(room.allowedDaysOfWeek)} only`;
+  } else {
+    hint.textContent = 'Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM · 5:30 PM (Fri/Sat only)';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +260,20 @@ async function fetchAndRenderSlots(dateVal) {
     return;
   }
 
+  const room = state.selectedRoom;
+  const dow = dayOfWeekFromDateStr(dateVal);
+
+  // Whole-venue hire (and any other future flat/day-restricted room) isn't
+  // bookable at all outside its allowed days — don't even hit the
+  // availability endpoint, just explain why.
+  if (Array.isArray(room.allowedDaysOfWeek) && !room.allowedDaysOfWeek.includes(dow)) {
+    document.getElementById('timeSlotGrid').innerHTML = `
+      <div class="col-span-2 py-6 text-center text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3">
+        ${room.name} is only available on ${describeDays(room.allowedDaysOfWeek)}. Please pick a different date.
+      </div>`;
+    return;
+  }
+
   try {
     const { roomId, unavailableSlots } = await callAPI(
       `slots?room_slug=${encodeURIComponent(state.selectedRoom.id)}&date=${dateVal}`,
@@ -216,30 +281,39 @@ async function fetchAndRenderSlots(dateVal) {
     );
 
     if (roomId) state.partyRoomDbId = roomId;
-    renderSlotsHtml(ALL_SLOTS, unavailableSlots || []);
+    renderSlotsHtml(slotsForRoom(room), unavailableSlots || [], dow);
   } catch (err) {
     console.error('Failed to fetch slots:', err);
-    renderSlotsHtml(ALL_SLOTS, []);
+    renderSlotsHtml(slotsForRoom(room), [], dow);
   }
 }
 
-function renderSlotsHtml(slots, unavailableSlots) {
+function renderSlotsHtml(slots, unavailableSlots, dow) {
   const grid = document.getElementById('timeSlotGrid');
   if (!grid) return;
 
   let html = '';
   slots.forEach(slot => {
-    const unavail  = unavailableSlots.includes(slot);
+    const restrictedDays = RESTRICTED_SLOT_DAYS[slot];
+    const dayRestricted = restrictedDays && !restrictedDays.includes(dow);
+    const unavail  = !dayRestricted && unavailableSlots.includes(slot);
     const selected = state.selectedTime === slot;
     const ends = SLOT_END_TIMES[slot];
     let cls = 'time-slot';
-    if (unavail)  cls += ' unavailable';
+    if (unavail || dayRestricted) cls += ' unavailable';
     if (selected) cls += ' selected';
-    if (unavail) {
+    if (dayRestricted) {
       html += `
         <div class="${cls}">
           <div class="font-display font-bold text-base">${slot}</div>
-          <div class="text-xs opacity-60 mt-0.5">– ${ends?.one || ''}</div>
+          <div class="text-xs opacity-60 mt-0.5">${ends ? '– ' + ends.one : ''}</div>
+          <div class="mt-1.5 text-xs font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 inline-block">${describeDays(restrictedDays)} only</div>
+        </div>`;
+    } else if (unavail) {
+      html += `
+        <div class="${cls}">
+          <div class="font-display font-bold text-base">${slot}</div>
+          <div class="text-xs opacity-60 mt-0.5">${ends ? '– ' + ends.one : ''}</div>
           <div class="mt-1.5 text-xs font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 inline-block">Full</div>
         </div>`;
     } else {
@@ -249,7 +323,7 @@ function renderSlotsHtml(slots, unavailableSlots) {
       html += `
         <div class="${cls}" onclick="selectTime('${slot}', this)">
           <div class="font-display font-bold text-base">${slot}</div>
-          <div class="text-xs opacity-70 mt-0.5">– ${ends?.one || ''}</div>
+          <div class="text-xs opacity-70 mt-0.5">${ends ? '– ' + ends.one : ''}</div>
           ${checkIcon}
         </div>`;
     }
@@ -334,8 +408,9 @@ function getWizardStateSnapshot() {
     allergyNotes:  document.getElementById('allergyNotes')?.value ?? state.allergyNotes,
     addons:        state.addons,
     sodaTypes:     state.sodaTypes,
-    nuggetTypes:   state.nuggetTypes,
     pizzaTypes:    state.pizzaTypes,
+    cateringChoice: state.cateringChoice,
+    noAlcoholAck:   state.noAlcoholAck,
     confirmEmail:  state.confirmEmail,
     confirmPhone:  state.confirmPhone,
   };
@@ -343,7 +418,7 @@ function getWizardStateSnapshot() {
 
 // Re-paints step DOM from a restored wizard_state blob. Reuses the same
 // render functions the wizard already calls as the customer clicks through
-// (renderRooms, repaintAddons, the soda/nugget/pizza picker updaters) so this
+// (renderRooms, repaintAddons, the soda/pizza picker updaters) so this
 // stays in sync with however those steps normally render.
 function hydrateWizardUI(saved) {
   Object.assign(state, saved);
@@ -351,6 +426,7 @@ function hydrateWizardUI(saved) {
   const gc = document.getElementById('guestCount');
   if (gc) gc.textContent = state.guests;
   renderRooms();
+  updateStep2SlotsHint();
 
   if (state.selectedDate) {
     const dateInput = document.getElementById('partyDate');
@@ -381,6 +457,11 @@ function hydrateWizardUI(saved) {
   }
 
   if (typeof repaintAddons === 'function') repaintAddons();
+
+  // Restore catering choice / no-alcohol ack regardless of which step the
+  // resumed session lands on — goToStep's own n===3 hook only fires when
+  // step 3 is the actual destination.
+  if (state.selectedRoom?.pricingModel === 'flat') renderStep3ForRoom();
 
   const allergyNotesEl = document.getElementById('allergyNotes');
   if (allergyNotesEl) allergyNotesEl.value = state.allergyNotes || '';
@@ -509,6 +590,50 @@ function selectFood(type, el) {
 }
 
 // ---------------------------------------------------------------------------
+// Step 3 — swaps between the ordinary per-child food/add-ons picker and
+// whole-venue hire's catering choice + no-alcohol acknowledgment.
+// ---------------------------------------------------------------------------
+function renderStep3ForRoom() {
+  const isWholeVenue = state.selectedRoom?.pricingModel === 'flat';
+  const foodSection = document.getElementById('foodAddonsSection');
+  const cateringSection = document.getElementById('wholeVenueCateringSection');
+  const heading = document.getElementById('step3Heading');
+  const subheading = document.getElementById('step3Subheading');
+  if (!foodSection || !cateringSection) return;
+
+  foodSection.classList.toggle('hidden', isWholeVenue);
+  cateringSection.classList.toggle('hidden', !isWholeVenue);
+
+  if (heading) heading.textContent = isWholeVenue ? 'Catering & house rules' : "What's on the menu?";
+  if (subheading) subheading.textContent = isWholeVenue
+    ? 'Choose how food & drink will be handled for your event.'
+    : "Pick your main meal (included) and add any extras you'd like.";
+
+  if (isWholeVenue) {
+    // Restore a previously-chosen radio/checkbox (e.g. resumed session or
+    // navigating back to this step) rather than always defaulting to blank.
+    if (state.cateringChoice) {
+      const radio = document.querySelector(`input[name="cateringChoice"][value="${state.cateringChoice}"]`);
+      if (radio) radio.checked = true;
+    }
+    const alcoholEl = document.getElementById('noAlcoholAck');
+    if (alcoholEl) alcoholEl.checked = !!state.noAlcoholAck;
+    onCateringChoiceChange();
+  }
+}
+
+function onCateringChoiceChange() {
+  const checked = document.querySelector('input[name="cateringChoice"]:checked');
+  const note = document.getElementById('cateringChoiceNote');
+  if (!note) return;
+  if (!checked) { note.classList.add('hidden'); return; }
+  note.classList.remove('hidden');
+  note.innerHTML = checked.value === 'venue_menu'
+    ? '🍽️ No outside food or drink is permitted — birthday cake is always the exception. Our team will follow up to arrange your venue menu order.'
+    : '🍽️ You&rsquo;re bringing your own food & drink — birthday cake and everything else is up to you.';
+}
+
+// ---------------------------------------------------------------------------
 // Save confirmed booking
 // ---------------------------------------------------------------------------
 async function saveBookingToSupabase(paymentIntentId, amountPaid) {
@@ -544,6 +669,8 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
     stripePaymentIntentId:   paymentIntentId,
     slotHoldId:              state.slotHoldId,
     cardholderName,
+    cateringChoice:          state.cateringChoice,
+    noAlcoholAck:            state.noAlcoholAck,
   });
 
   state.slotHoldId = null;
@@ -602,6 +729,8 @@ async function finaliseBooking() {
       foodChoice:     state.selectedFood,
       addonsSummary:  addonsSummaryText,
       totalAmount:    state.calculatedTotal,
+      cateringChoice: state.cateringChoice,
+      noAlcoholAck:   state.noAlcoholAck,
     });
 
     stopTimer();
@@ -617,10 +746,20 @@ async function finaliseBooking() {
 
 function buildConfirmationCard() {
   const room = state.selectedRoom;
+  const isFlat = room?.pricingModel === 'flat';
   const addonLines = getAddonSummaryLines();
   const addonHtml = addonLines.length > 0
     ? addonLines.map(a => `<div class="text-gray-500">+ ${a.label} ×${a.qty}</div><div class="font-semibold">$${a.subtotal.toFixed(2)}</div>`).join('')
     : '';
+
+  const cateringLabel = state.cateringChoice === 'venue_menu' ? 'Venue menu' : 'Self-catering';
+  const middleRowsHtml = isFlat
+    ? `
+      <div class="text-gray-500">Catering</div><div class="font-semibold">${cateringLabel}</div>
+      <div class="text-gray-500">Alcohol</div><div class="font-semibold">Not permitted 🚫</div>`
+    : `
+      <div class="text-gray-500">Food</div><div class="font-semibold">${state.selectedFood || '—'}</div>
+      ${addonHtml}`;
 
   document.getElementById('bookingSummaryCard').innerHTML = `
     <div class="font-display font-bold text-xl text-gray-800 mb-1">🎂 Booking Confirmed!</div>
@@ -629,8 +768,7 @@ function buildConfirmationCard() {
       <div class="text-gray-500">Room</div><div class="font-semibold">${room?.name || ''}</div>
       <div class="text-gray-500">Date & Time</div><div class="font-semibold">${state.selectedDate} at ${state.selectedTime}</div>
       <div class="text-gray-500">Guests</div><div class="font-semibold">${state.guests} kids</div>
-      <div class="text-gray-500">Food</div><div class="font-semibold">${state.selectedFood || '—'}</div>
-      ${addonHtml}
+      ${middleRowsHtml}
       <div class="text-gray-500">Total Paid</div><div class="font-bold text-indigo-600">$${state.calculatedTotal?.toFixed(2)} NZD</div>
       <div class="text-gray-500">Receipt to</div><div class="font-semibold text-sm truncate">${state.confirmEmail}</div>
       <div class="text-gray-500">SMS to</div><div class="font-semibold">+64 ${state.confirmPhone}</div>
@@ -652,7 +790,8 @@ const ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
   drinks_soda:     { label: 'Soft Drink', price: 10 },
-  nuggets_extra:   { label: 'Extra Nuggets — 15pc or 10pc + Fries', price: 20 },
+  nuggets_15pc:    { label: 'Chicken Nuggets (15pc)', price: 20 },
+  fries_large:     { label: 'Large Fries', price: 20 },
 };
 
 function changeAddon(id, delta) {
@@ -680,26 +819,6 @@ function changeAddon(id, delta) {
       }
     }
     updateSodaPickerUI();
-  }
-
-  if (id === 'nuggets_extra') {
-    const picker = document.getElementById('nuggetTypePicker');
-    if (picker) picker.classList.toggle('hidden', next === 0);
-    if (next === 0) {
-      state.nuggetTypes = {};
-    } else if (state.nuggetTypes) {
-      // Trim allocated total down to new qty
-      let total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
-      let excess = total - next;
-      const types = Object.keys(state.nuggetTypes);
-      for (let i = types.length - 1; i >= 0 && excess > 0; i--) {
-        const cut = Math.min(state.nuggetTypes[types[i]], excess);
-        state.nuggetTypes[types[i]] -= cut;
-        excess -= cut;
-        if (state.nuggetTypes[types[i]] === 0) delete state.nuggetTypes[types[i]];
-      }
-    }
-    updateNuggetPickerUI();
   }
 
   if (id === 'pizza_11') {
@@ -739,11 +858,8 @@ function repaintAddons() {
   if (pizzaPicker) pizzaPicker.classList.toggle('hidden', !(state.addons.pizza_11 > 0));
   const sodaPicker = document.getElementById('sodaTypePicker');
   if (sodaPicker) sodaPicker.classList.toggle('hidden', !(state.addons.drinks_soda > 0));
-  const nuggetPicker = document.getElementById('nuggetTypePicker');
-  if (nuggetPicker) nuggetPicker.classList.toggle('hidden', !(state.addons.nuggets_extra > 0));
   updatePizzaPickerUI();
   updateSodaPickerUI();
-  updateNuggetPickerUI();
   updateAddonSubtotal();
   renderOrderSummary();
 }
@@ -775,36 +891,6 @@ function changeSodaType(type, delta) {
   const next = Math.max(0, (state.sodaTypes[type] || 0) + delta);
   if (next === 0) delete state.sodaTypes[type]; else state.sodaTypes[type] = next;
   updateSodaPickerUI();
-  renderOrderSummary();
-}
-
-function updateNuggetPickerUI() {
-  if (!state.nuggetTypes) state.nuggetTypes = {};
-  const qty = state.addons?.nuggets_extra || 0;
-  const total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
-  const atMax = total >= qty;
-  const typeIds = { '15pc': '15pc', '10pc + Fries': '10pcFries' };
-  Object.entries(typeIds).forEach(([type, id]) => {
-    const qtyEl = document.getElementById('nuggetQty_' + id);
-    if (qtyEl) qtyEl.textContent = state.nuggetTypes[type] || 0;
-    const plusEl = document.getElementById('nuggetPlus_' + id);
-    if (plusEl) {
-      plusEl.classList.toggle('opacity-30', atMax);
-      plusEl.classList.toggle('pointer-events-none', atMax);
-    }
-  });
-  const counter = document.getElementById('nuggetTypeCounter');
-  if (counter) counter.textContent = `${total} / ${qty} allocated`;
-}
-
-function changeNuggetType(type, delta) {
-  if (!state.nuggetTypes) state.nuggetTypes = {};
-  const qty = state.addons?.nuggets_extra || 0;
-  const total = Object.values(state.nuggetTypes).reduce((s, v) => s + v, 0);
-  if (delta > 0 && total >= qty) return;
-  const next = Math.max(0, (state.nuggetTypes[type] || 0) + delta);
-  if (next === 0) delete state.nuggetTypes[type]; else state.nuggetTypes[type] = next;
-  updateNuggetPickerUI();
   renderOrderSummary();
 }
 
@@ -875,10 +961,6 @@ function getAddonSummaryLines() {
         const parts = Object.entries(state.sodaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
         label = 'Soft Drink (' + parts.join(', ') + ')';
       }
-      if (id === 'nuggets_extra' && state.nuggetTypes && Object.keys(state.nuggetTypes).length > 0) {
-        const parts = Object.entries(state.nuggetTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
-        label = 'Nuggets (' + parts.join(', ') + ')';
-      }
       if (id === 'pizza_11' && state.pizzaTypes && Object.keys(state.pizzaTypes).length > 0) {
         const parts = Object.entries(state.pizzaTypes).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
         label = '11-inch Pizza (' + parts.join(', ') + ')';
@@ -889,8 +971,8 @@ function getAddonSummaryLines() {
 function renderOrderSummary() {
   if (!state.selectedRoom) return;
   const room = state.selectedRoom;
-  const pricePerChild = room.basePricePerChild;
-  const baseTotal = pricePerChild * state.guests;
+  const isFlat = room.pricingModel === 'flat';
+  const baseTotal = isFlat ? room.flatPrice : room.basePricePerChild * state.guests;
   const addonTotal = getAddonTotal();
   const total = baseTotal + addonTotal;
   state.calculatedTotal = total;
@@ -904,14 +986,25 @@ function renderOrderSummary() {
     ).join('');
   }
 
+  const cateringLabel = state.cateringChoice === 'venue_menu' ? 'Venue menu'
+    : state.cateringChoice === 'self_catering' ? 'Self-catering' : 'Not selected';
+
+  const detailsHtml = isFlat
+    ? `
+      <div class="flex justify-between"><span>Catering:</span><span class="font-semibold">${cateringLabel}</span></div>
+      <div class="flex justify-between"><span>Alcohol:</span><span class="font-semibold">Not permitted 🚫</span></div>
+      <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${baseTotal.toLocaleString()} flat (venue rental only)</span></div>`
+    : `
+      <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${state.selectedFood || 'Not selected'}</span></div>
+      <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${room.basePricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>`;
+
   document.getElementById('orderSummaryPill').innerHTML = `
     <div class="font-display font-bold text-indigo-700 mb-3 text-base">📋 Your Order Summary</div>
     <div class="space-y-1.5 text-sm text-indigo-800">
       <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${room.name}</span></div>
       <div class="flex justify-between"><span>Date:</span><span class="font-semibold">${state.selectedDate} @ ${state.selectedTime}</span></div>
       <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${state.guests} children</span></div>
-      <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${state.selectedFood || 'Not selected'}</span></div>
-      <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${pricePerChild}/child × ${state.guests} = $${baseTotal.toFixed(2)}</span></div>
+      ${detailsHtml}
       ${addonHtml}
       <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
         <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>

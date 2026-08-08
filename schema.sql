@@ -39,15 +39,30 @@ CREATE TABLE IF NOT EXISTS public.party_rooms (
   description           text,
   is_active             boolean     NOT NULL DEFAULT true,
   sort_order            integer     NOT NULL DEFAULT 0,
+  -- 'flat' rooms (currently just whole-venue hire) charge flat_price
+  -- regardless of guest_count instead of base_price_per_child * guests.
+  pricing_model         text        NOT NULL DEFAULT 'per_child'
+                                     CHECK (pricing_model IN ('per_child', 'flat')),
+  flat_price            numeric(10,2),
+  -- NULL = bookable any day. Otherwise an array of Postgres/JS-style
+  -- day-of-week ints (0=Sun .. 6=Sat) this room can be booked on at all —
+  -- e.g. whole-venue hire is Sun/Mon/Tue only. Server-side enforcement
+  -- lives in server/services/bookingRules.js.
+  allowed_days_of_week  integer[],
   created_at            timestamptz NOT NULL DEFAULT now()
 );
 
-INSERT INTO public.party_rooms (slug, name, emoji, tag_line, color, min_guests, max_guests, base_price_per_child, weekday_total, weekend_total, description, sort_order)
+INSERT INTO public.party_rooms (slug, name, emoji, tag_line, color, min_guests, max_guests, base_price_per_child, weekday_total, weekend_total, description, sort_order, pricing_model, flat_price, allowed_days_of_week)
 VALUES
-  ('big',      'The Big Room',         '🌟', 'Exclusive Extra Large Zone', 'indigo', 12, 24, 39.00, 49.00, 59.00, 'Our flagship space — private stage, expanded play zone.',         1),
-  ('sunshine', 'Sunshine Room',        '☀️', 'Yellow · Warm & Cheerful',  'yellow',  8, 15, 39.00, null,  null,  'Bright, sunny, and full of energy.',                              2),
-  ('dream',    'Dream Room',           '🌙', 'Purple · Magical & Dreamy', 'purple',  8, 15, 39.00, null,  null,  'Soft lighting, dreamy decor.',                                    3),
-  ('forest',   'Wonder Forest Room',   '🌿', 'Green · Nature Adventure',  'green',   8, 15, 39.00, null,  null,  'An immersive forest theme.',                                      4)
+  ('big',      'The Big Room',         '🌟', 'Exclusive Extra Large Zone', 'indigo', 12, 24, 39.00, 49.00, 59.00, 'Our flagship space — private stage, expanded play zone.',         1, 'per_child', null,    null),
+  ('sunshine', 'Sunshine Room',        '☀️', 'Yellow · Warm & Cheerful',  'yellow',  8, 15, 39.00, null,  null,  'Bright, sunny, and full of energy.',                              2, 'per_child', null,    null),
+  ('dream',    'Dream Room',           '🌙', 'Purple · Magical & Dreamy', 'purple',  8, 15, 39.00, null,  null,  'Soft lighting, dreamy decor.',                                    3, 'per_child', null,    null),
+  ('forest',   'Wonder Forest Room',   '🌿', 'Green · Nature Adventure',  'green',   8, 15, 39.00, null,  null,  'An immersive forest theme.',                                      4, 'per_child', null,    null),
+  -- Whole-venue exclusive hire — Sun/Mon/Tue only, flat $2,899 rental
+  -- (excludes food/drink; see bookings.catering_choice). min/max guests
+  -- are a placeholder pending the real venue capacity — see
+  -- migration-whole-venue-and-evening-slot.sql for how to adjust it.
+  ('whole-venue', 'Whole Venue Hire',  '🏛️', 'Exclusive Full-Venue Buyout', 'slate', 1, 300, 0.00, null, null, 'The entire venue, exclusively yours — Sunday, Monday or Tuesday evenings only.', 5, 'flat', 2899.00, '{0,1,2}')
 ON CONFLICT (slug) DO NOTHING;
 
 -- ── 3. BOOKING_TIMESLOTS ────────────────────────────────────
@@ -92,6 +107,10 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   cancelled_at             timestamptz,
   notes                    text,
   admin_notes              text,                    -- internal only, never shown to the customer
+  -- Only set for 'flat'-priced rooms (whole-venue hire). NULL/false for
+  -- every ordinary per-child room booking.
+  catering_choice          text        CHECK (catering_choice IN ('self_catering', 'venue_menu')),
+  no_alcohol_ack           boolean     NOT NULL DEFAULT false,
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );
@@ -226,7 +245,7 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   changed_by         text          NOT NULL REFERENCES public.users(id),
-  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit')),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit', 'room_change')),
   delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
   new_guest_count    integer,
   new_food_choice    text,
@@ -236,6 +255,8 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   old_party_time     text,
   new_party_date     date,
   new_party_time     text,
+  old_party_room_id  uuid          REFERENCES public.party_rooms(id),
+  new_party_room_id  uuid          REFERENCES public.party_rooms(id),
   created_at         timestamptz   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_booking_edits_booking ON public.booking_edits (booking_id);

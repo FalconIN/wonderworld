@@ -186,6 +186,17 @@ function parseFoodChoiceFull(foodChoice) {
   return { nuggets, burgers, veges, total, malformed: total === 0 };
 }
 
+// Builds a food_choice string in the same canonical format parseFoodChoiceFull
+// expects back — "X Nuggets + Y Mini Burgers + Z Vege Burgers" — so admin-saved
+// bookings round-trip through the parser the same way customer bookings do.
+function buildFoodChoiceString(nuggets, burgers, veges) {
+  const parts = [];
+  if (nuggets > 0) parts.push(`${nuggets} Nuggets`);
+  if (burgers > 0) parts.push(`${burgers} Mini Burgers`);
+  if (veges   > 0) parts.push(`${veges} Vege Burgers`);
+  return parts.join(' + ');
+}
+
 // ---------------------------------------------------------------------------
 // Init: check admin access via Firebase Auth
 // ---------------------------------------------------------------------------
@@ -986,8 +997,15 @@ async function loadFoodPrep() {
     let confirmedParties = 0, pendingParties = 0;
     let nugC = 0, nugP = 0, burC = 0, burP = 0, vegC = 0, vegP = 0;
     let kidsFedTotal = 0;
+    // Per-child rooms only — whole-venue hire has no food_choice at all (it
+    // has catering_choice instead, tallied separately below), so it must be
+    // excluded from both the numerator and denominator of the "does food
+    // add up to guests" sanity check, or every whole-venue booking would
+    // wrongly trip it.
+    let perChildGuestTotal = 0;
     const addonC = {}, addonP = {};
     const missingRefs = [];
+    let venueMenuCount = 0, selfCateringCount = 0;
 
     rows.forEach(b => {
       const isConfirmed = b.status === 'confirmed';
@@ -996,13 +1014,19 @@ async function loadFoodPrep() {
       const guests = parseInt(b.guestCount) || 0;
       if (isConfirmed) guestConfirmed += guests; else guestPending += guests;
 
-      const parsed = parseFoodChoiceFull(b.foodChoice);
-      if (parsed.malformed) {
-        missingRefs.push(b.bookingRef || '—');
+      if (b.pricingModel === 'flat') {
+        if (b.cateringChoice === 'venue_menu') venueMenuCount++;
+        else if (b.cateringChoice === 'self_catering') selfCateringCount++;
       } else {
-        kidsFedTotal += parsed.total;
-        if (isConfirmed) { nugC += parsed.nuggets; burC += parsed.burgers; vegC += parsed.veges; }
-        else { nugP += parsed.nuggets; burP += parsed.burgers; vegP += parsed.veges; }
+        perChildGuestTotal += guests;
+        const parsed = parseFoodChoiceFull(b.foodChoice);
+        if (parsed.malformed) {
+          missingRefs.push(b.bookingRef || '—');
+        } else {
+          kidsFedTotal += parsed.total;
+          if (isConfirmed) { nugC += parsed.nuggets; burC += parsed.burgers; vegC += parsed.veges; }
+          else { nugP += parsed.nuggets; burP += parsed.burgers; vegP += parsed.veges; }
+        }
       }
 
       tallyAddonsSummary(b.addonsSummary, isConfirmed ? addonC : addonP);
@@ -1036,11 +1060,15 @@ async function loadFoodPrep() {
       html += '<p class="text-gray-400 text-sm">No food choices recorded for this range.</p>';
     }
 
+    if (venueMenuCount > 0 || selfCateringCount > 0) {
+      html += `<div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-700 dark:text-slate-300 font-semibold">Whole Venue Hire: ${venueMenuCount} venue menu, ${selfCateringCount} self-catering — coordinate catering for these separately, they're not included in the per-child totals above</div>`;
+    }
+
     if (missingRefs.length) {
       html += `<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 text-xs text-red-700 dark:text-red-300 font-semibold">⚠️ ${missingRefs.length} booking${missingRefs.length === 1 ? '' : 's'} ${missingRefs.length === 1 ? 'has' : 'have'} missing food data — Ref: ${missingRefs.map(escapeHtml).join(', ')}</div>`;
     }
 
-    if (kidsFedTotal !== guestTotal) {
+    if (kidsFedTotal !== perChildGuestTotal) {
       html += `<div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300 font-semibold">⚠️ Food totals don't match guest count — check bookings for missing food data</div>`;
     }
 
@@ -1412,7 +1440,7 @@ async function renderTodayRunSheet() {
       el.innerHTML = '<div class="text-center py-12"><div class="text-4xl mb-3">🎉</div><p class="text-gray-400">No parties scheduled for today.</p></div>';
       return;
     }
-    const SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4};
+    const SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4, '5:30 PM': 5, '5:30 PM – 8:30 PM': 5};
     rows.sort((a, b) => (SLOT_ORDER[a.partyTime] || 9) - (SLOT_ORDER[b.partyTime] || 9));
 
     el.innerHTML = rows.map(b => {
@@ -1425,6 +1453,11 @@ async function renderTodayRunSheet() {
           <div><span class="text-xs font-bold text-red-700 dark:text-red-300 uppercase">Dietary: </span><span class="text-sm text-red-800 dark:text-red-200">${escapeHtml(b.allergyNotes)}</span></div>
         </div>` : '';
       const addonsHtml = b.addonsSummary ? `<div class="text-xs text-indigo-600 dark:text-indigo-400 mt-1">➕ ${escapeHtml(b.addonsSummary)}</div>` : '';
+      const cateringHtml = b.cateringChoice ? `
+        <div class="mt-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl px-4 py-2.5 text-sm">
+          <div class="font-semibold text-gray-800 dark:text-gray-200">${b.cateringChoice === 'venue_menu' ? 'Venue menu' : 'Self-catering'}</div>
+          <div class="text-red-700 dark:text-red-300 font-semibold text-xs mt-0.5">No alcohol${b.noAlcoholAck ? ' — acknowledged' : ' — NOT acknowledged'}</div>
+        </div>` : '';
 
       return `
         <div class="border-2 border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-4 last:mb-0">
@@ -1435,7 +1468,7 @@ async function renderTodayRunSheet() {
                 <span class="font-display font-bold text-lg text-gray-900 dark:text-white">${b.roomEmoji || ''} ${escapeHtml(b.roomName)}</span>
               </div>
               <div class="text-sm text-gray-600 dark:text-gray-400">${name} · <strong>${b.guestCount} kids</strong></div>
-              <div class="text-sm font-semibold mt-1 text-gray-800 dark:text-gray-200">🍽️ ${escapeHtml(b.foodChoice) || '—'}</div>
+              ${b.cateringChoice ? cateringHtml : `<div class="text-sm font-semibold mt-1 text-gray-800 dark:text-gray-200">🍽️ ${escapeHtml(b.foodChoice) || '—'}</div>`}
               ${addonsHtml}
               ${allergyHtml}
             </div>
@@ -1565,6 +1598,7 @@ function renderCurrentBookingsSubTab() {
       (b.bookingRef || '').toLowerCase().includes(q) ||
       (b.contactEmail || '').toLowerCase().includes(q) ||
       (b.roomName || '').toLowerCase().includes(q) ||
+      (b.adminNotes || '').toLowerCase().includes(q) ||
       `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase().includes(q);
     const matchesStatus = !statusFilter || b.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -1698,7 +1732,10 @@ async function viewBooking(bookingId) {
         <div class="font-display font-bold text-indigo-700 mb-2 text-sm">📋 Order Summary</div>
         <div class="space-y-1.5 text-sm text-indigo-800">
           <div class="flex justify-between"><span>Guests:</span><span class="font-semibold">${guestCount} children</span></div>
-          <div class="flex justify-between"><span>Food:</span><span class="font-semibold">${escapeHtml(booking.foodChoice) || '—'}</span></div>
+          ${booking.cateringChoice ? `
+          <div class="flex justify-between"><span>Catering:</span><span class="font-semibold">${booking.cateringChoice === 'venue_menu' ? 'Venue menu' : 'Self-catering'}</span></div>
+          <div class="flex justify-between"><span>Alcohol:</span><span class="font-semibold text-red-600">${booking.noAlcoholAck ? 'Not permitted — acknowledged' : 'Not permitted — NOT acknowledged'}</span></div>
+          ` : `<div class="flex justify-between"><span>Food:</span><span class="font-semibold">${escapeHtml(booking.foodChoice) || '—'}</span></div>`}
           ${ratePerChild ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${ratePerChild.toFixed(2)}/child × ${guestCount} = $${baseAmount.toFixed(2)}</span></div>` : ''}
           ${booking.addonsSummary ? `<div class="flex justify-between"><span>Add-ons:</span><span class="font-semibold text-right">${escapeHtml(booking.addonsSummary)}</span></div>` : ''}
           <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
@@ -1721,9 +1758,12 @@ async function viewBooking(bookingId) {
       </div>` : ''}
       <div class="text-xs text-gray-400">Booked: ${new Date(booking.createdAt).toLocaleString('en-NZ', { timeZone: NZ_TZ })}</div>
       ${booking.status === 'confirmed' ? `
-      <div class="mt-2">
-        <button onclick="openRescheduleModal('${booking.id}')" class="btn-secondary w-full py-3 text-sm">
+      <div class="mt-2 flex gap-3">
+        <button onclick="openRescheduleModal('${booking.id}')" class="btn-secondary flex-1 py-3 text-sm">
           Reschedule Time
+        </button>
+        <button onclick="openChangeRoomModal('${booking.id}')" class="btn-secondary flex-1 py-3 text-sm">
+          Change Room
         </button>
       </div>` : ''}
       <div class="flex gap-3 mt-2">
@@ -1891,6 +1931,126 @@ async function doConfirmReschedule() {
 
 function closeRescheduleModal() {
   document.getElementById('rescheduleModal').style.display = 'none';
+}
+
+// Two deliberate steps are required before a room actually changes: picking
+// a room (stage 'select') only stages it, then a dedicated warning screen
+// (stage 'confirm') with its own explicit button is what actually fires the
+// API call. This mirrors the reschedule flow's "don't fire off a native
+// confirm() popup" convention above, but goes one step further since a room
+// move has no undo — moving back is just another change, not a revert.
+let roomChangeState = { bookingId: null, stage: 'select', data: null, selectedRoomId: null, selectedRoomName: null };
+
+async function openChangeRoomModal(bookingId) {
+  const modal = document.getElementById('changeRoomModal');
+  const content = document.getElementById('changeRoomContent');
+  roomChangeState = { bookingId, stage: 'select', data: null, selectedRoomId: null, selectedRoomName: null };
+  content.innerHTML = '<p class="text-center text-gray-400 py-6">Loading rooms…</p>';
+  modal.style.display = 'flex';
+
+  let data;
+  try {
+    data = await callAPI(`admin/bookings/${bookingId}/room-options`, null, 'GET');
+  } catch (err) {
+    content.innerHTML = `<p class="text-red-500 text-sm">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  roomChangeState.data = data;
+  renderChangeRoomSelect();
+}
+
+function renderChangeRoomSelect() {
+  const { data, selectedRoomId } = roomChangeState;
+  const content = document.getElementById('changeRoomContent');
+
+  const roomsHtml = data.rooms.map(r => {
+    if (r.isCurrent) {
+      return `<div class="px-4 py-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 text-indigo-700 font-semibold text-sm">
+        ${r.emoji || ''} ${escapeHtml(roomDisplayName(r.name))} <span class="text-xs font-normal ml-1">(current)</span>
+      </div>`;
+    }
+    if (!r.available) {
+      const reason = r.isTaken ? 'booked at this date/time' : `needs ${r.minGuests}-${r.maxGuests} guests`;
+      return `<div class="px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 font-semibold text-sm cursor-not-allowed">
+        ${r.emoji || ''} ${escapeHtml(roomDisplayName(r.name))} <span class="text-xs font-normal ml-1">(${reason})</span>
+      </div>`;
+    }
+    const selected = r.id === selectedRoomId;
+    return `<button onclick="selectChangeRoomOption('${r.id}', '${escapeHtml(r.name).replace(/'/g, "\\'")}')"
+      class="px-4 py-3 rounded-xl border-2 font-semibold text-sm text-left transition-all w-full ${selected ? 'border-brand-orange bg-orange-50 ring-2 ring-brand-orange' : 'border-gray-200 hover:border-brand-orange hover:bg-orange-50'}">
+      ${r.emoji || ''} ${escapeHtml(roomDisplayName(r.name))}${selected ? ' <span class="text-xs font-normal ml-1">✓ selected</span>' : ''}
+    </button>`;
+  }).join('');
+
+  const canContinue = !!selectedRoomId;
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 mb-3">Guest count: <strong>${data.guestCount}</strong> · ${(data.partyDate||'').slice(0,10)} @ ${escapeHtml(data.partyTime)}</p>
+    <div class="grid grid-cols-1 gap-2 mb-2">${roomsHtml}</div>
+    <button id="changeRoomContinueBtn" onclick="showChangeRoomWarning()" ${canContinue ? '' : 'disabled'}
+      class="btn-primary w-full py-3 text-sm mt-3 ${canContinue ? '' : 'opacity-40 cursor-not-allowed'}">
+      Continue
+    </button>`;
+}
+
+function selectChangeRoomOption(roomId, roomName) {
+  roomChangeState.selectedRoomId = roomId;
+  roomChangeState.selectedRoomName = roomName;
+  renderChangeRoomSelect();
+}
+
+// The second, distinct confirmation screen. Nothing on this screen is
+// clickable by accident — it's a full replacement of the modal content with
+// one clearly dangerous action and one clearly safe "go back" action.
+function showChangeRoomWarning() {
+  const { data, selectedRoomName } = roomChangeState;
+  if (!selectedRoomName) return;
+  roomChangeState.stage = 'confirm';
+
+  const currentRoom = data.rooms.find(r => r.isCurrent);
+  const content = document.getElementById('changeRoomContent');
+  content.innerHTML = `
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+      <div class="font-bold text-amber-800 text-sm mb-1">⚠️ This is permanent</div>
+      <p class="text-sm text-amber-800">
+        You are about to move this booking from
+        <strong>${escapeHtml(roomDisplayName(currentRoom ? currentRoom.name : ''))}</strong> to
+        <strong>${escapeHtml(roomDisplayName(selectedRoomName))}</strong>.
+        The old room's time slot is released immediately and cannot be recovered — this cannot be undone
+        (moving back later would just be another room change).
+      </p>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="renderChangeRoomSelect()" class="btn-secondary flex-1 py-3 text-sm">
+        Go back
+      </button>
+      <button onclick="doConfirmChangeRoom()" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
+        Yes, permanently change room
+      </button>
+    </div>`;
+}
+
+async function doConfirmChangeRoom() {
+  const { bookingId, selectedRoomId, selectedRoomName } = roomChangeState;
+  if (!bookingId || !selectedRoomId) return;
+
+  const content = document.getElementById('changeRoomContent');
+  content.innerHTML = '<p class="text-center text-gray-400 py-6">Changing room…</p>';
+
+  try {
+    const result = await callAPI(`admin/bookings/${bookingId}/change-room`, { newRoomId: selectedRoomId }, 'POST');
+    closeChangeRoomModal();
+    closeBookingModal();
+    alert(`✅ Booking ${result.bookingRef} moved from ${roomDisplayName(result.oldRoomName)} to ${roomDisplayName(result.newRoomName)}.`);
+    await loadBookings();
+  } catch (err) {
+    content.innerHTML = `<p class="text-red-500 text-sm mb-3">${escapeHtml(err.message)}</p>
+      <button onclick="renderChangeRoomSelect()" class="btn-secondary w-full py-3 text-sm">Back</button>`;
+  }
+}
+
+function closeChangeRoomModal() {
+  document.getElementById('changeRoomModal').style.display = 'none';
 }
 
 async function resendConfirmationEmail(bookingId, bookingRef) {
@@ -2251,7 +2411,7 @@ async function toggleAdmin(userId, currentlyAdmin) {
 // ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
-const BOOKING_SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4};
+const BOOKING_SLOT_ORDER = {'9:30 AM': 1, '11:30 AM': 2, '1:30 PM': 3, '3:30 PM': 4, '5:30 PM': 5, '5:30 PM – 8:30 PM': 5};
 
 function getBookingsSorted(bookings) {
   const order = document.getElementById('bookingsSortOrder')?.value || 'party_date_asc';
@@ -2356,15 +2516,30 @@ const AB_ROOMS = [
   { id: 'sunshine', name: 'Sunshine Room',     emoji: '☀️', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/sunshine.jpg' },
   { id: 'dream',    name: 'Dream Room',        emoji: '🌙', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/dream.jpg' },
   { id: 'forest',   name: 'Wonder Forest Room',emoji: '🌿', minGuests: 8,  maxGuests: 15, pricePerChild: 39, image: 'images/rooms/forest.jpg' },
+  { id: 'whole-venue', name: 'Whole Venue Hire', emoji: '🏛️', minGuests: 1, maxGuests: 300,
+    pricingModel: 'flat', flatPrice: 2899, allowedDaysOfWeek: [0, 1, 2] }, // Sun/Mon/Tue
 ];
 
-const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+// '5:30 PM' mirrors the customer-facing evening slot (Fri/Sat only, ordinary
+// rooms). Whole-venue hire has its own single slot, kept in a separate list
+// with a distinct label (5:30-8:30 PM vs the ordinary rooms' 5:30-7:00 PM)
+// so the two are never conflated in the booking list.
+const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
 const AB_SLOT_END_TIMES = {
   '9:30 AM':  '11:00 AM',
   '11:30 AM': '1:00 PM',
   '1:30 PM':  '3:00 PM',
   '3:30 PM':  '5:00 PM',
+  '5:30 PM':  '7:00 PM',
 };
+const AB_RESTRICTED_SLOT_DAYS = { '5:30 PM': [5, 6] }; // Friday & Saturday
+const AB_WHOLE_VENUE_SLOTS = ['5:30 PM – 8:30 PM'];
+const AB_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+function abDescribeDays(days) { return days.map(d => AB_DAY_NAMES[d]).join('/'); }
+function abDayOfWeekFromDateStr(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
 
 // Mirrors the customer-facing ADDON_PRICES in booking.js
 const AB_ADDON_PRICES = {
@@ -2379,7 +2554,8 @@ const AB_ADDON_PRICES = {
   sushi_kids48:    { label: 'Kids Party Platter (48 pcs)',     price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28 pcs)',   price: 42.90 },
   drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
-  nuggets_extra:   { label: 'Extra Nuggets — 15pc or 10pc + Fries', price: 20 },
+  nuggets_15pc:    { label: 'Chicken Nuggets (15pc)',          price: 20 },
+  fries_large:     { label: 'Large Fries',                     price: 20 },
 };
 
 // Local state for the manual booking modal
@@ -2391,12 +2567,11 @@ let abState = {
   selectedTime: null,
   addons: {},
   sodaTypes: {},
-  nuggetTypes: {},
   pizzaTypes: {},
 };
 
 function openAddBookingModal() {
-  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, nuggetTypes: {}, pizzaTypes: {} };
+  abState = { guests: 10, selectedRoomId: null, selectedRoomDbId: null, selectedDate: null, selectedTime: null, addons: {}, sodaTypes: {}, pizzaTypes: {} };
 
   const today = nzDateStr();
   document.getElementById('ab_date').min = today;
@@ -2406,6 +2581,7 @@ function openAddBookingModal() {
   document.getElementById('ab_adminNotes').value = '';
   document.getElementById('ab_nuggetCount').value = '0';
   document.getElementById('ab_burgerCount').value = '0';
+  document.getElementById('ab_vegeCount').value = '0';
   document.getElementById('ab_foodSplitTotal').textContent = '0 / 10 selected';
   document.getElementById('ab_foodTarget').textContent = '10';
   document.getElementById('ab_amountPaid').value = '';
@@ -2413,8 +2589,12 @@ function openAddBookingModal() {
   document.getElementById('ab_status').value = 'confirmed';
   document.getElementById('ab_timeSlotGrid').innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Select a room and date first</div>';
   document.getElementById('ab_orderSummary').innerHTML = '<div class="text-indigo-400">Select a room and guests to see pricing</div>';
+  document.querySelectorAll('input[name="ab_cateringChoice"]').forEach(el => { el.checked = false; });
+  const abAlcoholEl = document.getElementById('ab_noAlcoholAck');
+  if (abAlcoholEl) abAlcoholEl.checked = false;
 
   abRenderRoomCards();
+  abRenderStep3ForRoom();
   abRenderAddonsList();
   document.getElementById('addBookingModal').style.display = 'flex';
   document.getElementById('addBookingError').classList.add('hidden');
@@ -2434,6 +2614,7 @@ function abOnGuestsChange() {
   abRenderRoomCards();
   document.getElementById('ab_nuggetCount').value = '0';
   document.getElementById('ab_burgerCount').value = '0';
+  document.getElementById('ab_vegeCount').value = '0';
   document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
   abUpdateOrderSummary();
 }
@@ -2479,7 +2660,7 @@ function abBuildRoomCard(room, dimmed) {
           </div>
         </div>
         <div class="flex items-center gap-3 flex-shrink-0">
-          <div class="text-sm font-bold text-indigo-600">$${room.pricePerChild}/child</div>
+          <div class="text-sm font-bold text-indigo-600">${room.pricingModel === 'flat' ? `$${room.flatPrice.toLocaleString()} flat` : `$${room.pricePerChild}/child`}</div>
           ${thumb}
         </div>
       </div>
@@ -2524,11 +2705,13 @@ async function abSelectRoom(roomId) {
       document.getElementById('ab_foodTarget').textContent = abState.guests;
       document.getElementById('ab_nuggetCount').value = '0';
       document.getElementById('ab_burgerCount').value = '0';
+      document.getElementById('ab_vegeCount').value = '0';
       document.getElementById('ab_foodSplitTotal').textContent = `0 / ${abState.guests} selected`;
     }
   }
 
   abRenderRoomCards();
+  abRenderStep3ForRoom();
 
   try {
     const roomRow = await callAPI(`rooms/by-slug/${roomId}`, null, 'GET');
@@ -2541,6 +2724,19 @@ async function abSelectRoom(roomId) {
   const dateVal = document.getElementById('ab_date').value;
   if (dateVal) await abUpdateTimeSlots();
   abUpdateOrderSummary();
+}
+
+// Swaps the manual-booking modal between the ordinary per-child food/add-ons
+// section and whole-venue hire's catering choice + no-alcohol ack — mirrors
+// renderStep3ForRoom() in booking.js for the customer-facing wizard.
+function abRenderStep3ForRoom() {
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  const isWholeVenue = room?.pricingModel === 'flat';
+  const foodSection = document.getElementById('ab_foodAddonsSection');
+  const cateringSection = document.getElementById('ab_wholeVenueCateringSection');
+  if (!foodSection || !cateringSection) return;
+  foodSection.classList.toggle('hidden', isWholeVenue);
+  cateringSection.classList.toggle('hidden', !isWholeVenue);
 }
 
 async function abUpdateTimeSlots() {
@@ -2558,6 +2754,14 @@ async function abUpdateTimeSlots() {
     return;
   }
 
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  const dow = abDayOfWeekFromDateStr(dateVal);
+
+  if (Array.isArray(room?.allowedDaysOfWeek) && !room.allowedDaysOfWeek.includes(dow)) {
+    grid.innerHTML = `<div class="col-span-2 py-4 text-center text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3">${room.name} is only available on ${abDescribeDays(room.allowedDaysOfWeek)}.</div>`;
+    return;
+  }
+
   grid.innerHTML = '<div class="text-gray-400 text-sm col-span-2 py-4 text-center">Checking availability...</div>';
 
   let unavailable = [];
@@ -2566,20 +2770,26 @@ async function abUpdateTimeSlots() {
     unavailable = result.unavailableSlots || [];
   } catch { /* show all as available on error */ }
 
+  const slots = room?.pricingModel === 'flat' ? AB_WHOLE_VENUE_SLOTS : AB_ALL_SLOTS;
+
   let html = '';
-  AB_ALL_SLOTS.forEach(slot => {
-    const isUnavailable = unavailable.includes(slot);
+  slots.forEach(slot => {
+    const restrictedDays = AB_RESTRICTED_SLOT_DAYS[slot];
+    const dayRestricted = restrictedDays && !restrictedDays.includes(dow);
+    const isUnavailable = !dayRestricted && unavailable.includes(slot);
     const selected = abState.selectedTime === slot;
-    const cls = isUnavailable
+    const disabled = isUnavailable || dayRestricted;
+    const cls = disabled
       ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
       : selected
         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 cursor-pointer'
         : 'border-gray-200 bg-white ab-card hover:border-indigo-300 cursor-pointer';
+    const badge = dayRestricted ? `${abDescribeDays(restrictedDays)} only` : isUnavailable ? 'Full' : '';
     html += `
-      <div class="border-2 ${cls} rounded-xl p-2.5 text-center transition-all" ${isUnavailable ? '' : `onclick="abSelectTime('${slot}', this)"`}>
+      <div class="border-2 ${cls} rounded-xl p-2.5 text-center transition-all" ${disabled ? '' : `onclick="abSelectTime('${slot}', this)"`}>
         <div class="font-semibold text-sm">${slot}</div>
-        <div class="text-xs opacity-70">– ${AB_SLOT_END_TIMES[slot]}</div>
-        ${isUnavailable ? '<div class="text-xs font-semibold mt-0.5">Full</div>' : ''}
+        ${AB_SLOT_END_TIMES[slot] ? `<div class="text-xs opacity-70">– ${AB_SLOT_END_TIMES[slot]}</div>` : ''}
+        ${badge ? `<div class="text-xs font-semibold mt-0.5">${badge}</div>` : ''}
       </div>`;
   });
   grid.innerHTML = html;
@@ -2599,24 +2809,23 @@ function abOnFoodInput() {
   const total = abState.guests;
   const nuggets = Math.max(0, parseInt(document.getElementById('ab_nuggetCount').value) || 0);
   const burgers = Math.max(0, parseInt(document.getElementById('ab_burgerCount').value) || 0);
-  document.getElementById('ab_foodSplitTotal').textContent = `${nuggets + burgers} / ${total} selected`;
+  const veges   = Math.max(0, parseInt(document.getElementById('ab_vegeCount').value) || 0);
+  document.getElementById('ab_foodSplitTotal').textContent = `${nuggets + burgers + veges} / ${total} selected`;
   abUpdateOrderSummary();
 }
 
 // ── Shared type-picker helpers (used by both ab_ and eb_ forms) ──────────────
 
-const TYPE_PICKER_IDS = new Set(['drinks_soda', 'nuggets_extra', 'pizza_11']);
+const TYPE_PICKER_IDS = new Set(['drinks_soda', 'pizza_11']);
 
 function getAddonTypeMap(addonId) {
   if (addonId === 'drinks_soda')    return { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
-  if (addonId === 'nuggets_extra')  return { '15pc': '15pc', '10pc + Fries': '10pcFries' };
   if (addonId === 'pizza_11')       return { 'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese', 'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza' };
   return {};
 }
 
 function getAddonTypeStateKey(addonId) {
   if (addonId === 'drinks_soda')   return 'sodaTypes';
-  if (addonId === 'nuggets_extra') return 'nuggetTypes';
   if (addonId === 'pizza_11')      return 'pizzaTypes';
   return null;
 }
@@ -2690,7 +2899,6 @@ function getAddonLabelWithTypes(id, addonState) {
   if (!stateKey || !addonState[stateKey] || !Object.keys(addonState[stateKey]).length) return a.label;
   const parts = Object.entries(addonState[stateKey]).filter(([,n]) => n > 0).map(([t,n]) => n > 1 ? `${t} x${n}` : t);
   if (id === 'drinks_soda')    return `Soft Drink (${parts.join(', ')})`;
-  if (id === 'nuggets_extra')  return `Nuggets (${parts.join(', ')})`;
   if (id === 'pizza_11')       return `11-inch Pizza (${parts.join(', ')})`;
   return a.label;
 }
@@ -2774,18 +2982,23 @@ function abUpdateOrderSummary() {
     summaryEl.innerHTML = '<div class="text-indigo-400">Select a room and guests to see pricing</div>';
     return;
   }
-  const baseTotal = room.pricePerChild * abState.guests;
-  const addonTotal = abGetAddonTotal();
+  const isFlat = room.pricingModel === 'flat';
+  const baseTotal = isFlat ? room.flatPrice : room.pricePerChild * abState.guests;
+  const addonTotal = isFlat ? 0 : abGetAddonTotal();
   const total = baseTotal + addonTotal;
 
-  const addonLines = Object.entries(abState.addons)
+  const addonLines = isFlat ? '' : Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => `<div class="flex justify-between"><span>+ ${getAddonLabelWithTypes(id, abState)} ×${qty}</span><span class="font-semibold">$${(AB_ADDON_PRICES[id].price * qty).toFixed(2)}</span></div>`)
     .join('');
 
+  const rateLine = isFlat
+    ? `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${baseTotal.toLocaleString()} flat (venue rental only)</span></div>`
+    : `<div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${room.pricePerChild}/child × ${abState.guests} = $${baseTotal.toFixed(2)}</span></div>`;
+
   summaryEl.innerHTML = `
     <div class="flex justify-between"><span>Room:</span><span class="font-semibold">${room.name}</span></div>
-    <div class="flex justify-between"><span>Rate:</span><span class="font-semibold">$${room.pricePerChild}/child × ${abState.guests} = $${baseTotal.toFixed(2)}</span></div>
+    ${rateLine}
     ${addonLines}
     <div class="border-t border-indigo-200 mt-2 pt-2 flex justify-between font-bold text-base">
       <span>Total:</span><span class="text-indigo-600">$${total.toFixed(2)} NZD</span>
@@ -2809,6 +3022,7 @@ function abUpdateBalanceDue() {
 function abGetCalculatedTotal() {
   const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
   if (!room) return 0;
+  if (room.pricingModel === 'flat') return room.flatPrice;
   return (room.pricePerChild * abState.guests) + abGetAddonTotal();
 }
 
@@ -2831,6 +3045,10 @@ async function submitAddBooking() {
 
   const nuggets = parseInt(document.getElementById('ab_nuggetCount').value) || 0;
   const burgers = parseInt(document.getElementById('ab_burgerCount').value) || 0;
+  const veges   = parseInt(document.getElementById('ab_vegeCount').value) || 0;
+
+  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
+  const isFlat = room?.pricingModel === 'flat';
 
   // Validate
   // (First name/email are allowed blank here for phone bookings taken
@@ -2839,14 +3057,24 @@ async function submitAddBooking() {
   if (!abState.selectedRoomId) { errEl.textContent = 'Please select a party room.'; errEl.classList.remove('hidden'); return; }
   if (!date)   { errEl.textContent = 'Party date is required.';  errEl.classList.remove('hidden'); return; }
   if (!time)   { errEl.textContent = 'Please select a time slot.'; errEl.classList.remove('hidden'); return; }
-  if (nuggets + burgers !== guests) {
-    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
+
+  let cateringChoice = null;
+  let noAlcoholAck = false;
+  if (isFlat) {
+    const cateringEl = document.querySelector('input[name="ab_cateringChoice"]:checked');
+    if (!cateringEl) { errEl.textContent = 'Please choose a catering option.'; errEl.classList.remove('hidden'); return; }
+    cateringChoice = cateringEl.value;
+    const alcoholEl = document.getElementById('ab_noAlcoholAck');
+    if (!alcoholEl?.checked) { errEl.textContent = 'Please acknowledge the no-alcohol policy.'; errEl.classList.remove('hidden'); return; }
+    noAlcoholAck = true;
+  } else if (nuggets + burgers + veges !== guests) {
+    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers + veges} selected.`;
     errEl.classList.remove('hidden');
     return;
   }
 
   // Pizza / soda / nuggets type validation
-  const pizzaQty = abState.addons['pizza_11'] || 0;
+  const pizzaQty = isFlat ? 0 : abState.addons['pizza_11'] || 0;
   if (pizzaQty > 0) {
     const picked = Object.values(abState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
     if (picked < pizzaQty) {
@@ -2856,7 +3084,7 @@ async function submitAddBooking() {
       return;
     }
   }
-  const sodaQty = abState.addons['drinks_soda'] || 0;
+  const sodaQty = isFlat ? 0 : abState.addons['drinks_soda'] || 0;
   if (sodaQty > 0) {
     const picked = Object.values(abState.sodaTypes || {}).reduce((s, v) => s + v, 0);
     if (picked < sodaQty) {
@@ -2866,25 +3094,14 @@ async function submitAddBooking() {
       return;
     }
   }
-  const nuggetQty = abState.addons['nuggets_extra'] || 0;
-  if (nuggetQty > 0) {
-    const picked = Object.values(abState.nuggetTypes || {}).reduce((s, v) => s + v, 0);
-    if (picked < nuggetQty) {
-      errEl.textContent = `Please choose a type for all ${nuggetQty} nugget order(s) before saving.`;
-      errEl.classList.remove('hidden');
-      document.getElementById('ab_typePicker_nuggets_extra')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      return;
-    }
-  }
 
-  const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
-  const addonLines = Object.entries(abState.addons)
+  const foodChoice = isFlat ? null : buildFoodChoiceString(nuggets, burgers, veges);
+  const addonLines = isFlat ? [] : Object.entries(abState.addons)
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => `${getAddonLabelWithTypes(id, abState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
   const addonsSummary = addonLines.join(', ');
-  const addonsAmount = abGetAddonTotal();
-  const room = AB_ROOMS.find(r => r.id === abState.selectedRoomId);
-  const baseAmount = room.pricePerChild * guests;
+  const addonsAmount = isFlat ? 0 : abGetAddonTotal();
+  const baseAmount = isFlat ? room.flatPrice : room.pricePerChild * guests;
   const totalAmount = baseAmount + addonsAmount;
   const amountPaidRaw = parseFloat(document.getElementById('ab_amountPaid').value);
   const amountPaid = isNaN(amountPaidRaw) ? totalAmount : Math.min(Math.max(amountPaidRaw, 0), totalAmount);
@@ -2902,7 +3119,7 @@ async function submitAddBooking() {
       roomId: abState.selectedRoomDbId, roomName: room.name,
       date, time, guests, foodChoice, notes,
       addonsSummary, addonsAmount, baseAmount, totalAmount,
-      amountPaid, status, adminNotes,
+      amountPaid, status, adminNotes, cateringChoice, noAlcoholAck,
     });
 
     closeAddBookingModal();
@@ -2929,20 +3146,19 @@ let editBookingState = {
   guests: 10,
   addons: {},
   sodaTypes: {},
-  nuggetTypes: {},
   pizzaTypes: {},
   roomMin: 1,
   roomMax: 24,
 };
 
+// Delegates to parseFoodChoiceFull so "4 Mini Burgers" / "2 Vege Burgers"
+// (the format customer bookings actually use) parse correctly — this used to
+// have its own stricter regex that only matched bare "Burgers", silently
+// zeroing out burgers and dropping vege burgers entirely whenever a booking
+// came from the customer-facing wizard instead of the admin modal.
 function parseFoodChoice(foodChoice) {
-  let nuggets = 0, burgers = 0;
-  if (!foodChoice) return { nuggets, burgers };
-  const nugMatch = foodChoice.match(/(\d+)\s*Nuggets?/i);
-  const burMatch = foodChoice.match(/(\d+)\s*Burgers?/i);
-  if (nugMatch) nuggets = parseInt(nugMatch[1]);
-  if (burMatch) burgers = parseInt(burMatch[1]);
-  return { nuggets, burgers };
+  const { nuggets, burgers, veges } = parseFoodChoiceFull(foodChoice);
+  return { nuggets, burgers, veges };
 }
 
 function escapeRegex(str) {
@@ -2956,7 +3172,6 @@ function parseAddonsSummary(summary) {
   // Typed items have variant names embedded in the label, so match on the base prefix only
   const flexMatchers = {
     drinks_soda:    /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
-    nuggets_extra:  /Nuggets(?:\s*\([^)]*\))?\s*×(\d+)/i,
     pizza_11:       /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
   };
   Object.entries(flexMatchers).forEach(([id, pattern]) => {
@@ -2978,7 +3193,6 @@ function parseTypesFromSummary(summary, addonId) {
   if (!summary) return {};
   const basePatterns = {
     drinks_soda:    /Soft Drink\s*\(([^)]+)\)/i,
-    nuggets_extra:  /Nuggets\s*\(([^)]+)\)/i,
     pizza_11:       /11-inch Pizza\s*\(([^)]+)\)/i,
   };
   const pattern = basePatterns[addonId];
@@ -3007,7 +3221,6 @@ function openEditBookingModal(bookingId) {
   editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
   editBookingState.pizzaTypes = parseTypesFromSummary(booking.addonsSummary, 'pizza_11');
   editBookingState.sodaTypes  = parseTypesFromSummary(booking.addonsSummary, 'drinks_soda');
-  editBookingState.nuggetTypes = parseTypesFromSummary(booking.addonsSummary, 'nuggets_extra');
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -3015,7 +3228,7 @@ function openEditBookingModal(bookingId) {
   ebGuestsEl.min = editBookingState.roomMin;
   ebGuestsEl.max = editBookingState.roomMax;
 
-  const { nuggets, burgers } = parseFoodChoice(booking.foodChoice);
+  const { nuggets, burgers, veges } = parseFoodChoice(booking.foodChoice);
 
   document.getElementById('eb_bookingRef').textContent = booking.bookingRef;
   document.getElementById('eb_firstName').value = booking.firstName || '';
@@ -3026,7 +3239,8 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
   document.getElementById('eb_nuggetCount').textContent = nuggets;
   document.getElementById('eb_burgerCount').textContent = burgers;
-  document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers} / ${editBookingState.guests} selected`;
+  document.getElementById('eb_vegeCount').textContent = veges;
+  document.getElementById('eb_foodSplitTotal').textContent = `${nuggets + burgers + veges} / ${editBookingState.guests} selected`;
   document.getElementById('eb_notes').value = booking.allergyNotes || '';
   document.getElementById('eb_adminNotes').value = booking.adminNotes || '';
   document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
@@ -3049,6 +3263,7 @@ function ebOnGuestsChange() {
   document.getElementById('eb_foodTarget').textContent = editBookingState.guests;
   document.getElementById('eb_nuggetCount').textContent = '0';
   document.getElementById('eb_burgerCount').textContent = '0';
+  document.getElementById('eb_vegeCount').textContent = '0';
   document.getElementById('eb_foodSplitTotal').textContent = `0 / ${editBookingState.guests} selected`;
   ebUpdateOrderSummary();
 }
@@ -3057,17 +3272,18 @@ function ebChangeFoodSplit(type, delta) {
   const total = editBookingState.guests;
   const nuggets = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
   const burgers = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
-  const current = type === 'nuggets' ? nuggets : burgers;
-  const other = type === 'nuggets' ? burgers : nuggets;
+  const veges   = parseInt(document.getElementById('eb_vegeCount').textContent) || 0;
+  const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
+  const other = (type === 'nuggets' ? burgers + veges : type === 'burgers' ? nuggets + veges : nuggets + burgers);
   const next = Math.max(0, Math.min(current + delta, total - other));
 
-  if (type === 'nuggets') {
-    document.getElementById('eb_nuggetCount').textContent = next;
-  } else {
-    document.getElementById('eb_burgerCount').textContent = next;
-  }
+  const elMap = { nuggets: 'eb_nuggetCount', burgers: 'eb_burgerCount', veges: 'eb_vegeCount' };
+  document.getElementById(elMap[type]).textContent = next;
 
-  const newTotal = type === 'nuggets' ? next + burgers : nuggets + next;
+  const newNuggets = type === 'nuggets' ? next : nuggets;
+  const newBurgers = type === 'burgers' ? next : burgers;
+  const newVeges   = type === 'veges'   ? next : veges;
+  const newTotal = newNuggets + newBurgers + newVeges;
   document.getElementById('eb_foodSplitTotal').textContent = `${newTotal} / ${total} selected`;
   ebUpdateOrderSummary();
 }
@@ -3171,6 +3387,7 @@ async function submitEditBooking() {
   const guests    = editBookingState.guests;
   const nuggets   = parseInt(document.getElementById('eb_nuggetCount').textContent) || 0;
   const burgers   = parseInt(document.getElementById('eb_burgerCount').textContent) || 0;
+  const veges     = parseInt(document.getElementById('eb_vegeCount').textContent) || 0;
   const notes     = document.getElementById('eb_notes').value.trim();
   const adminNotes = document.getElementById('eb_adminNotes').value.trim();
   const firstName = document.getElementById('eb_firstName').value.trim();
@@ -3178,8 +3395,8 @@ async function submitEditBooking() {
   const email     = document.getElementById('eb_email').value.trim().toLowerCase();
   const phone     = document.getElementById('eb_phone').value.trim();
 
-  if (nuggets + burgers !== guests) {
-    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers} selected.`;
+  if (nuggets + burgers + veges !== guests) {
+    errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers + veges} selected.`;
     errEl.classList.remove('hidden');
     return;
   }
@@ -3204,16 +3421,6 @@ async function submitEditBooking() {
       return;
     }
   }
-  const nuggetQty = editBookingState.addons['nuggets_extra'] || 0;
-  if (nuggetQty > 0) {
-    const picked = Object.values(editBookingState.nuggetTypes || {}).reduce((s, v) => s + v, 0);
-    if (picked < nuggetQty) {
-      errEl.textContent = `Please choose a type for all ${nuggetQty} nugget order(s) before saving.`;
-      errEl.classList.remove('hidden');
-      document.getElementById('eb_typePicker_nuggets_extra')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      return;
-    }
-  }
 
   const ratePerChild = (editBookingState.booking.baseAmount && editBookingState.booking.guestCount)
     ? parseFloat(editBookingState.booking.baseAmount) / editBookingState.booking.guestCount : 39;
@@ -3221,7 +3428,7 @@ async function submitEditBooking() {
   const addonsAmount = ebGetAddonTotal();
   const totalAmount = baseAmount + addonsAmount;
 
-  const foodChoice = `${nuggets > 0 ? nuggets + ' Nuggets' : ''}${nuggets > 0 && burgers > 0 ? ' + ' : ''}${burgers > 0 ? burgers + ' Burgers' : ''}`;
+  const foodChoice = buildFoodChoiceString(nuggets, burgers, veges);
   const addonLines = Object.entries(editBookingState.addons)
     .filter(([, qty]) => qty > 0)
     .map(([id, qty]) => `${getAddonLabelWithTypes(id, editBookingState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);

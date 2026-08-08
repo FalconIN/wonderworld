@@ -4,6 +4,8 @@ const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAdmin } = require('../middleware/auth');
 const { fetchAndStoreReviews } = require('../services/googleReviewsSync');
+const { reclaimableHoldClause } = require('../services/holdExpiry');
+const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 
 // All routes require admin
 router.use(requireAdmin);
@@ -158,6 +160,7 @@ router.get('/bookings/:id', async (req, res) => {
               b.addons_summary as "addonsSummary",
               b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
               b.admin_notes as "adminNotes",
+              b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
               b.created_at as "createdAt",
               r.name as "roomName", r.emoji as "roomEmoji",
               u.first_name as "firstName", u.last_name as "lastName",
@@ -301,15 +304,32 @@ router.patch('/bookings/:id', async (req, res) => {
       }
     }
 
-    // Update amount paid — replace any manual payment records for this booking
+    // Update amount paid — this field is pre-filled in the edit form with the
+    // booking's already-COMBINED paid total (real Stripe/POLi payments plus
+    // any prior manual record), and gets resubmitted as-is on every save of
+    // this form even when the admin only changed something unrelated like a
+    // phone number. Replacing the whole 'manual' payments row with that
+    // combined figure used to insert a brand-new manual row for the FULL
+    // amount on every such save, stacking on top of the real payment row
+    // (which is never touched here) and doubling — or, on repeated saves,
+    // compounding — the recorded amount paid. Only the difference between
+    // what's submitted and what's actually been charged via a real payment
+    // should ever land in the manual row.
     if (amountPaid !== undefined) {
-      const paid = Math.max(0, parseFloat(amountPaid) || 0);
+      const requestedPaid = Math.max(0, parseFloat(amountPaid) || 0);
+      const { rows: [realPaidRow] } = await client.query(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM payments
+         WHERE booking_id = $1 AND status = 'succeeded' AND payment_method IS DISTINCT FROM 'manual'`,
+        [req.params.id]
+      );
+      const manualAmount = requestedPaid - parseFloat(realPaidRow.total);
+
       await client.query(`DELETE FROM payments WHERE booking_id = $1 AND payment_method = 'manual'`, [req.params.id]);
-      if (paid > 0) {
+      if (manualAmount > 0.005) {
         await client.query(
           `INSERT INTO payments (booking_id, user_id, amount, currency, status, payment_method)
            VALUES ($1, $2, $3, 'nzd', 'succeeded', 'manual')`,
-          [req.params.id, booking.user_id, paid]
+          [req.params.id, booking.user_id, manualAmount]
         );
       }
     }
@@ -598,7 +618,7 @@ router.post('/bookings/import', async (req, res) => {
       await client.query(
         `DELETE FROM booking_timeslots
          WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
-           AND status = 'held' AND hold_expires_at < now()`,
+           AND status = 'held' AND ${reclaimableHoldClause()}`,
         [r.matchedRoomId, r.date, r.time]
       );
       const { rows: slot } = await client.query(
@@ -648,7 +668,7 @@ router.post('/bookings/manual', async (req, res) => {
     firstName, lastName, email, phone,
     roomId, roomName, date, time, guests,
     foodChoice, notes, addonsSummary, addonsAmount, baseAmount, totalAmount,
-    amountPaid, status = 'confirmed', adminNotes,
+    amountPaid, status = 'confirmed', adminNotes, cateringChoice, noAlcoholAck,
   } = req.body;
 
   // Blank name/email on an admin-created (e.g. phone) booking used to save as
@@ -668,12 +688,28 @@ router.post('/bookings/manual', async (req, res) => {
     // Validate guest count against the room's capacity (mirrors the check
     // in the customer-facing booking flow, which this admin path bypasses).
     const { rows: [room] } = await client.query(
-      `SELECT min_guests as "minGuests", max_guests as "maxGuests" FROM party_rooms WHERE id = $1`,
+      `SELECT name, min_guests as "minGuests", max_guests as "maxGuests",
+              pricing_model as "pricingModel", flat_price as "flatPrice",
+              allowed_days_of_week
+       FROM party_rooms WHERE id = $1`,
       [roomId]
     );
     if (!room) throw new Error('Selected room not found.');
     if (!guests || guests < room.minGuests || guests > room.maxGuests) {
       throw new Error(`${roomName} requires between ${room.minGuests} and ${room.maxGuests} guests.`);
+    }
+    // Same Fri/Sat-only (evening slot) / Sun-Mon-Tue-only (whole-venue)
+    // day-of-week gate as the customer-facing flow — admins can still
+    // override the room/date pairing itself, but not onto a day the
+    // room/slot combination doesn't support at all.
+    assertBookingAllowedOnDate({ name: room.name, allowed_days_of_week: room.allowed_days_of_week }, time, date);
+    if (room.pricingModel === 'flat') {
+      if (!['self_catering', 'venue_menu'].includes(cateringChoice)) {
+        throw new Error('Please choose a catering option for this whole-venue booking.');
+      }
+      if (!noAlcoholAck) {
+        throw new Error('Please acknowledge the no-alcohol policy for this whole-venue booking.');
+      }
     }
 
     // Check slot — clear this slot's own expired hold first so a stale hold
@@ -686,7 +722,7 @@ router.post('/bookings/manual', async (req, res) => {
     await client.query(
       `DELETE FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
-         AND status = 'held' AND hold_expires_at < now()`,
+         AND status = 'held' AND ${reclaimableHoldClause()}`,
       [roomId, date, time]
     );
     const { rows: slot } = await client.query(
@@ -743,12 +779,15 @@ router.post('/bookings/manual', async (req, res) => {
     const { rows: [booking] } = await client.query(
       `INSERT INTO bookings (user_id, party_room_id, booking_ref, party_date, party_time,
           guest_count, food_choice, allergy_notes, addons_summary, base_amount, addons_amount,
-          total_amount, status, contact_email, contact_phone, admin_notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          total_amount, status, contact_email, contact_phone, admin_notes,
+          catering_choice, no_alcohol_ack)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING id`,
       [userId, roomId, bookingRef, date, time, guests, foodChoice, notes || '',
        addonsSummary || '', baseAmount, addonsAmount || 0, totalAmount,
-       status, resolvedEmail || ADMIN_PLACEHOLDER_EMAIL, phone || null, adminNotes || '']
+       status, resolvedEmail || ADMIN_PLACEHOLDER_EMAIL, phone || null, adminNotes || '',
+       room.pricingModel === 'flat' ? cateringChoice : null,
+       room.pricingModel === 'flat' ? !!noAlcoholAck : false]
     );
 
     if (slot[0]) {
@@ -805,6 +844,7 @@ router.get('/today', async (req, res) => {
               b.allergy_notes as "allergyNotes", b.addons_summary as "addonsSummary",
               b.contact_email as "contactEmail", b.contact_phone as "contactPhone",
               b.total_amount as "totalAmount",
+              b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
               COALESCE(pay.amount_paid, 0) as "amountPaid",
               r.name as "roomName", r.emoji as "roomEmoji", r.color as "roomColor",
               u.first_name as "firstName", u.last_name as "lastName"
@@ -919,7 +959,8 @@ router.get('/food-prep', async (req, res) => {
       `SELECT b.booking_ref as "bookingRef", b.party_date as "date", b.party_time as "partyTime",
               b.food_choice as "foodChoice", b.guest_count as "guestCount",
               b.addons_summary as "addonsSummary", b.status,
-              r.name as "roomName", r.emoji as "roomEmoji"
+              b.catering_choice as "cateringChoice",
+              r.name as "roomName", r.emoji as "roomEmoji", r.pricing_model as "pricingModel"
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
        WHERE b.status IN ('confirmed', 'pending')
@@ -1059,7 +1100,7 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
   }
 });
 
-const RESCHEDULE_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM'];
+const RESCHEDULE_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
 
 // YYYY-MM-DD, and a real calendar date (rejects e.g. 2026-02-30)
 function isValidDateStr(s) {
@@ -1095,7 +1136,7 @@ router.get('/bookings/:id/reschedule-slots', async (req, res) => {
 
     // Expire stale holds
     await pool.query(
-      `DELETE FROM booking_timeslots WHERE status = 'held' AND hold_expires_at < now()`
+      `DELETE FROM booking_timeslots WHERE status = 'held' AND ${reclaimableHoldClause()}`
     );
 
     // Find the booking's own timeslot row (any status) so we can exclude it from "taken"
@@ -1195,7 +1236,7 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
        ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
          SET status = 'confirmed', booking_id = EXCLUDED.booking_id, held_by_user_id = NULL, hold_expires_at = NULL
          WHERE booking_timeslots.status = 'released'
-            OR (booking_timeslots.status = 'held' AND booking_timeslots.hold_expires_at < now())
+            OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
        RETURNING id`,
       [booking.party_room_id, newDate, newTime, booking.id]
     );
@@ -1241,6 +1282,175 @@ router.post('/bookings/:id/reschedule', async (req, res) => {
       firstName:    booking.first_name,
       roomName:     booking.room_name,
       partyDate:    newDate,
+    });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// GET /api/admin/bookings/:id/room-options
+// Lists every active room alongside whether it's free at this booking's
+// existing date/time and whether the booking's guest count fits its
+// capacity, so the admin UI can grey out rooms that aren't actually a valid
+// target before anyone picks one.
+router.get('/bookings/:id/room-options', async (req, res) => {
+  try {
+    const { rows: [booking] } = await pool.query(
+      `SELECT b.party_room_id as "currentRoomId", b.guest_count as "guestCount",
+              b.party_time as "partyTime", to_char(b.party_date, 'YYYY-MM-DD') as "partyDate"
+       FROM bookings b
+       WHERE b.id = $1 AND b.status = 'confirmed'`,
+      [req.params.id]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+    // Expire stale holds so they don't falsely block a room as taken.
+    await pool.query(
+      `DELETE FROM booking_timeslots WHERE status = 'held' AND ${reclaimableHoldClause()}`
+    );
+
+    const { rows: rooms } = await pool.query(
+      `SELECT r.id, r.slug, r.name, r.emoji,
+              r.min_guests as "minGuests", r.max_guests as "maxGuests",
+              EXISTS (
+                SELECT 1 FROM booking_timeslots t
+                WHERE t.party_room_id = r.id
+                  AND t.slot_date = $2 AND t.slot_time = $3
+                  AND t.status IN ('confirmed', 'held')
+                  AND t.booking_id != $1
+              ) as "isTaken"
+       FROM party_rooms r
+       WHERE r.is_active = true
+       ORDER BY r.sort_order`,
+      [req.params.id, booking.partyDate, booking.partyTime]
+    );
+
+    res.json({
+      currentRoomId: booking.currentRoomId,
+      guestCount:    booking.guestCount,
+      partyDate:     booking.partyDate,
+      partyTime:     booking.partyTime,
+      rooms: rooms.map(r => ({
+        ...r,
+        isCurrent:     r.id === booking.currentRoomId,
+        fitsCapacity:  booking.guestCount >= r.minGuests && booking.guestCount <= r.maxGuests,
+        available:     r.id !== booking.currentRoomId && !r.isTaken && booking.guestCount >= r.minGuests && booking.guestCount <= r.maxGuests,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/bookings/:id/change-room
+// Moves a confirmed booking to a different room at its existing date/time.
+// This is deliberately its own endpoint (rather than a field on the general
+// PATCH /bookings/:id editor) because — like reschedule — it has to swap
+// booking_timeslots rows atomically, not just update a column.
+router.post('/bookings/:id/change-room', async (req, res) => {
+  const { newRoomId } = req.body;
+  if (!newRoomId) return res.status(400).json({ error: 'newRoomId is required.' });
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const { rows: [booking] } = await client.query(
+      `SELECT b.id, b.booking_ref, b.guest_count, b.party_time, b.party_room_id,
+              b.contact_email, b.contact_phone, b.user_id,
+              to_char(b.party_date, 'YYYY-MM-DD') as party_date,
+              u.first_name, r.name as room_name
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.id = $1 AND b.status = 'confirmed'
+       FOR UPDATE OF b`,
+      [req.params.id]
+    );
+
+    if (!booking) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Booking not found or not confirmed.' });
+    }
+    if (booking.party_room_id === newRoomId) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'That is already the current room.' });
+    }
+
+    const { rows: [newRoom] } = await client.query(
+      `SELECT id, name, min_guests as "minGuests", max_guests as "maxGuests"
+       FROM party_rooms WHERE id = $1 AND is_active = true`,
+      [newRoomId]
+    );
+    if (!newRoom) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Selected room not found.' });
+    }
+    if (booking.guest_count < newRoom.minGuests || booking.guest_count > newRoom.maxGuests) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `${newRoom.name} only fits ${newRoom.minGuests}-${newRoom.maxGuests} guests; this booking has ${booking.guest_count}.` });
+    }
+
+    const oldRoomId = booking.party_room_id;
+    const oldRoomName = booking.room_name;
+
+    // Same atomic claim-then-release pattern as /reschedule: the INSERT..ON
+    // CONFLICT and its WHERE guard run together under the row lock Postgres
+    // takes for the conflicting row, so two concurrent moves racing for the
+    // same target slot serialize instead of one clobbering the other.
+    const { rows: claimed } = await client.query(
+      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
+       VALUES ($1, $2, $3, 'confirmed', $4)
+       ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+         SET status = 'confirmed', booking_id = EXCLUDED.booking_id, held_by_user_id = NULL, hold_expires_at = NULL
+         WHERE booking_timeslots.status = 'released'
+            OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
+       RETURNING id`,
+      [newRoomId, booking.party_date, booking.party_time, booking.id]
+    );
+    if (claimed.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'That room is already booked for this date and time.' });
+    }
+
+    // Release the booking's old timeslot row now that the new one is claimed.
+    await client.query(
+      `UPDATE booking_timeslots SET status = 'released', booking_id = NULL
+       WHERE booking_id = $1 AND id != $2`,
+      [booking.id, claimed[0].id]
+    );
+
+    await client.query(
+      `UPDATE bookings SET party_room_id = $1, updated_at = now() WHERE id = $2`,
+      [newRoomId, booking.id]
+    );
+
+    // Room changes are permanent and irreversible from the admin's point of
+    // view (no "undo" — moving back is just another change-room call), so
+    // this audit row is the only record of what the room used to be.
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, old_party_room_id, new_party_room_id)
+       VALUES ($1, $2, 'room_change', 0, $3, $4)`,
+      [booking.id, req.user.uid, oldRoomId, newRoomId]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      ok: true,
+      oldRoomName,
+      newRoomName: newRoom.name,
+      bookingRef:   booking.booking_ref,
+      contactEmail: booking.contact_email,
+      contactPhone: booking.contact_phone,
+      firstName:    booking.first_name,
+      partyDate:    booking.party_date,
+      partyTime:    booking.party_time,
     });
   } catch (err) {
     if (client) await client.query('ROLLBACK').catch(() => {});

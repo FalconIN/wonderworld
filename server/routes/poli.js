@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { paymentLimiter } = require('../middleware/rateLimit');
 const { createConfirmedBooking } = require('../services/bookingCreator');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
+const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const poli = require('../services/poliClient');
 
 const SITE_URL = process.env.SITE_URL || 'https://wonderworldwestgate.co.nz';
@@ -30,7 +31,7 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
   const {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
     allergyNotes, addonsSummary, addonsAmount = 0, contactEmail, contactPhone, slotHoldId,
-    firstName, lastName,
+    firstName, lastName, cateringChoice, noAlcoholAck,
   } = req.body;
   const uid = req.user.uid;
 
@@ -39,7 +40,9 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
 
   try {
     const { rows: [room] } = await pool.query(
-      'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      `SELECT id, name, base_price_per_child, min_guests, max_guests,
+              pricing_model, flat_price, allowed_days_of_week
+       FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1`,
       [roomId || null, roomSlug || null]
     );
     if (!room) return res.status(400).json({ error: 'Invalid room.' });
@@ -49,7 +52,23 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
       return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
     }
 
-    const baseAmount = parseFloat(room.base_price_per_child) * guests;
+    try {
+      assertBookingAllowedOnDate(room, partyTime, partyDate);
+    } catch (ruleErr) {
+      return res.status(400).json({ error: ruleErr.message });
+    }
+
+    if (room.pricing_model === 'flat') {
+      if (!['self_catering', 'venue_menu'].includes(cateringChoice)) {
+        return res.status(400).json({ error: 'Please choose a catering option.' });
+      }
+      if (!noAlcoholAck) {
+        return res.status(400).json({ error: 'Please acknowledge the no-alcohol policy to continue.' });
+      }
+    }
+    const baseAmount = room.pricing_model === 'flat'
+      ? parseFloat(room.flat_price)
+      : parseFloat(room.base_price_per_child) * guests;
     const totalAmount = baseAmount + parseFloat(addonsAmount || 0);
     if (!totalAmount || totalAmount < 1) return res.status(400).json({ error: 'Invalid booking amount.' });
 
@@ -61,6 +80,8 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
         bookingRef, uid, roomId: room.id, partyDate, partyTime, guestCount, foodChoice,
         allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
         contactEmail, contactPhone, slotHoldId, firstName, lastName,
+        cateringChoice: room.pricing_model === 'flat' ? cateringChoice : null,
+        noAlcoholAck: room.pricing_model === 'flat' ? !!noAlcoholAck : false,
       })]
     );
 
@@ -108,14 +129,20 @@ async function verifyAndConfirm(token) {
   // Re-verify the amount server-side against the room price, same defense
   // as the Stripe path — never trust the amount POLi echoes back alone.
   const { rows: [room] } = await pool.query(
-    'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE id = $1', [p.roomId]
+    `SELECT id, name, base_price_per_child, min_guests, max_guests,
+            pricing_model, flat_price, allowed_days_of_week
+     FROM party_rooms WHERE id = $1`, [p.roomId]
   );
   if (!room) throw new Error('Room no longer exists for pending POLi booking.');
   const pendingGuests = parseInt(p.guestCount, 10);
   if (!pendingGuests || pendingGuests < room.min_guests || pendingGuests > room.max_guests) {
     throw new Error(`Guest count ${p.guestCount} is outside room limits (${room.min_guests}-${room.max_guests}).`);
   }
-  const expected = parseFloat(room.base_price_per_child) * pendingGuests + parseFloat(p.addonsAmount || 0);
+  assertBookingAllowedOnDate(room, p.partyTime, p.partyDate);
+  const expectedBase = room.pricing_model === 'flat'
+    ? parseFloat(room.flat_price)
+    : parseFloat(room.base_price_per_child) * pendingGuests;
+  const expected = expectedBase + parseFloat(p.addonsAmount || 0);
   if (result.amount && Math.abs(parseFloat(result.amount) - expected) > 0.01) {
     throw new Error(`POLi amount (${result.amount}) does not match expected booking total (${expected}).`);
   }
@@ -127,6 +154,7 @@ async function verifyAndConfirm(token) {
     totalAmount: expected, contactEmail: p.contactEmail, contactPhone: p.contactPhone,
     slotHoldId: p.slotHoldId, paymentProvider: 'poli', poliTransactionToken: token,
     poliTransactionRef: result.merchantRef,
+    cateringChoice: p.cateringChoice || null, noAlcoholAck: !!p.noAlcoholAck,
   });
 
   await pool.query('DELETE FROM poli_pending_bookings WHERE poli_token = $1', [token]);
@@ -145,6 +173,7 @@ async function verifyAndConfirm(token) {
     firstName: p.firstName, lastName: p.lastName, roomName: room.name,
     partyDate: p.partyDate, partyTime: p.partyTime, guestCount: p.guestCount,
     foodChoice: p.foodChoice, addonsSummary: p.addonsSummary, totalAmount: expected,
+    cateringChoice: p.cateringChoice || null, noAlcoholAck: !!p.noAlcoholAck,
   }).catch(err => console.error('POLi booking confirmation notification failed:', err));
 
   return { ok: true, bookingId };

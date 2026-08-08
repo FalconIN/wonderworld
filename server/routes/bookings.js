@@ -5,6 +5,8 @@ const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('../middleware/auth');
 const { bookingLimiter } = require('../middleware/rateLimit');
 const { createConfirmedBooking } = require('../services/bookingCreator');
+const { reclaimableHoldClause } = require('../services/holdExpiry');
+const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 
 // GET /api/rooms — public room list
 router.get('/rooms', async (req, res) => {
@@ -41,7 +43,7 @@ router.get('/slots', async (req, res) => {
   try {
     // Clean up expired holds first
     await pool.query(
-      `DELETE FROM booking_timeslots WHERE status = 'held' AND hold_expires_at < now()`
+      `DELETE FROM booking_timeslots WHERE status = 'held' AND ${reclaimableHoldClause()}`
     );
 
     let roomId = room_id;
@@ -73,11 +75,24 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
   const userId = req.user.uid;
 
   try {
+    // Server-side day-of-week gate — mirrors the greying-out already done
+    // client-side in booking.js, but that's UI only and must not be trusted.
+    const { rows: [room] } = await pool.query(
+      'SELECT name, allowed_days_of_week FROM party_rooms WHERE id = $1 AND is_active = true',
+      [roomId]
+    );
+    if (!room) return res.status(400).json({ error: 'Invalid room.' });
+    try {
+      assertBookingAllowedOnDate(room, slot, date);
+    } catch (ruleErr) {
+      return res.status(400).json({ error: ruleErr.message });
+    }
+
     // Clean up any expired hold on this exact slot
     await pool.query(
       `DELETE FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
-         AND status = 'held' AND hold_expires_at < now()`,
+         AND status = 'held' AND ${reclaimableHoldClause()}`,
       [roomId, date, slot]
     );
 
@@ -108,7 +123,7 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
          SET status = 'held', held_by_user_id = EXCLUDED.held_by_user_id,
              hold_expires_at = EXCLUDED.hold_expires_at, booking_id = NULL
          WHERE booking_timeslots.status = 'released'
-            OR (booking_timeslots.status = 'held' AND booking_timeslots.hold_expires_at < now())
+            OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
        RETURNING id`,
       [roomId, date, slot, userId, expiresAt]
     );
@@ -144,6 +159,7 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
     allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
     contactEmail, contactPhone, stripePaymentIntentId, slotHoldId, cardholderName,
+    cateringChoice, noAlcoholAck,
   } = req.body;
 
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
@@ -160,7 +176,9 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
 
     // Compute expected amount server-side from the room price in the database
     const { rows: [foundRoom] } = await pool.query(
-      'SELECT id, name, base_price_per_child, min_guests, max_guests FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1',
+      `SELECT id, name, base_price_per_child, min_guests, max_guests,
+              pricing_model, flat_price, allowed_days_of_week
+       FROM party_rooms WHERE (id = $1 OR slug = $2) AND is_active = true LIMIT 1`,
       [roomId || null, roomSlug || null]
     );
     if (!foundRoom) return res.status(400).json({ error: 'Invalid room.' });
@@ -171,7 +189,25 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       return res.status(400).json({ error: `This room requires between ${room.min_guests} and ${room.max_guests} guests.` });
     }
 
-    const serverBaseAmount = parseFloat(room.base_price_per_child) * guests;
+    try {
+      assertBookingAllowedOnDate(room, partyTime, partyDate);
+    } catch (ruleErr) {
+      return res.status(400).json({ error: ruleErr.message });
+    }
+
+    // 'flat' rooms (whole-venue hire) charge a fixed rental price regardless
+    // of guest count — everything else keeps the existing per-child math.
+    if (room.pricing_model === 'flat') {
+      if (!['self_catering', 'venue_menu'].includes(cateringChoice)) {
+        return res.status(400).json({ error: 'Please choose a catering option.' });
+      }
+      if (!noAlcoholAck) {
+        return res.status(400).json({ error: 'Please acknowledge the no-alcohol policy to continue.' });
+      }
+    }
+    const serverBaseAmount = room.pricing_model === 'flat'
+      ? parseFloat(room.flat_price)
+      : parseFloat(room.base_price_per_child) * guests;
     const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
 
     if (pi.amount !== expectedCents) {
@@ -228,6 +264,8 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       contactEmail, contactPhone, slotHoldId, cardholderName: stripeBillingName || cardholderName,
       cardBrand: stripeCardBrand, cardLast4: stripeCardLast4,
       paymentProvider: 'stripe', stripePaymentIntentId,
+      cateringChoice: room.pricing_model === 'flat' ? cateringChoice : null,
+      noAlcoholAck: room.pricing_model === 'flat' ? !!noAlcoholAck : false,
     });
 
     // Best-effort — the booking already succeeded above, this is just
@@ -340,6 +378,7 @@ router.get('/users/bookings', requireAuth, async (req, res) => {
               b.food_choice as "foodChoice", b.addons_summary as "addonsSummary",
               b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
               b.total_amount as "totalAmount", b.status, b.created_at as "createdAt",
+              b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
               r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
               r.max_guests as "roomMaxGuests", r.base_price_per_child as "pricePerChild"
        FROM bookings b

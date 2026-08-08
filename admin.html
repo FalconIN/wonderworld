@@ -503,6 +503,17 @@
   </div>
 </div>
 
+<!-- ── Change Room Modal ─────────────────────────────────── -->
+<div id="changeRoomModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeChangeRoomModal()">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+      <h2 class="font-display font-bold text-2xl text-gray-900 dark:text-white">Change Room</h2>
+      <button onclick="closeChangeRoomModal()" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 flex-shrink-0">×</button>
+    </div>
+    <div id="changeRoomContent"></div>
+  </div>
+</div>
+
 <!-- ── Add Booking Modal ─────────────────────────────────── -->
 <div id="addBookingModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddBookingModal()">
   <div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
@@ -545,11 +556,32 @@
         </div>
       </div>
 
+      <!-- Whole-venue hire: catering choice + no-alcohol ack -->
+      <div id="ab_wholeVenueCateringSection" class="hidden bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">Catering & Alcohol Policy</div>
+        <div class="text-xs text-gray-400">$2,899 flat covers venue rental only — food/drink not included.</div>
+        <div class="space-y-2">
+          <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer">
+            <input type="radio" name="ab_cateringChoice" value="self_catering" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <span class="text-sm"><span class="font-semibold">Self-catering</span> — customer brings their own food/drink.</span>
+          </label>
+          <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer">
+            <input type="radio" name="ab_cateringChoice" value="venue_menu" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <span class="text-sm"><span class="font-semibold">Venue menu</span> — no outside food/drink except birthday cake.</span>
+          </label>
+        </div>
+        <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-red-200 bg-red-50 cursor-pointer">
+          <input type="checkbox" id="ab_noAlcoholAck" class="mt-0.5 w-4 h-4 accent-red-500 flex-shrink-0" />
+          <span class="text-sm font-semibold text-red-800">No alcohol acknowledged (either catering option)</span>
+        </label>
+      </div>
+
       <!-- Food split -->
+      <div id="ab_foodAddonsSection">
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
         <div class="text-xs text-gray-400">Must add up to <span id="ab_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
           <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍗</div>
             <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
@@ -559,6 +591,11 @@
             <div class="text-2xl mb-1">🍔</div>
             <div class="font-semibold text-xs mb-2">Mini Burger</div>
             <input type="number" min="0" id="ab_burgerCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
+          </div>
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🥦</div>
+            <div class="font-semibold text-xs mb-2">Vege Mini Burger</div>
+            <input type="number" min="0" id="ab_vegeCount" value="0" oninput="abOnFoodInput()" class="field text-center font-bold text-indigo-600 text-lg w-full" />
           </div>
         </div>
         <div id="ab_foodSplitTotal" class="text-xs text-center text-gray-400">0 / 10 selected</div>
@@ -570,6 +607,7 @@
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons (optional)</div>
         <div id="ab_addonsList" class="space-y-2"></div>
       </div>
+      </div> <!-- /#ab_foodAddonsSection -->
 
       <!-- Admin notes -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
@@ -651,7 +689,7 @@
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-3 transition-colors">
         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">🍽️ Food Choice</div>
         <div class="text-xs text-gray-400">Must add up to <span id="eb_foodTarget" class="font-bold text-indigo-600">10</span> kids</div>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-3 gap-3">
           <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
             <div class="text-2xl mb-1">🍗</div>
             <div class="font-semibold text-xs mb-2">Chicken Nuggets</div>
@@ -668,6 +706,15 @@
               <button onclick="ebChangeFoodSplit('burgers', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
               <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_burgerCount">0</span>
               <button onclick="ebChangeFoodSplit('burgers', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
+            </div>
+          </div>
+          <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-3 text-center transition-colors">
+            <div class="text-2xl mb-1">🥦</div>
+            <div class="font-semibold text-xs mb-2">Vege Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ebChangeFoodSplit('veges', -1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">−</button>
+              <span class="font-bold text-lg text-indigo-600 w-6 text-center" id="eb_vegeCount">0</span>
+              <button onclick="ebChangeFoodSplit('veges', 1)" class="w-7 h-7 rounded-lg border border-gray-300 font-bold hover:border-indigo-400">+</button>
             </div>
           </div>
         </div>
@@ -822,6 +869,6 @@
 </style>
 
 <script src="firebase.js" defer></script>
-<script src="admin.js?v=41" defer></script>
+<script src="admin.js?v=42" defer></script>
 </body>
 </html>
