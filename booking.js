@@ -832,7 +832,8 @@ function buildConfirmationCard() {
   const middleRowsHtml = isFlat
     ? `
       <div class="text-gray-500">Catering</div><div class="font-semibold">${cateringLabel}</div>
-      <div class="text-gray-500">Alcohol</div><div class="font-semibold">Not permitted 🚫</div>`
+      <div class="text-gray-500">Alcohol</div><div class="font-semibold">Not permitted 🚫</div>
+      ${addonHtml}`
     : `
       <div class="text-gray-500">Food</div><div class="font-semibold">${state.selectedFood || '—'}</div>
       ${addonHtml}`;
