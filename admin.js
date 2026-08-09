@@ -2737,6 +2737,71 @@ function abRenderStep3ForRoom() {
   if (!foodSection || !cateringSection) return;
   foodSection.classList.toggle('hidden', isWholeVenue);
   cateringSection.classList.toggle('hidden', !isWholeVenue);
+
+  if (isWholeVenue) {
+    abOnCateringChoiceChange();
+  } else {
+    abPlaceAddonsBlock(false);
+  }
+}
+
+// Tracks the admin Add-Ons card's original spot so it can be moved back after
+// being relocated into ab_wholeVenueMenuSlot — mirrors booking.js's
+// addonsHomeParent/placeAddonsBlock for the customer wizard. #ab_addonsCard
+// otherwise lives inside #ab_foodAddonsSection, which is hidden wholesale for
+// whole-venue bookings — without relocating it out, there is no menu picker
+// shown at all when "Venue menu" catering is chosen.
+let abAddonsHomeParent = null;
+let abAddonsHomeNextSibling = null;
+
+function abPlaceAddonsBlock(showAsMenu) {
+  const card = document.getElementById('ab_addonsCard');
+  if (!card) return;
+  if (!abAddonsHomeParent) {
+    abAddonsHomeParent = card.parentNode;
+    abAddonsHomeNextSibling = card.nextSibling;
+  }
+
+  const icon = document.getElementById('ab_addonsHeadingIcon');
+  const label = document.getElementById('ab_addonsHeadingLabel');
+  const suffix = document.getElementById('ab_addonsHeadingSuffix');
+
+  if (showAsMenu === null) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  if (showAsMenu) {
+    const slot = document.getElementById('ab_wholeVenueMenuSlot');
+    if (slot && card.parentNode !== slot) slot.appendChild(card);
+    if (icon) icon.textContent = '🍽️';
+    if (label) label.textContent = 'Menu';
+    if (suffix) suffix.textContent = '';
+  } else {
+    if (abAddonsHomeParent && card.parentNode !== abAddonsHomeParent) {
+      abAddonsHomeParent.insertBefore(card, abAddonsHomeNextSibling);
+    }
+    if (icon) icon.textContent = '➕';
+    if (label) label.textContent = 'Add-Ons';
+    if (suffix) suffix.textContent = '(optional)';
+  }
+  card.classList.remove('hidden');
+}
+
+function abOnCateringChoiceChange() {
+  const checked = document.querySelector('input[name="ab_cateringChoice"]:checked');
+  const note = document.getElementById('ab_cateringChoiceNote');
+  if (!note) return;
+  if (!checked) {
+    note.classList.add('hidden');
+    abPlaceAddonsBlock(null);
+    return;
+  }
+  note.classList.remove('hidden');
+  note.innerHTML = checked.value === 'venue_menu'
+    ? '🍽️ No outside food or drink is permitted — birthday cake is always the exception. Choose items from the menu below.'
+    : '🍽️ Customer is bringing their own food & drink — birthday cake and everything else is up to them.';
+  abPlaceAddonsBlock(checked.value === 'venue_menu' ? true : null);
 }
 
 async function abUpdateTimeSlots() {

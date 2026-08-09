@@ -562,14 +562,16 @@
         <div class="text-xs text-gray-400">$2,899 flat covers venue rental only — food/drink not included.</div>
         <div class="space-y-2">
           <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer">
-            <input type="radio" name="ab_cateringChoice" value="self_catering" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <input type="radio" name="ab_cateringChoice" value="self_catering" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" onchange="abOnCateringChoiceChange()" />
             <span class="text-sm"><span class="font-semibold">Self-catering</span> — customer brings their own food/drink.</span>
           </label>
           <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer">
-            <input type="radio" name="ab_cateringChoice" value="venue_menu" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+            <input type="radio" name="ab_cateringChoice" value="venue_menu" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" onchange="abOnCateringChoiceChange()" />
             <span class="text-sm"><span class="font-semibold">Venue menu</span> — no outside food/drink except birthday cake.</span>
           </label>
         </div>
+        <div id="ab_cateringChoiceNote" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700"></div>
+        <div id="ab_wholeVenueMenuSlot"></div>
         <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-red-200 bg-red-50 cursor-pointer">
           <input type="checkbox" id="ab_noAlcoholAck" class="mt-0.5 w-4 h-4 accent-red-500 flex-shrink-0" />
           <span class="text-sm font-semibold text-red-800">No alcohol acknowledged (either catering option)</span>
@@ -602,9 +604,10 @@
         <div><label class="lbl">Allergy / Notes</label><textarea class="field" id="ab_notes" rows="2" placeholder="Any allergies or special requests..."></textarea></div>
       </div>
 
-      <!-- Add-ons -->
-      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
-        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons (optional)</div>
+      <!-- Add-ons (relocated into ab_wholeVenueMenuSlot, retitled "Menu", when
+           Whole Venue Hire + venue-menu catering is selected — see abPlaceAddonsBlock() -->
+      <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors" id="ab_addonsCard">
+        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1"><span id="ab_addonsHeadingIcon">➕</span> <span id="ab_addonsHeadingLabel">Add-Ons</span> <span id="ab_addonsHeadingSuffix" class="text-gray-400 font-normal">(optional)</span></div>
         <div id="ab_addonsList" class="space-y-2"></div>
       </div>
       </div> <!-- /#ab_foodAddonsSection -->
@@ -869,6 +872,6 @@
 </style>
 
 <script src="firebase.js" defer></script>
-<script src="admin.js?v=43" defer></script>
+<script src="admin.js?v=44" defer></script>
 </body>
 </html>
