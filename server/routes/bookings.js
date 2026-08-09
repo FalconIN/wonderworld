@@ -4,7 +4,7 @@ const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { requireAuth } = require('../middleware/auth');
 const { bookingLimiter } = require('../middleware/rateLimit');
-const { createConfirmedBooking } = require('../services/bookingCreator');
+const { createConfirmedBooking, SlotHoldExpiredError } = require('../services/bookingCreator');
 const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 
@@ -277,6 +277,41 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
 
     res.json({ bookingId });
   } catch (err) {
+    if (err instanceof SlotHoldExpiredError) {
+      // The card has already been captured (verified above) but the slot
+      // hold no longer holds the slot — most likely it expired while the
+      // customer was mid-payment, and someone else may now hold it. Same
+      // remedy as the amount-mismatch case above: auto-refund rather than
+      // leave the customer charged with no booking, and leave a `payments`
+      // row (booking_id NULL) for admin reconciliation.
+      let refundStatus = 'failed';
+      let refundNote = 'Auto-refund failed — needs manual reconciliation.';
+      try {
+        await stripe.refunds.create({ payment_intent: stripePaymentIntentId });
+        refundStatus = 'refunded';
+        refundNote = 'Auto-refunded.';
+      } catch (refundErr) {
+        refundNote = `Auto-refund failed: ${refundErr.message} — needs manual reconciliation.`;
+      }
+
+      await pool.query(
+        `INSERT INTO payments
+           (booking_id, user_id, stripe_payment_intent_id, amount, currency, status,
+            payment_provider, error_message, refunded_at)
+         VALUES (NULL, $1, $2, $3, 'nzd', $4, 'stripe', $5, CASE WHEN $4 = 'refunded' THEN now() ELSE NULL END)
+         ON CONFLICT (stripe_payment_intent_id) DO UPDATE
+           SET status = EXCLUDED.status, error_message = EXCLUDED.error_message,
+               refunded_at = EXCLUDED.refunded_at, updated_at = now()`,
+        [uid, stripePaymentIntentId, verifiedTotalAmount, refundStatus,
+         `Slot hold expired before booking could be confirmed. ${refundNote}`]
+      );
+
+      return res.status(409).json({
+        error: refundStatus === 'refunded'
+          ? "Your time slot hold expired before we could confirm your booking, so we've automatically refunded your card. Please try booking again."
+          : 'Your time slot hold expired before we could confirm your booking. We could not confirm the refund — please contact us at Bookings@wonderworldwestgate.co.nz so we can sort this out.'
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });

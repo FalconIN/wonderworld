@@ -50,6 +50,10 @@ const state = {
   bookingId:      null,
   stripePaymentIntentId: null,
   calculatedTotal: 0,
+  // True while stripe.confirmPayment() is awaiting a result (payment.js) —
+  // the session/hold countdown (booking.js) checks this before tearing down
+  // an in-progress payment attempt. See handleTimerExpiry().
+  paymentInFlight: false,
 };
 
 // ---------------------------------------------------------------------------

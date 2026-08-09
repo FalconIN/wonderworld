@@ -180,13 +180,33 @@ function buildRoomCard(room, dimmed) {
     </div>`;
 }
 
-function selectRoom(id) {
+async function selectRoom(id) {
+  const roomChanged = state.selectedRoom?.id !== id;
+
   state.selectedRoom = ROOMS.find(r => r.id === id);
   renderRooms();
   updateStep2SlotsHint();
   const nextBtn = document.getElementById('step1Next');
   nextBtn.disabled = false;
   nextBtn.style.opacity = '1';
+
+  // A held slot's exclusivity lock belongs to whichever room it was created
+  // for. Without this, switching rooms left selectedTime/slotHoldId/
+  // partyRoomDbId referring to different rooms: the background availability
+  // poller (fetchAndRenderSlots, via subscribeToSlotChanges) reads
+  // state.selectedRoom fresh on every tick and silently repoints
+  // partyRoomDbId at whatever room is now selected, regardless of whether a
+  // hold was ever taken out on it — so the final booking could get written
+  // for a room whose slot was never actually checked (see WW-129HC4
+  // root-cause writeup). Stopping the poller and clearing the stale hold
+  // here means it can only resume via updateTimeSlots(), which re-syncs
+  // partyRoomDbId/selectedTime/slotHoldId together from a fresh check.
+  if (roomChanged) {
+    stopTimer();
+    if (state.slotHoldId) await releaseSlotHold(state.slotHoldId);
+    state.selectedTime = null;
+    state.partyRoomDbId = null;
+  }
 }
 
 // Step 2's hint line describes whichever slot(s) apply to the selected
@@ -1082,7 +1102,21 @@ function startTimer() {
 // the same instant) passes. The whole attempt is over at that point, not
 // just the room hold, so this reopens a fresh session/hold rather than
 // leaving the customer in a dead wizard with no active session.
+//
+// If a payment confirmation is in flight (state.paymentInFlight, set by
+// payment.js around stripe.confirmPayment()), deleting the hold and
+// resetting the wizard right now would race an in-progress charge — the
+// card can still succeed a moment later with the hold already gone and no
+// wizard state left to save a booking against (see WW-129HC4 incident
+// writeup). Defer instead of acting: by the time paymentInFlight clears,
+// this is either moot (payment succeeded, wizard already moved to step 5)
+// or the hold really is dead and this runs for real.
 async function handleTimerExpiry() {
+  if (state.paymentInFlight) {
+    setTimeout(handleTimerExpiry, 1000);
+    return;
+  }
+
   const display = document.getElementById('timerDisplay');
   if (display) display.textContent = '00:00';
 

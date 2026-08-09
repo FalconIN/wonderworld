@@ -120,6 +120,16 @@ CREATE INDEX IF NOT EXISTS idx_bookings_party_date ON public.bookings (party_dat
 CREATE INDEX IF NOT EXISTS idx_bookings_status     ON public.bookings (status);
 CREATE INDEX IF NOT EXISTS idx_bookings_booking_ref ON public.bookings (booking_ref);
 
+-- Hard backstop against double-booking a slot: booking_timeslots' own unique
+-- constraint is supposed to be the single source of truth for slot exclusivity,
+-- but application code can still insert into bookings without a live claim on
+-- it (see migration-double-booking-guard.sql for the incident this closed).
+-- Only 'confirmed' is constrained -- 'pending'/'cancelled'/'refunded' rows are
+-- allowed to share a slot (e.g. a cancelled booking freeing it up again).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_confirmed_slot
+  ON public.bookings (party_room_id, party_date, party_time)
+  WHERE status = 'confirmed';
+
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$

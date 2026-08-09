@@ -330,6 +330,15 @@ async function processStripePayment() {
     confirmPhone:    state.confirmPhone,
   }));
 
+  // Set for the duration of the confirmPayment() round-trip so the session/
+  // hold countdown (booking.js handleTimerExpiry) knows not to delete the
+  // hold and reset the wizard out from under an in-flight charge — a hold
+  // expiring in that exact window previously let the card get charged with
+  // no booking ever written (see WW-129HC4 incident writeup). Cleared in
+  // `finally` so it's reset on every exit path (success, decline, throw) —
+  // except an Afterpay-style redirect, where the page navigates away anyway
+  // and this whole JS context is discarded.
+  state.paymentInFlight = true;
   try {
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements: stripeElements,
@@ -365,6 +374,8 @@ async function processStripePayment() {
     btn.disabled = false;
     btnText?.classList.remove('hidden');
     btnSpinner?.classList.add('hidden');
+  } finally {
+    state.paymentInFlight = false;
   }
 }
 
