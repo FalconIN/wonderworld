@@ -98,6 +98,7 @@ router.get('/bookings', async (req, res) => {
                         WHEN '11:30 AM' THEN '11:30'::time
                         WHEN '1:30 PM'  THEN '13:30'::time
                         WHEN '3:30 PM'  THEN '15:30'::time
+                        WHEN '5:30 PM'  THEN '17:30'::time
                         ELSE '12:00'::time
                       END) AT TIME ZONE 'Pacific/Auckland'
                     )) / 60 as "minutesPastDue"
