@@ -876,7 +876,7 @@ const ADDON_PRICES = {
 // order summary, food-prep report) but held back from customers pending
 // a manual check. Flip to true to go live; no other changes needed. See
 // updateGfNuggetsUI below and changeFoodSplit('gfNuggets', ...) in app.js.
-const GF_NUGGETS_ENABLED = false;
+const GF_NUGGETS_ENABLED = true;
 
 // Also live for anyone in private test mode (see isTestMode() in app.js),
 // so it can be verified before flipping the flag above for everyone.
