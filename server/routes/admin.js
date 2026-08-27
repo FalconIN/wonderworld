@@ -6,6 +6,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { fetchAndStoreReviews } = require('../services/googleReviewsSync');
 const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
+const { sendBookingConfirmation } = require('../services/bookingNotifications');
 
 // All routes require admin
 router.use(requireAdmin);
@@ -812,6 +813,21 @@ router.post('/bookings/manual', async (req, res) => {
 
     await client.query('COMMIT');
     res.json({ bookingRef, bookingId: booking.id });
+
+    // Unlike the customer-facing checkout flow, there's no browser waiting to
+    // trigger this client-side — staff just filled in a form. Send it now,
+    // server-side, same as the POLi return handler does. Only for bookings
+    // actually confirmed (a manual booking can be entered as 'pending').
+    if (status === 'confirmed') {
+      sendBookingConfirmation({
+        bookingRef, bookingId: booking.id, email: resolvedEmail || null, phone: phone || null,
+        firstName: resolvedFirstName, lastName: resolvedLastName, roomName: room.name,
+        partyDate: date, partyTime: time, guestCount: guests, foodChoice,
+        addonsSummary, totalAmount,
+        cateringChoice: room.pricingModel === 'flat' ? cateringChoice : null,
+        noAlcoholAck: room.pricingModel === 'flat' ? !!noAlcoholAck : false,
+      }).catch(err => console.error('Manual booking confirmation notification failed:', err));
+    }
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });
