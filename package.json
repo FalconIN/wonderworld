@@ -6,7 +6,8 @@
   "scripts": {
     "build:css": "npm run build:css:public && npm run build:css:admin",
     "build:css:public": "tailwindcss -c tailwind.config.js -i ./tailwind-input.css -o ./tailwind.css --minify",
-    "build:css:admin": "tailwindcss -c tailwind.admin.config.js -i ./tailwind-input.css -o ./tailwind-admin.css --minify"
+    "build:css:admin": "tailwindcss -c tailwind.admin.config.js -i ./tailwind-input.css -o ./tailwind-admin.css --minify",
+    "test": "node .github/init.js"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.19"
