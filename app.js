@@ -329,7 +329,7 @@ function isTestMode() {
 // pricing change) without touching nginx/PM2 — every "Book a Party"/"Book
 // Now" CTA on every page routes through this one function. Flip back to
 // false to re-enable; no other changes needed.
-const BOOKING_PAUSED = true;
+const BOOKING_PAUSED = false;
 
 function openBooking() {
   if (BOOKING_PAUSED && !isTestMode()) {
