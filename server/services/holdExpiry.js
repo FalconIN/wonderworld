@@ -1,4 +1,4 @@
-// A held slot's hold_expires_at (15 min) can lapse before its POLi payment
+// A held slot's hold_expires_at (30 min) can lapse before its POLi payment
 // finishes — POLi's bank-redirect flow can run well past that window. If
 // anything reclaims the slot mid-payment, deleting/overwriting the
 // booking_timeslots row cascades away the matching poli_pending_bookings
@@ -7,7 +7,7 @@
 // but we never find out (see WW-23LOKH incident, 2026-08-02/03).
 //
 // Give any slot with a recent pending POLi payment a grace window past its
-// nominal 15-minute hold before it's fair game to reclaim. If the attempt
+// nominal 30-minute hold before it's fair game to reclaim. If the attempt
 // really was abandoned, it becomes reclaimable again once that window lapses.
 const PENDING_POLI_GRACE = "interval '1 hour'";
 

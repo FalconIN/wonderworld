@@ -4,6 +4,7 @@ const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const pool    = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { paymentLimiter } = require('../middleware/rateLimit');
+const { verifyAndConfirmStripePayment } = require('../services/stripeReconcile');
 
 // Returns a valid Stripe customer id for this user, healing the stored id if
 // it's stale (e.g. left over from Stripe test mode — customer ids don't carry
@@ -193,6 +194,16 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   try {
     if (event.type === 'payment_intent.succeeded') {
       const pi = event.data.object;
+
+      // Safety net: finalize the booking here if the customer's browser
+      // never called POST /api/bookings after Stripe confirmed the charge
+      // (tab closed, connection dropped, app crashed) — see WW-C2PRDY
+      // incident, 2026-08-11. Idempotent against the client's own call;
+      // whichever gets there first wins, see verifyAndConfirmStripePayment.
+      await verifyAndConfirmStripePayment(pi.id).catch(err =>
+        console.error(`Stripe safety-net reconciliation failed for ${pi.id}:`, err)
+      );
+
       await pool.query(
         `UPDATE payments SET status = 'succeeded', updated_at = now()
          WHERE stripe_payment_intent_id = $1`,
@@ -200,15 +211,18 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       );
     }
 
-    // Booking confirmation itself doesn't depend on this webhook — the
-    // frontend confirms payment client-side, then calls POST /api/bookings,
-    // which independently re-verifies the charge via paymentIntents.retrieve
-    // before writing anything. That's the source of truth. This handler (and
-    // succeeded, above) is a redundant reconciliation pass, and today it's
-    // usually a no-op for failures specifically: a `payments` row is only
-    // ever inserted after a booking is confirmed, so a PaymentIntent that
-    // fails before that point has no row here to update yet. Kept anyway so
-    // this self-heals if that ever changes, and for admin visibility via
+    // Booking confirmation for the common case still happens client-side —
+    // the frontend confirms payment in-browser, then calls POST
+    // /api/bookings, which independently re-verifies the charge via
+    // paymentIntents.retrieve before writing anything. That's still the
+    // fast path (the customer sees the confirmation screen instantly instead
+    // of waiting on webhook delivery). The safety net above only does
+    // anything when that call never arrives. This handler (and succeeded,
+    // above) is otherwise a redundant reconciliation pass, and for failures
+    // specifically it's usually a no-op: a `payments` row is only ever
+    // inserted after a booking is confirmed, so a PaymentIntent that fails
+    // before that point has no row here to update yet. Kept anyway so this
+    // self-heals if that ever changes, and for admin visibility via
     // `error_message`.
     if (event.type === 'payment_intent.payment_failed') {
       const pi = event.data.object;

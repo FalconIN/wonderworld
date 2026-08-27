@@ -223,7 +223,7 @@
         <div class="mb-6">
           <label class="lbl mb-1 block">How many of each? <span class="text-gray-400 font-normal">(must add up to <span id="foodGuestTarget" class="font-bold text-indigo-600">10</span> kids)</span></label>
           <div id="foodSplitError" class="text-red-500 text-xs mb-2 hidden">Total exceeds the number of kids — reduce one of the options.</div>
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-3 gap-3" id="foodSplitGrid">
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="nuggetCard">
               <div class="text-4xl mb-2">🍗</div>
               <div class="font-display font-bold text-sm">Chicken Nuggets</div>
@@ -232,6 +232,16 @@
                 <button onclick="changeFoodSplit('nuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
                 <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="nuggetCount">0</span>
                 <button id="nuggetPlus" onclick="changeFoodSplit('nuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
+              </div>
+            </div>
+            <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center hidden" id="gfNuggetsCard">
+              <div class="text-4xl mb-2">🌾</div>
+              <div class="font-display font-bold text-sm">Gluten-Free Nuggets <span class="text-indigo-600">+$5</span></div>
+              <div class="text-xs text-gray-400 font-semibold mb-3">Per kid</div>
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="changeFoodSplit('gfNuggets', -1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="font-display font-bold text-2xl text-indigo-600 w-8 text-center" id="addon_gf_nuggets">0</span>
+                <button id="gfNuggetsPlus" onclick="changeFoodSplit('gfNuggets', 1)" class="w-8 h-8 rounded-lg border-2 border-gray-300 font-bold text-lg hover:border-indigo-400 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:border-gray-200">+</button>
               </div>
             </div>
             <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 text-center" id="burgerCard">
@@ -679,8 +689,8 @@
 
 <script src="firebase.js" defer></script>
 <script src="auth.js?v=4" defer></script>
-<script src="booking.js?v=29" defer></script>
+<script src="booking.js?v=32" defer></script>
 <script src="payment.js?v=5" defer></script>
-<script src="app.js?v=31" defer></script>
+<script src="app.js?v=33" defer></script>
 </body>
 </html>

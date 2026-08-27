@@ -60,7 +60,7 @@ router.post('/open', requireAuth, bookingLimiter, async (req, res) => {
       }
     }
 
-    // The slot hold and the session both run ~15 minutes but don't start in
+    // The slot hold and the session both run ~30 minutes but don't start in
     // lockstep (the hold only begins at step 2), so on resume the hold can
     // have already lapsed even though the session hasn't.
     let holdExpired = false;

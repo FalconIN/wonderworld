@@ -8,6 +8,8 @@ const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
 
+const TWILIO_CONFIGURED = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+
 // All routes require admin
 router.use(requireAdmin);
 
@@ -89,6 +91,7 @@ router.get('/bookings', async (req, res) => {
                     b.addons_summary as "addonsSummary",
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
                     b.admin_notes as "adminNotes",
+                    b.food_credit_amount as "foodCreditAmount",
                     b.created_at as "createdAt",
                     r.name as "roomName", r.emoji as "roomEmoji",
                     u.first_name as "firstName", u.last_name as "lastName",
@@ -163,6 +166,7 @@ router.get('/bookings/:id', async (req, res) => {
               b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
               b.admin_notes as "adminNotes",
               b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
+              b.food_credit_amount as "foodCreditAmount",
               b.created_at as "createdAt",
               r.name as "roomName", r.emoji as "roomEmoji",
               u.first_name as "firstName", u.last_name as "lastName",
@@ -199,6 +203,35 @@ router.get('/payments/for-booking/:bookingId', async (req, res) => {
   }
 });
 
+// POST /api/admin/bookings/:id/redeem-credit — mark a booking's accrued food
+// credit (see bookings.food_credit_amount, POST /api/bookings/:id/reduce-guests)
+// as used at the venue. There's no POS integration to redeem against, so
+// this is an all-or-nothing "zero it out" action logged to admin_notes for
+// an audit trail, rather than a partial-redemption balance.
+router.post('/bookings/:id/redeem-credit', async (req, res) => {
+  try {
+    const { rows: [before] } = await pool.query(
+      `SELECT food_credit_amount as "foodCreditAmount", admin_notes as "adminNotes" FROM bookings WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!before) return res.status(404).json({ error: 'Booking not found' });
+    if (parseFloat(before.foodCreditAmount) <= 0) {
+      return res.status(400).json({ error: 'This booking has no outstanding food credit.' });
+    }
+
+    const note = `Food credit of $${parseFloat(before.foodCreditAmount).toFixed(2)} marked redeemed ${new Date().toISOString().slice(0, 10)} by ${req.user.email || req.user.uid}.`;
+    const newNotes = before.adminNotes ? `${before.adminNotes}\n${note}` : note;
+
+    await pool.query(
+      `UPDATE bookings SET food_credit_amount = 0, admin_notes = $1, updated_at = now() WHERE id = $2`,
+      [newNotes, req.params.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // PATCH /api/admin/bookings/:id/cancel
 router.patch('/bookings/:id/cancel', async (req, res) => {
   const client = await pool.connect();
@@ -207,16 +240,21 @@ router.patch('/bookings/:id/cancel', async (req, res) => {
 
     const { rows: [booking] } = await client.query(
       `UPDATE bookings SET status = 'cancelled', cancelled_at = now(), updated_at = now()
-       WHERE id = $1 RETURNING party_room_id as "partyRoomId", party_date as "partyDate", party_time as "partyTime"`,
+       WHERE id = $1 RETURNING id`,
       [req.params.id]
     );
     if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
 
-    // Delete the timeslot so the slot becomes bookable again
+    // Delete the timeslot so the slot becomes bookable again. Scoped to this
+    // booking's own id, not its (room, date, time) — deleting by the derived
+    // triple would delete WHATEVER row currently occupies that slot, which
+    // isn't necessarily this booking's own lock if the two were ever out of
+    // sync (see the WW-CJYSR1/WW-KM6D1V legacy mismatch incident: cancelling
+    // the wrong booking with that bug live would have freed a room a
+    // different, still-valid paying customer actually held).
     await client.query(
-      `DELETE FROM booking_timeslots
-       WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
-      [booking.partyRoomId, booking.partyDate, booking.partyTime]
+      `DELETE FROM booking_timeslots WHERE booking_id = $1`,
+      [req.params.id]
     );
 
     await client.query('COMMIT');
@@ -257,7 +295,7 @@ router.patch('/bookings/:id', async (req, res) => {
            admin_notes = $10,
            ${statusClause} updated_at = now()
        WHERE id = $${idIdx}
-       RETURNING user_id, party_room_id as "partyRoomId", party_date as "partyDate", party_time as "partyTime"`,
+       RETURNING user_id`,
       baseParams
     );
     if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found' }); }
@@ -266,11 +304,14 @@ router.patch('/bookings/:id', async (req, res) => {
     // leave the timeslot locked forever — this mirrors the release the
     // dedicated PATCH /bookings/:id/cancel endpoint does, so a slot cancelled
     // through the edit-details form doesn't stay permanently ghost-locked.
+    // Scoped to this booking's own id, not its (room, date, time) — see the
+    // matching fix on PATCH /bookings/:id/cancel for why deleting by the
+    // derived triple is unsafe if the lock and the booking were ever out of
+    // sync (WW-CJYSR1/WW-KM6D1V legacy incident).
     if (newStatus === 'cancelled') {
       await client.query(
-        `DELETE FROM booking_timeslots
-         WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
-        [booking.partyRoomId, booking.partyDate, booking.partyTime]
+        `DELETE FROM booking_timeslots WHERE booking_id = $1`,
+        [req.params.id]
       );
     }
 
@@ -610,24 +651,26 @@ router.post('/bookings/import', async (req, res) => {
         userId = newId;
       }
 
-      // Check slot — clear this slot's own expired hold first so a stale hold
-      // doesn't block a legitimate import, then block on anything still live
-      // (a 'confirmed' booking or an active customer checkout hold) so this
-      // admin path can't silently steal a slot out from under a customer
-      // mid-checkout (previously only 'confirmed' was checked, so a 'held'
-      // row was invisible here and got clobbered when the customer's payment
-      // completed, leaving the admin's booking with no slot lock at all).
+      // Fast-path check for a friendly per-row failure message — NOT the
+      // actual safety mechanism; see the atomic claim after the booking row
+      // is inserted below. A plain SELECT-then-conditionally-write here (the
+      // previous version) left a window between this check and the write
+      // where a concurrent import/manual booking or customer checkout could
+      // claim the same slot; the later write would then silently overwrite
+      // that claim's lock instead of failing — see the WW-CJYSR1/WW-KM6D1V
+      // legacy incident this pattern produced when it lived in the
+      // customer-facing flow, closed there by the same atomic-claim fix.
       await client.query(
         `DELETE FROM booking_timeslots
          WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
            AND status = 'held' AND ${reclaimableHoldClause()}`,
         [r.matchedRoomId, r.date, r.time]
       );
-      const { rows: slot } = await client.query(
-        `SELECT id, status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
+      const { rows: [slotPreview] } = await client.query(
+        `SELECT status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
         [r.matchedRoomId, r.date, r.time]
       );
-      if (slot[0] && slot[0].status !== 'released') throw new Error(`Slot already booked: ${r.date} ${r.time}`);
+      if (slotPreview && slotPreview.status !== 'released') throw new Error(`Slot already booked: ${r.date} ${r.time}`);
 
       const bookingRef = 'WW-IMP-' + Math.random().toString(36).slice(2, 7).toUpperCase();
       const { rows: [booking] } = await client.query(
@@ -641,15 +684,23 @@ router.post('/bookings/import', async (req, res) => {
          r.baseAmount, r.addonsAmount, r.price, r.email, r.phone || null]
       );
 
-      if (slot[0]) {
-        await client.query(`UPDATE booking_timeslots SET status = 'confirmed', booking_id = $1 WHERE id = $2`, [booking.id, slot[0].id]);
-      } else {
-        await client.query(
-          `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, held_by_user_id, booking_id)
-           VALUES ($1,$2,$3,'confirmed',$4,$5)`,
-          [r.matchedRoomId, r.date, r.time, userId, booking.id]
-        );
-      }
+      // Atomic claim-then-write, same pattern as /reschedule and
+      // /change-room: the INSERT..ON CONFLICT and its WHERE guard run
+      // together under Postgres's own row lock for the conflicting row, so a
+      // concurrent writer racing for this exact slot serializes instead of
+      // silently clobbering this claim (or being clobbered by it).
+      const { rows: claimed } = await client.query(
+        `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, held_by_user_id, booking_id)
+         VALUES ($1, $2, $3, 'confirmed', $4, $5)
+         ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+           SET status = 'confirmed', booking_id = EXCLUDED.booking_id,
+               held_by_user_id = EXCLUDED.held_by_user_id, hold_expires_at = NULL
+           WHERE booking_timeslots.status = 'released'
+              OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
+         RETURNING id`,
+        [r.matchedRoomId, r.date, r.time, userId, booking.id]
+      );
+      if (claimed.length === 0) throw new Error(`Slot already booked: ${r.date} ${r.time}`);
 
       await client.query('COMMIT');
       successCount++;
@@ -714,24 +765,27 @@ router.post('/bookings/manual', async (req, res) => {
       }
     }
 
-    // Check slot — clear this slot's own expired hold first so a stale hold
-    // doesn't block a legitimate manual booking, then block on anything still
-    // live (a 'confirmed' booking or an active customer checkout hold) so this
-    // admin path can't silently steal a slot out from under a customer
-    // mid-checkout (previously only 'confirmed' was checked, so a 'held' row
-    // was invisible here and got clobbered when the customer's payment
-    // completed, leaving the admin's booking with no slot lock at all).
+    // Fast-path check for a friendly error message — NOT the actual safety
+    // mechanism; see the atomic claim after the booking row is inserted
+    // below. A plain SELECT-then-conditionally-write here (the previous
+    // version) left a window between this check and the write where a
+    // second concurrent manual booking (e.g. two staff both taking phone
+    // bookings for the same popular slot) or a customer checkout hold could
+    // claim the same slot; the later write would then silently overwrite
+    // that claim's lock instead of failing — see the WW-CJYSR1/WW-KM6D1V
+    // legacy incident this exact pattern produced when it lived in the
+    // customer-facing flow, closed there by the same atomic-claim fix.
     await client.query(
       `DELETE FROM booking_timeslots
        WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3
          AND status = 'held' AND ${reclaimableHoldClause()}`,
       [roomId, date, time]
     );
-    const { rows: slot } = await client.query(
-      `SELECT id, status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
+    const { rows: [slotPreview] } = await client.query(
+      `SELECT status FROM booking_timeslots WHERE party_room_id = $1 AND slot_date = $2 AND slot_time = $3`,
       [roomId, date, time]
     );
-    if (slot[0] && slot[0].status !== 'released') throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
+    if (slotPreview && slotPreview.status !== 'released') throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
 
     // Upsert user. A real email keeps its own account, looked up/created by
     // that email as before. A blank email is NOT given a fresh random row
@@ -792,15 +846,23 @@ router.post('/bookings/manual', async (req, res) => {
        room.pricingModel === 'flat' ? !!noAlcoholAck : false]
     );
 
-    if (slot[0]) {
-      await client.query(`UPDATE booking_timeslots SET status='confirmed', booking_id=$1, held_by_user_id=$2 WHERE id=$3`, [booking.id, userId, slot[0].id]);
-    } else {
-      await client.query(
-        `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, held_by_user_id, booking_id)
-         VALUES ($1,$2,$3,'confirmed',$4,$5)`,
-        [roomId, date, time, userId, booking.id]
-      );
-    }
+    // Atomic claim-then-write, same pattern as /reschedule and /change-room:
+    // the INSERT..ON CONFLICT and its WHERE guard run together under
+    // Postgres's own row lock for the conflicting row, so a concurrent
+    // writer racing for this exact slot serializes instead of silently
+    // clobbering this claim (or being clobbered by it).
+    const { rows: claimed } = await client.query(
+      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, held_by_user_id, booking_id)
+       VALUES ($1, $2, $3, 'confirmed', $4, $5)
+       ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+         SET status = 'confirmed', booking_id = EXCLUDED.booking_id,
+             held_by_user_id = EXCLUDED.held_by_user_id, hold_expires_at = NULL
+         WHERE booking_timeslots.status = 'released'
+            OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
+       RETURNING id`,
+      [roomId, date, time, userId, booking.id]
+    );
+    if (claimed.length === 0) throw new Error(`That time slot is already booked for ${roomName} on ${date}.`);
 
     const paid = parseFloat(amountPaid) || 0;
     if (paid > 0) {
@@ -1040,6 +1102,9 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
     const results = { email: null, sms: null };
 
     // Email via Resend
+    if (!b.contactEmail) {
+      results.email = 'skipped: no email on file';
+    } else
     try {
       const { Resend } = require('resend');
       const resend = new Resend(process.env.RESEND_API_KEY);
@@ -1090,7 +1155,15 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
     }
 
     // SMS via Twilio (only if phone on record)
-    if (b.contactPhone) {
+    // Twilio isn't configured in this environment (no TWILIO_* env vars) —
+    // without this guard the SDK constructor throws ("username is required",
+    // treating the missing account SID as a Basic Auth username) on every
+    // single call, every time an admin resends a confirmation. The other two
+    // notification paths (bookingNotifications.js, notifications.js) already
+    // check TWILIO_CONFIGURED before attempting; this one didn't.
+    if (b.contactPhone && !TWILIO_CONFIGURED) {
+      results.sms = 'skipped: Twilio not configured';
+    } else if (b.contactPhone) {
       try {
         const twilio = require('twilio');
         const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);

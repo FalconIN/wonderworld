@@ -111,6 +111,12 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   -- every ordinary per-child room booking.
   catering_choice          text        CHECK (catering_choice IN ('self_catering', 'venue_menu')),
   no_alcohol_ack           boolean     NOT NULL DEFAULT false,
+  -- Accrued when a customer reduces guest_count post-payment (see
+  -- POST /api/bookings/:id/reduce-guests) — the price difference is credited
+  -- here instead of refunded to the card, redeemable at the venue against
+  -- food/menu purchases. Never decremented automatically; staff track
+  -- redemption manually (admin_notes) since there's no POS integration.
+  food_credit_amount       numeric(10,2) NOT NULL DEFAULT 0,
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );
@@ -199,11 +205,11 @@ CREATE TRIGGER set_payments_updated_at
 
 -- ── 5c. BOOKING_SESSIONS ─────────────────────────────────────
 -- In-progress wizard drafts, keyed by the (Firebase-verified) customer uid.
--- Lets the wizard resume where a customer left off within a 15-minute window
+-- Lets the wizard resume where a customer left off within a 30-minute window
 -- instead of starting over, and caps them to one active attempt at a time.
 -- Not the source of truth for a booking — that's still `bookings`, only ever
 -- written after payment is verified. `expires_at` is fixed at creation and
--- never extended, so a session always dies exactly 15 minutes after it opened
+-- never extended, so a session always dies exactly 30 minutes after it opened
 -- regardless of autosave activity.
 CREATE TABLE IF NOT EXISTS public.booking_sessions (
   id           uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -214,7 +220,7 @@ CREATE TABLE IF NOT EXISTS public.booking_sessions (
                             CHECK (status IN ('active', 'completed', 'expired')),
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
-  expires_at   timestamptz NOT NULL DEFAULT (now() + interval '15 minutes')
+  expires_at   timestamptz NOT NULL DEFAULT (now() + interval '30 minutes')
 );
 
 -- Enforces "max 1 active attempt per customer" at the DB level.
@@ -255,7 +261,7 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   changed_by         text          NOT NULL REFERENCES public.users(id),
-  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit', 'room_change')),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit', 'room_change', 'reduce_kids')),
   delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
   new_guest_count    integer,
   new_food_choice    text,

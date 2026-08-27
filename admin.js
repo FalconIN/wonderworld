@@ -1669,6 +1669,7 @@ function renderBookingsTable(bookings) {
           const due = parseFloat(b.totalAmount || 0) - parseFloat(b.amountPaid || 0);
           return due > 0.005 ? `<div class="text-xs font-bold text-amber-600 mt-1">$${due.toFixed(2)} due</div>` : '';
         })() : ''}
+        ${parseFloat(b.foodCreditAmount || 0) > 0 ? `<div class="text-xs font-bold text-green-600 mt-1">🍟 $${parseFloat(b.foodCreditAmount).toFixed(2)} credit</div>` : ''}
       </td>
       <td data-label="Actions">
         <div class="flex gap-2">
@@ -1746,6 +1747,17 @@ async function viewBooking(bookingId) {
         </div>
       </div>
 
+      ${parseFloat(booking.foodCreditAmount || 0) > 0 ? `
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-xs text-green-600 mb-1 uppercase font-semibold">🍟 Food Credit — from a guest-count reduction</div>
+            <div class="text-sm font-bold text-green-800">$${parseFloat(booking.foodCreditAmount).toFixed(2)} outstanding, redeemable at the venue</div>
+          </div>
+          <button onclick="redeemFoodCredit('${booking.id}')" class="btn-secondary py-2 px-3 text-xs whitespace-nowrap">Mark Redeemed</button>
+        </div>
+      </div>` : ''}
+
       ${booking.allergyNotes ? `
       <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
         <div class="text-xs text-amber-600 mb-1 uppercase font-semibold">⚠️ Dietary Requirements</div>
@@ -1779,6 +1791,18 @@ async function viewBooking(bookingId) {
     </div>`;
 
   document.getElementById('bookingDetailModal').style.display = 'flex';
+}
+
+async function redeemFoodCredit(bookingId) {
+  if (!confirm('Mark this food credit as fully redeemed? This cannot be undone.')) return;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/redeem-credit`, {}, 'POST');
+    const idx = allBookings.findIndex(b => b.id === bookingId);
+    if (idx !== -1) allBookings.splice(idx, 1); // force a fresh fetch in viewBooking
+    await viewBooking(bookingId);
+  } catch (err) {
+    alert('Could not redeem credit: ' + err.message);
+  }
 }
 
 function closeBookingModal() {
@@ -2556,6 +2580,7 @@ const AB_ADDON_PRICES = {
   drinks_soda:     { label: 'Soft Drink (per bottle)',         price: 10 },
   nuggets_15pc:    { label: 'Chicken Nuggets (15pc)',          price: 20 },
   fries_large:     { label: 'Large Fries',                     price: 20 },
+  gf_nuggets:      { label: 'Gluten-Free Nuggets',             price: 5 },
 };
 
 // Local state for the manual booking modal

@@ -3,7 +3,7 @@
  * Handles:
  *   - Room rendering & selection
  *   - Time slot fetching from Supabase (real availability)
- *   - Optimistic slot locking (15-min hold)
+ *   - Optimistic slot locking (30-min hold)
  *   - Server-side double-booking prevention
  *   - Timer logic
  *   - Saving booking to Supabase
@@ -368,7 +368,7 @@ async function selectTime(slot, el) {
   state.selectedTime = slot;
   document.getElementById('step2Next').disabled = false;
 
-  // Create a 15-minute hold on this slot
+  // Create a 30-minute hold on this slot
   await createSlotHold(slot);
 }
 
@@ -409,7 +409,7 @@ async function releaseSlotHold(holdId) {
 }
 
 // ---------------------------------------------------------------------------
-// Booking session — resume an in-progress attempt within 15 minutes instead
+// Booking session — resume an in-progress attempt within 30 minutes instead
 // of starting over, and cap customers to one active attempt at a time.
 // Backed by server/routes/bookingSessions.js.
 // ---------------------------------------------------------------------------
@@ -459,8 +459,8 @@ function hydrateWizardUI(saved) {
   }
 
   if (state.foodSplit) {
-    const { nuggets = 0, burgers = 0, veges = 0 } = state.foodSplit;
-    const total = nuggets + burgers + veges;
+    const { nuggets = 0, burgers = 0, veges = 0, gfNuggets = 0 } = state.foodSplit;
+    const total = nuggets + burgers + veges + gfNuggets;
     const nuggetEl = document.getElementById('nuggetCount');
     const burgerEl = document.getElementById('burgerCount');
     const vegeEl   = document.getElementById('vegeCount');
@@ -470,7 +470,7 @@ function hydrateWizardUI(saved) {
     const totalEl = document.getElementById('foodSplitTotal');
     if (totalEl) totalEl.textContent = `${total} / ${state.guests} selected`;
     const atMax = total >= state.guests;
-    ['nuggetPlus', 'burgerPlus', 'vegePlus'].forEach(id => {
+    ['nuggetPlus', 'burgerPlus', 'vegePlus', 'gfNuggetsPlus'].forEach(id => {
       const btn = document.getElementById(id);
       if (btn) btn.disabled = atMax;
     });
@@ -869,7 +869,20 @@ const ADDON_PRICES = {
   drinks_soda:     { label: 'Soft Drink', price: 10 },
   nuggets_15pc:    { label: 'Chicken Nuggets (15pc)', price: 20 },
   fries_large:     { label: 'Large Fries', price: 20 },
+  gf_nuggets:      { label: 'Gluten-Free Nuggets', price: 5 },
 };
+
+// Feature flag — the gluten-free nugget upgrade is fully built (pricing,
+// order summary, food-prep report) but held back from customers pending
+// a manual check. Flip to true to go live; no other changes needed. See
+// updateGfNuggetsUI below and changeFoodSplit('gfNuggets', ...) in app.js.
+const GF_NUGGETS_ENABLED = false;
+
+// Also live for anyone in private test mode (see isTestMode() in app.js),
+// so it can be verified before flipping the flag above for everyone.
+function gfNuggetsEnabled() {
+  return GF_NUGGETS_ENABLED || (typeof isTestMode === 'function' && isTestMode());
+}
 
 function changeAddon(id, delta) {
   if (!state.addons) state.addons = {};
@@ -937,8 +950,42 @@ function repaintAddons() {
   if (sodaPicker) sodaPicker.classList.toggle('hidden', !(state.addons.drinks_soda > 0));
   updatePizzaPickerUI();
   updateSodaPickerUI();
+  updateGfNuggetsUI();
   updateAddonSubtotal();
   renderOrderSummary();
+}
+
+// Gluten-free nuggets is its own peer card in the food-split grid (see
+// menu.html/prices.html #gfNuggetsCard), sharing the same guest-count pool
+// as Chicken Nuggets/Mini Burger/Vege Burger — its +/- routes through the
+// same changeFoodSplit('gfNuggets', ...) as the other three. This just
+// shows/hides the card (and the grid's column count) for the feature flag,
+// and keeps everything zeroed while it's held back.
+function updateGfNuggetsUI() {
+  const card = document.getElementById('gfNuggetsCard');
+  const grid = document.getElementById('foodSplitGrid');
+  const enabled = gfNuggetsEnabled();
+
+  if (grid) {
+    grid.classList.toggle('grid-cols-2', enabled);
+    grid.classList.toggle('grid-cols-3', !enabled);
+  }
+
+  if (!enabled) {
+    // Held back from customers — keep it hidden and zeroed, so nothing
+    // renders or prices even if some other path (e.g. a resumed session
+    // saved before this flag existed) sets it.
+    if (card) card.classList.add('hidden');
+    if (state.foodSplit) state.foodSplit.gfNuggets = 0;
+    if (state.addons) state.addons.gf_nuggets = 0;
+    const countEl = document.getElementById('addon_gf_nuggets');
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  if (card) card.classList.remove('hidden');
+  const countEl = document.getElementById('addon_gf_nuggets');
+  if (countEl) countEl.textContent = state.addons?.gf_nuggets || 0;
 }
 
 function updateSodaPickerUI() {

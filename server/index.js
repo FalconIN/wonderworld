@@ -90,12 +90,21 @@ app.use('/api/booking-sessions', bookingSessionsRouter);
 // ---------------------------------------------------------------------------
 const cron = require('node-cron');
 const { fetchAndStoreReviews } = require('./services/googleReviewsSync');
+const { reconcileRecentOrphans } = require('./services/stripeReconcile');
 
 cron.schedule('0 3 * * *', () => {
   fetchAndStoreReviews().catch(err => console.error('Google reviews sync failed:', err.message));
 });
 // Run once at boot too, so the table isn't empty until 3am
 fetchAndStoreReviews().catch(err => console.error('Initial Google reviews sync failed:', err.message));
+
+// Backstop for stranded Stripe payments the payment_intent.succeeded webhook
+// never reconciled (delivery failure, endpoint downtime) — see
+// server/services/stripeReconcile.js. The webhook is the fast path; this
+// just bounds the worst case.
+cron.schedule('*/30 * * * *', () => {
+  reconcileRecentOrphans().catch(err => console.error('Stripe backstop reconciliation failed:', err.message));
+});
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));

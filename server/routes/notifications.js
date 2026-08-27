@@ -39,6 +39,9 @@ router.post('/booking-modification', requireAuth, async (req, res) => {
 
   const results = { email: null, sms: null };
 
+  if (!email) {
+    results.email = 'skipped: no email on file';
+  } else
   try {
     const { Resend } = require('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);
@@ -129,6 +132,9 @@ router.post('/booking-rescheduled', requireAuth, async (req, res) => {
 
   const results = { email: null, sms: null };
 
+  if (!email) {
+    results.email = 'skipped: no email on file';
+  } else
   try {
     const { Resend } = require('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);

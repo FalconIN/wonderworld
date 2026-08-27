@@ -42,6 +42,14 @@ async function sendBookingConfirmation({
           </div>` : '';
 
   // ── Email via Resend ─────────────────────────────────────
+  // ~57 confirmed bookings (phone/manual, no email captured at booking time)
+  // have no contact_email on file — sending was previously attempted
+  // unconditionally and failed loudly (Resend rejects an empty/missing `to`)
+  // every time, which is indistinguishable in the logs from an actual
+  // delivery problem. Skip cleanly instead; SMS below still goes out.
+  if (!email) {
+    results.email = 'skipped: no email on file';
+  } else
   try {
     const { Resend } = require('resend');
     const resend = new Resend(process.env.RESEND_API_KEY);

@@ -7,6 +7,24 @@ const { bookingLimiter } = require('../middleware/rateLimit');
 const { createConfirmedBooking, SlotHoldExpiredError } = require('../services/bookingCreator');
 const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
+const { refundOrphan } = require('../services/stripeReconcile');
+
+// Best-effort lookup of the customer's in-progress wizard state, keyed by the
+// booking_ref Stripe already carries — used only to tell an admin what room/
+// date/time/guest-count the customer actually asked for when a payment can't
+// be turned into a booking automatically. Never allowed to throw: this runs
+// inside error-handling paths that already have a real problem to report.
+async function lookupWizardState(bookingRef) {
+  if (!bookingRef) return null;
+  try {
+    const { rows: [session] } = await pool.query(
+      `SELECT wizard_state FROM booking_sessions WHERE booking_ref = $1`, [bookingRef]
+    );
+    return session?.wizard_state || null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // GET /api/rooms — public room list
 router.get('/rooms', async (req, res) => {
@@ -69,7 +87,7 @@ router.get('/slots', async (req, res) => {
   }
 });
 
-// POST /api/slots/hold — create a 15-min slot hold
+// POST /api/slots/hold — create a 30-min slot hold
 router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
   const { roomId, date, slot } = req.body;
   const userId = req.user.uid;
@@ -100,13 +118,13 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
     // session — one deadline for the whole wizard attempt, not two
     // independently ticking countdowns. A session is always opened before
     // step 2 (where this is called) is reachable, so this should always find
-    // one; the now()+15min fallback only covers a session having separately
+    // one; the now()+30min fallback only covers a session having separately
     // failed to open.
     const { rows: [session] } = await pool.query(
       `SELECT expires_at FROM booking_sessions WHERE user_id = $1 AND status = 'active' AND expires_at > now()`,
       [userId]
     );
-    const expiresAt = session ? session.expires_at : new Date(Date.now() + 15 * 60 * 1000);
+    const expiresAt = session ? session.expires_at : new Date(Date.now() + 30 * 60 * 1000);
 
     // Upsert rather than a plain INSERT: the unique constraint on
     // (room, date, time) means a slot that was ever locked and then released
@@ -162,6 +180,20 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     cateringChoice, noAlcoholAck,
   } = req.body;
 
+  // The Stripe webhook's safety net (server/services/stripeReconcile.js) can
+  // win this race and confirm the booking before this call lands — it's
+  // usually much faster than the browser's own round trip. Without this
+  // check, this call would find the slot hold already consumed (status
+  // moved past 'held') and misread that as a genuinely lost slot, triggering
+  // an unwanted auto-refund of a booking that actually succeeded. Short-
+  // circuit to the existing booking instead.
+  if (stripePaymentIntentId) {
+    const { rows: [already] } = await pool.query(
+      `SELECT id FROM bookings WHERE stripe_payment_intent_id = $1`, [stripePaymentIntentId]
+    );
+    if (already) return res.json({ bookingId: already.id });
+  }
+
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
   let verifiedTotalAmount;
   let room;
@@ -216,26 +248,11 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       // mounted. Refund immediately rather than leaving the customer charged with no booking,
       // and leave a record in `payments` (booking_id NULL, since no booking was created) so
       // it's visible in the admin Payments tab for reconciliation.
-      let refundStatus = 'failed';
-      let refundNote = 'Auto-refund failed — needs manual reconciliation.';
-      try {
-        await stripe.refunds.create({ payment_intent: stripePaymentIntentId });
-        refundStatus = 'refunded';
-        refundNote = 'Auto-refunded.';
-      } catch (refundErr) {
-        refundNote = `Auto-refund failed: ${refundErr.message} — needs manual reconciliation.`;
-      }
-
-      await pool.query(
-        `INSERT INTO payments
-           (booking_id, user_id, stripe_payment_intent_id, amount, currency, status,
-            payment_provider, error_message, refunded_at)
-         VALUES (NULL, $1, $2, $3, 'nzd', $4, 'stripe', $5, CASE WHEN $4 = 'refunded' THEN now() ELSE NULL END)
-         ON CONFLICT (stripe_payment_intent_id) DO UPDATE
-           SET status = EXCLUDED.status, error_message = EXCLUDED.error_message,
-               refunded_at = EXCLUDED.refunded_at, updated_at = now()`,
-        [uid, stripePaymentIntentId, pi.amount / 100, refundStatus,
-         `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}. ${refundNote}`]
+      const wizardState = await lookupWizardState(bookingRef);
+      const refundStatus = await refundOrphan(
+        stripePaymentIntentId, pi.amount / 100, uid,
+        `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`,
+        bookingRef, wizardState
       );
 
       return res.status(400).json({
@@ -284,26 +301,11 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       // remedy as the amount-mismatch case above: auto-refund rather than
       // leave the customer charged with no booking, and leave a `payments`
       // row (booking_id NULL) for admin reconciliation.
-      let refundStatus = 'failed';
-      let refundNote = 'Auto-refund failed — needs manual reconciliation.';
-      try {
-        await stripe.refunds.create({ payment_intent: stripePaymentIntentId });
-        refundStatus = 'refunded';
-        refundNote = 'Auto-refunded.';
-      } catch (refundErr) {
-        refundNote = `Auto-refund failed: ${refundErr.message} — needs manual reconciliation.`;
-      }
-
-      await pool.query(
-        `INSERT INTO payments
-           (booking_id, user_id, stripe_payment_intent_id, amount, currency, status,
-            payment_provider, error_message, refunded_at)
-         VALUES (NULL, $1, $2, $3, 'nzd', $4, 'stripe', $5, CASE WHEN $4 = 'refunded' THEN now() ELSE NULL END)
-         ON CONFLICT (stripe_payment_intent_id) DO UPDATE
-           SET status = EXCLUDED.status, error_message = EXCLUDED.error_message,
-               refunded_at = EXCLUDED.refunded_at, updated_at = now()`,
-        [uid, stripePaymentIntentId, verifiedTotalAmount, refundStatus,
-         `Slot hold expired before booking could be confirmed. ${refundNote}`]
+      const wizardState = await lookupWizardState(bookingRef);
+      const refundStatus = await refundOrphan(
+        stripePaymentIntentId, verifiedTotalAmount, uid,
+        `Slot hold expired or no longer matched this booking (${err.code || err.name}): ${err.message}`,
+        bookingRef, wizardState
       );
 
       return res.status(409).json({
@@ -414,6 +416,7 @@ router.get('/users/bookings', requireAuth, async (req, res) => {
               b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
               b.total_amount as "totalAmount", b.status, b.created_at as "createdAt",
               b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
+              b.food_credit_amount as "foodCreditAmount",
               r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
               r.max_guests as "roomMaxGuests", r.base_price_per_child as "pricePerChild"
        FROM bookings b
@@ -439,8 +442,10 @@ router.get('/bookings/:id', requireAuth, async (req, res) => {
               b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
               b.total_amount as "totalAmount", b.status, b.contact_email as "contactEmail",
               b.stripe_payment_intent_id as "stripePaymentIntentId",
+              b.food_credit_amount as "foodCreditAmount",
               r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
-              r.max_guests as "roomMaxGuests", r.base_price_per_child as "pricePerChild"
+              r.max_guests as "roomMaxGuests", r.min_guests as "roomMinGuests",
+              r.base_price_per_child as "pricePerChild", r.pricing_model as "pricingModel"
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
        WHERE b.id = $1 AND b.user_id = $2`,
@@ -540,14 +545,24 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
     const newAddons = newAddonsSummary ? newAddonsSummary.trim() : '';
     const combinedAddons = [prevAddons, newAddons].filter(Boolean).join(', ');
     const newTotalAddons = parseFloat(booking.addons_amount || 0) + parseFloat(newAddonsAmount || 0);
+    // Derived, not re-priced from guest_count * pricePerChild — this keeps
+    // the total_amount = base_amount + addons_amount invariant exact by
+    // construction regardless of pricing model (flat-rate rooms aren't
+    // guest-count-priced at all). Previously base_amount was never updated
+    // here at all, so any guest-count increase left it permanently stale —
+    // total_amount (and the actual Stripe charge) were always correct, but
+    // 8 live confirmed bookings now have an understated base_amount/
+    // overstated-looking total from this, which any report summing
+    // base_amount directly would get wrong.
+    const newBase = newTotal - newTotalAddons;
 
     await client.query(
       `UPDATE bookings SET
          guest_count = $1, food_choice = COALESCE($2, food_choice),
-         addons_summary = $3, addons_amount = $4, total_amount = $5, updated_at = now()
-       WHERE id = $6`,
+         addons_summary = $3, addons_amount = $4, base_amount = $5, total_amount = $6, updated_at = now()
+       WHERE id = $7`,
       [newGuestCount, newFoodChoice || null, combinedAddons || null,
-       newTotalAddons, newTotal, bookingId]
+       newTotalAddons, newBase, newTotal, bookingId]
     );
 
     await client.query(
@@ -570,6 +585,164 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
 
     await client.query('COMMIT');
     res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Parses the same canonical "X Nuggets + Y Mini Burgers + Z Vege Burgers"
+// format admin.js's parseFoodChoiceFull expects, so a server-trimmed split
+// round-trips through the admin food-prep report the same as a customer-built
+// one. Unlike that client-side parser, malformed/empty input isn't an error
+// here — it just means there's nothing to trim (falls back to all-zero,
+// letting the reduction proceed against an empty split).
+function parseFoodChoiceForTrim(foodChoice) {
+  let remaining = String(foodChoice || '');
+  let veges = 0, burgers = 0, nuggets = 0;
+  const vegeMatch = remaining.match(/(\d+)\s*Ve(?:gie|ggie|ge)\s*Burgers?/i);
+  if (vegeMatch) {
+    veges = parseInt(vegeMatch[1], 10);
+    remaining = remaining.slice(0, vegeMatch.index) + remaining.slice(vegeMatch.index + vegeMatch[0].length);
+  }
+  const burMatch = remaining.match(/(\d+)\s*(?:Mini\s*)?Burgers?/i);
+  if (burMatch) {
+    burgers = parseInt(burMatch[1], 10);
+    remaining = remaining.slice(0, burMatch.index) + remaining.slice(burMatch.index + burMatch[0].length);
+  }
+  const nugMatch = remaining.match(/(\d+)\s*Nuggets?/i);
+  if (nugMatch) nuggets = parseInt(nugMatch[1], 10);
+  return { nuggets, burgers, veges };
+}
+
+function buildFoodChoiceString(nuggets, burgers, veges) {
+  const parts = [];
+  if (nuggets > 0) parts.push(`${nuggets} Nuggets`);
+  if (burgers > 0) parts.push(`${burgers} Mini Burgers`);
+  if (veges   > 0) parts.push(`${veges} Vege Burgers`);
+  return parts.join(' + ');
+}
+
+// Removes `removeCount` kids from a {nuggets,burgers,veges} split by
+// repeatedly taking one off whichever category is currently largest —
+// food_choice is only ever an aggregate count (never tied to a named child),
+// so which category absorbs the reduction has no operational meaning; this
+// just keeps the three roughly balanced instead of draining one to zero
+// first. Never lets a category go negative even if removeCount is somehow
+// larger than the total (defensive; callers are expected to pass a valid
+// removeCount ≤ nuggets+burgers+veges).
+function trimFoodSplit(split, removeCount) {
+  const counts = { ...split };
+  for (let i = 0; i < removeCount; i++) {
+    const [key, qty] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (qty <= 0) break;
+    counts[key] = qty - 1;
+  }
+  return counts;
+}
+
+// POST /api/bookings/:id/reduce-guests — reduce guest count post-payment and
+// credit the price difference as a redeemable-at-the-venue food credit,
+// rather than a cash refund back to the card (Stripe refunds require the
+// original PaymentIntent and are handled by staff manually when that's the
+// right call — this endpoint never touches Stripe at all). Deliberately a
+// separate endpoint from POST /bookings/:id/edit (which only ever increases
+// guest count / adds add-ons and charges a card for the difference) rather
+// than folding a decrease into that same code path — the two have opposite
+// trust models: an increase is only ever as large as whatever Stripe
+// actually charged, but a decrease has no card charge to anchor it against,
+// so the credited amount must be computed here from the room's own price,
+// never taken from the client.
+router.post('/bookings/:id/reduce-guests', requireAuth, bookingLimiter, async (req, res) => {
+  const uid = req.user.uid;
+  const bookingId = req.params.id;
+  const { newGuestCount } = req.body;
+
+  let booking;
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.*, r.base_price_per_child as "pricePerChild", r.min_guests as "roomMinGuests",
+              r.pricing_model as "pricingModel",
+              EXTRACT(EPOCH FROM (
+                (b.party_date + CASE b.party_time
+                   WHEN '9:30 AM'  THEN '09:30'::time
+                   WHEN '11:30 AM' THEN '11:30'::time
+                   WHEN '1:30 PM'  THEN '13:30'::time
+                   WHEN '3:30 PM'  THEN '15:30'::time
+                   WHEN '5:30 PM'  THEN '17:30'::time
+                   ELSE '12:00'::time
+                 END) AT TIME ZONE 'Pacific/Auckland' - now()
+              )) / 3600 as "hoursUntilParty"
+       FROM bookings b JOIN party_rooms r ON r.id = b.party_room_id
+       WHERE b.id = $1 AND b.user_id = $2 AND b.status = 'confirmed'`,
+      [bookingId, uid]
+    );
+    booking = rows[0];
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+  if (!booking) return res.status(404).json({ error: 'Booking not found or cannot be edited.' });
+
+  const hoursUntil = parseFloat(booking.hoursUntilParty);
+  if (hoursUntil < 24) {
+    return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
+  }
+
+  if (booking.pricingModel === 'flat') {
+    return res.status(400).json({ error: 'Whole Venue Hire is a flat rate — reducing guest count does not change the price. Contact us if you need to make changes.' });
+  }
+
+  const requested = parseInt(newGuestCount, 10);
+  if (!requested || requested >= booking.guest_count) {
+    return res.status(400).json({ error: 'New guest count must be lower than the current guest count.' });
+  }
+  if (requested < booking.roomMinGuests) {
+    return res.status(400).json({ error: `This room requires at least ${booking.roomMinGuests} guests. To go lower, please contact us at Bookings@wonderworldwestgate.co.nz.` });
+  }
+
+  // Server-computed from the room's own price — never trust a client-
+  // submitted credit amount, since (unlike an increase) there's no Stripe
+  // charge here to cross-check it against.
+  const pricePerChild = parseFloat(booking.pricePerChild);
+  const kidsRemoved   = booking.guest_count - requested;
+  const amountDelta   = -(pricePerChild * kidsRemoved);
+  const creditAdded   = pricePerChild * kidsRemoved;
+
+  const trimmedSplit  = trimFoodSplit(parseFoodChoiceForTrim(booking.food_choice), kidsRemoved);
+  const newFoodChoice = buildFoodChoiceString(trimmedSplit.nuggets, trimmedSplit.burgers, trimmedSplit.veges);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [updated] } = await client.query(
+      `UPDATE bookings SET
+         guest_count = $1, food_choice = $2,
+         base_amount = base_amount + $3, total_amount = total_amount + $3,
+         food_credit_amount = food_credit_amount + $4, updated_at = now()
+       WHERE id = $5
+       RETURNING food_credit_amount as "foodCreditAmount", total_amount as "totalAmount"`,
+      [requested, newFoodChoice, amountDelta, creditAdded, bookingId]
+    );
+
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, new_guest_count, new_food_choice)
+       VALUES ($1, $2, 'reduce_kids', $3, $4, $5)`,
+      [bookingId, uid, amountDelta, requested, newFoodChoice]
+    );
+
+    await client.query('COMMIT');
+    res.json({
+      ok: true,
+      newGuestCount: requested,
+      newFoodChoice,
+      creditAdded,
+      foodCreditAmount: updated.foodCreditAmount,
+      newTotalAmount: updated.totalAmount,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });

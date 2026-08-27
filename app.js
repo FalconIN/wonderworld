@@ -212,15 +212,18 @@ async function validateStep(n) {
     return true;
   }
   if (n === 3) {
-    const nuggets = parseInt(document.getElementById('nuggetCount')?.textContent) || 0;
-    const burgers = parseInt(document.getElementById('burgerCount')?.textContent) || 0;
-    const veges   = parseInt(document.getElementById('vegeCount')?.textContent) || 0;
-    if (nuggets + burgers + veges !== state.guests) {
-      showFieldError(`Food selection must add up to ${state.guests} kids. Currently ${nuggets + burgers + veges} selected.`);
+    const nuggets   = parseInt(document.getElementById('nuggetCount')?.textContent) || 0;
+    const burgers   = parseInt(document.getElementById('burgerCount')?.textContent) || 0;
+    const veges     = parseInt(document.getElementById('vegeCount')?.textContent) || 0;
+    const gfNuggets = parseInt(document.getElementById('addon_gf_nuggets')?.textContent) || 0;
+    const totalKids = nuggets + burgers + veges + gfNuggets;
+    if (totalKids !== state.guests) {
+      showFieldError(`Food selection must add up to ${state.guests} kids. Currently ${totalKids} selected.`);
       return false;
     }
     const parts = [];
-    if (nuggets > 0) parts.push(nuggets + ' Nuggets');
+    const totalNuggets = nuggets + gfNuggets;
+    if (totalNuggets > 0) parts.push(totalNuggets + ' Nuggets');
     if (burgers > 0) parts.push(burgers + ' Mini Burgers');
     if (veges   > 0) parts.push(veges   + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
@@ -299,9 +302,41 @@ function showFieldError(msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Private test-mode bypass — visiting a link with ?testmode=<secret> flips a
+// localStorage flag in that one browser, letting BOOKING_PAUSED and
+// GF_NUGGETS_ENABLED (see booking.js) be tested without exposing either to
+// the public. Persists across pages/visits until cleared; doesn't touch
+// anything server-side.
+// ---------------------------------------------------------------------------
+const TEST_MODE_SECRET = 'ww2026preview';
+(function initTestMode() {
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('testmode') === TEST_MODE_SECRET) {
+      localStorage.setItem('ww_test_mode', '1');
+      history.replaceState(null, '', location.pathname);
+    }
+  } catch {}
+})();
+function isTestMode() {
+  try { return localStorage.getItem('ww_test_mode') === '1'; } catch { return false; }
+}
+
+// ---------------------------------------------------------------------------
 // Open / close booking overlay
 // ---------------------------------------------------------------------------
+// Temporary switch to pause new bookings site-wide (e.g. during a deploy or
+// pricing change) without touching nginx/PM2 — every "Book a Party"/"Book
+// Now" CTA on every page routes through this one function. Flip back to
+// false to re-enable; no other changes needed.
+const BOOKING_PAUSED = true;
+
 function openBooking() {
+  if (BOOKING_PAUSED && !isTestMode()) {
+    showFieldError("✅ We're making the booking experience even better — please check back soon!");
+    return;
+  }
+
   const overlay = document.getElementById('bookingOverlay');
   if (overlay) overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
@@ -424,6 +459,7 @@ function resetWizard() {
   if (foodSplitTotal) foodSplitTotal.textContent = '0 / 10 selected';
   const foodSplitError = document.getElementById('foodSplitError');
   if (foodSplitError) foodSplitError.classList.add('hidden');
+  if (typeof updateGfNuggetsUI === 'function') updateGfNuggetsUI();
 
   // Reset allergy fields
   const allergyNotes = document.getElementById('allergyNotes');
@@ -742,18 +778,21 @@ function changeFoodSplit(type, delta) {
   const nuggets = parseInt(document.getElementById('nuggetCount').textContent) || 0;
   const burgers = parseInt(document.getElementById('burgerCount').textContent) || 0;
   const veges   = parseInt(document.getElementById('vegeCount').textContent)   || 0;
+  const gf      = parseInt(document.getElementById('addon_gf_nuggets')?.textContent) || 0;
 
-  const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : veges;
+  const current = type === 'nuggets' ? nuggets : type === 'burgers' ? burgers : type === 'veges' ? veges : gf;
   const next    = Math.max(0, current + delta);
 
-  if (type === 'nuggets')      document.getElementById('nuggetCount').textContent = next;
-  else if (type === 'burgers') document.getElementById('burgerCount').textContent = next;
-  else                         document.getElementById('vegeCount').textContent   = next;
+  if (type === 'nuggets')        document.getElementById('nuggetCount').textContent = next;
+  else if (type === 'burgers')   document.getElementById('burgerCount').textContent = next;
+  else if (type === 'veges')     document.getElementById('vegeCount').textContent   = next;
+  else if (type === 'gfNuggets') { const el = document.getElementById('addon_gf_nuggets'); if (el) el.textContent = next; }
 
-  const n = type === 'nuggets' ? next : nuggets;
-  const b = type === 'burgers' ? next : burgers;
-  const v = type === 'veges'   ? next : veges;
-  const newTotal = n + b + v;
+  const n  = type === 'nuggets'   ? next : nuggets;
+  const b  = type === 'burgers'   ? next : burgers;
+  const v  = type === 'veges'     ? next : veges;
+  const gfN = type === 'gfNuggets' ? next : gf;
+  const newTotal = n + b + v + gfN;
 
   const totalEl = document.getElementById('foodSplitTotal');
   const ofEl    = document.getElementById('foodSplitOf');
@@ -762,16 +801,30 @@ function changeFoodSplit(type, delta) {
 
   // Disable all + buttons when combined total hits the guest count
   const atMax = newTotal >= total;
-  ['nuggetPlus', 'burgerPlus', 'vegePlus'].forEach(id => {
+  ['nuggetPlus', 'burgerPlus', 'vegePlus', 'gfNuggetsPlus'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = atMax;
   });
 
-  state.foodSplit = { nuggets: n, burgers: b, veges: v };
+  state.foodSplit = { nuggets: n, burgers: b, veges: v, gfNuggets: gfN };
+
+  if (type === 'gfNuggets') {
+    if (!state.addons) state.addons = {};
+    state.addons.gf_nuggets = gfN;
+    updateAddonSubtotal();
+    renderOrderSummary();
+  }
 
   if (newTotal === total) {
+    // Gluten-free nuggets are still a nugget meal for kitchen-prep/kids-fed
+    // accounting (see ADDON_PRICES.gf_nuggets for the per-kid upcharge) —
+    // folded into the same "Nuggets" bucket here so the food_choice string
+    // stays in the "X Nuggets + Y Mini Burgers + Z Vege Burgers" format the
+    // server (parseFoodChoiceForTrim) and admin report (parseFoodChoiceFull)
+    // both expect.
     const parts = [];
-    if (n > 0) parts.push(n + ' Nuggets');
+    const totalNuggets = n + gfN;
+    if (totalNuggets > 0) parts.push(totalNuggets + ' Nuggets');
     if (b > 0) parts.push(b + ' Mini Burgers');
     if (v > 0) parts.push(v + ' Vege Burgers');
     state.selectedFood = parts.join(' + ');
@@ -847,6 +900,7 @@ async function viewMyBookings() {
               <div>💰 $${parseFloat(b.totalAmount).toFixed(2)} NZD</div>
             </div>
             ${b.addonsSummary ? `<div class="mt-1 text-xs text-gray-400 truncate">Add-ons: ${escapeHtml(b.addonsSummary)}</div>` : ''}
+            ${parseFloat(b.foodCreditAmount || 0) > 0 ? `<div class="mt-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-2 py-1 inline-block">🍟 $${parseFloat(b.foodCreditAmount).toFixed(2)} food credit — redeemable at the venue</div>` : ''}
             <div class="mt-1 text-xs text-gray-400">Ref: ${b.bookingRef}</div>
             ${editBtnHtml}
           </div>`;
@@ -1015,6 +1069,7 @@ function renderEditStep1(booking, savedCardInfo) {
   }
 
   const maxGuests = parseInt(booking.roomMaxGuests) || 24;
+  const minGuests = parseInt(booking.roomMinGuests) || 1;
   const pricePerChild = parseFloat(booking.pricePerChild) || 39;
 
   const bannerHtml = hours < 48
@@ -1048,13 +1103,14 @@ function renderEditStep1(booking, savedCardInfo) {
     <!-- Guest count -->
     <div class="mb-5">
       <label class="lbl">Number of Kids Attending</label>
-      <p class="text-xs text-gray-400 mb-2">Cannot go below ${booking.guestCount}. Maximum: ${maxGuests}.</p>
+      <p class="text-xs text-gray-400 mb-2" id="editGuestRangeHint">Between ${minGuests} and ${maxGuests}. Reducing kids credits the difference as food credit — no cash refund.</p>
       <div class="flex items-center gap-3">
-        <button id="editGuestMinus" onclick="changeEditGuests(-1)" class="w-10 h-10 rounded-xl border-2 border-gray-200 font-bold text-lg hover:border-indigo-400 transition-colors flex items-center justify-center" disabled>−</button>
+        <button id="editGuestMinus" onclick="changeEditGuests(-1)" class="w-10 h-10 rounded-xl border-2 border-gray-200 font-bold text-lg hover:border-indigo-400 transition-colors flex items-center justify-center" ${editState.newGuestCount <= minGuests ? 'disabled' : ''}>−</button>
         <span class="font-display font-bold text-2xl w-10 text-center" id="editGuestCount">${editState.newGuestCount}</span>
         <button id="editGuestPlus" onclick="changeEditGuests(1)" class="w-10 h-10 rounded-xl border-2 border-gray-200 font-bold text-lg hover:border-indigo-400 transition-colors flex items-center justify-center" ${editState.newGuestCount >= maxGuests ? 'disabled' : ''}>+</button>
         <span class="text-gray-400 text-sm ml-1">kids</span>
       </div>
+      <div id="editCreditPreview" class="mt-2 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 hidden"></div>
     </div>
 
     <!-- Food split (shown only if guest count increased) -->
@@ -1096,8 +1152,10 @@ function renderEditStep1(booking, savedCardInfo) {
       <div id="editFoodSplitStatus" class="mt-2 text-xs text-center text-gray-400">0 / ${booking.guestCount} selected</div>
     </div>
 
-    <!-- New Add-ons -->
-    <div class="mb-5">
+    <!-- New Add-ons (hidden while reducing guest count — a reduction is a
+         food-credit-only edit, kept separate from a card-charging one; see
+         changeEditGuests) -->
+    <div class="mb-5" id="editAddonsSection">
       <div class="font-display font-bold text-base text-gray-900 mb-1">➕ Additional Add-Ons <span class="text-gray-400 font-normal text-sm">(optional)</span></div>
       <p class="text-xs text-gray-400 mb-3">Only newly added items will be charged. These are on top of your existing add-ons.</p>
       ${buildEditAddonsHtml()}
@@ -1200,7 +1258,8 @@ function changeEditGuests(delta) {
   const booking = editState.booking;
   if (!booking) return;
   const maxGuests = parseInt(booking.roomMaxGuests) || 24;
-  const next = Math.max(booking.guestCount, Math.min(maxGuests, editState.newGuestCount + delta));
+  const minGuests = parseInt(booking.roomMinGuests) || 1;
+  const next = Math.max(minGuests, Math.min(maxGuests, editState.newGuestCount + delta));
   editState.newGuestCount = next;
 
   const el = document.getElementById('editGuestCount');
@@ -1208,7 +1267,7 @@ function changeEditGuests(delta) {
 
   const minusBtn = document.getElementById('editGuestMinus');
   const plusBtn = document.getElementById('editGuestPlus');
-  if (minusBtn) minusBtn.disabled = next <= booking.guestCount;
+  if (minusBtn) minusBtn.disabled = next <= minGuests;
   if (plusBtn) plusBtn.disabled = next >= maxGuests;
 
   const foodSection = document.getElementById('editFoodSplitSection');
@@ -1232,6 +1291,31 @@ function changeEditGuests(delta) {
   ['editNuggetPlus','editBurgerPlus','editVegePlus'].forEach(id => {
     const b = document.getElementById(id); if (b) b.disabled = false;
   });
+
+  // Reducing guests is a food-credit-only edit (no card charge), kept
+  // separate from adding kids/add-ons (which charges a card) — see
+  // proceedEditToReview/renderReduceGuestsReview. Hide Add-Ons and clear any
+  // selections while reducing so the two flows can't be combined into one
+  // request with a mixed-sign delta.
+  const isReducing = next < booking.guestCount;
+  const addonsSection = document.getElementById('editAddonsSection');
+  if (addonsSection) addonsSection.classList.toggle('hidden', isReducing);
+  if (isReducing) {
+    editState.newAddons = {}; editState.newPizzaTypes = {}; editState.newSodaTypes = {};
+    document.querySelectorAll('#editAddonsSection [id^="editAddon_"]').forEach(e => e.textContent = '0');
+  }
+
+  const pricePerChild = parseFloat(booking.pricePerChild) || 39;
+  const creditPreview = document.getElementById('editCreditPreview');
+  if (creditPreview) {
+    if (isReducing) {
+      const credit = (booking.guestCount - next) * pricePerChild;
+      creditPreview.textContent = `🍟 You'll get a $${credit.toFixed(2)} food credit, redeemable at the venue — no cash refund.`;
+      creditPreview.classList.remove('hidden');
+    } else {
+      creditPreview.classList.add('hidden');
+    }
+  }
 
   updateEditDelta();
 }
@@ -1396,6 +1480,14 @@ function proceedEditToReview() {
   if (!booking) return;
   updateEditDelta();
 
+  // Reducing guest count is a separate, food-credit-only flow — no card
+  // charge, no add-ons in the same request (see changeEditGuests). Skip the
+  // increase-path validation below entirely.
+  if (editState.newGuestCount < booking.guestCount) {
+    renderReduceGuestsReview();
+    return;
+  }
+
   // Validate food split if guest count increased
   if (editState.newGuestCount > booking.guestCount) {
     const combined = editState.editNuggets + editState.editBurgers + editState.editVeges;
@@ -1542,6 +1634,81 @@ function renderEditStep2() {
   }
   if (delta > 0 && editState.savedCard) {
     updateEditPaymentModeUI();
+  }
+}
+
+// ── Reduce guests: review + submit (food credit, no payment step) ──────
+function renderReduceGuestsReview() {
+  const booking = editState.booking;
+  const pricePerChild = parseFloat(booking.pricePerChild) || 39;
+  const kidsRemoved = booking.guestCount - editState.newGuestCount;
+  const credit = kidsRemoved * pricePerChild;
+
+  document.getElementById('editBookingContent').innerHTML = `
+    <h2 class="font-display font-bold text-2xl text-gray-900 mb-5">Confirm Reduction</h2>
+
+    <div class="bg-green-50 border-2 border-green-200 rounded-2xl p-4 mb-5">
+      <div class="font-display font-bold text-green-700 mb-3">🍟 Food Credit — Not a Cash Refund</div>
+      <div class="space-y-1.5 text-sm text-green-800">
+        <div class="flex justify-between"><span>Guest count</span><span class="font-semibold">${booking.guestCount} → ${editState.newGuestCount} kids</span></div>
+        <div class="border-t border-green-200 mt-2 pt-2 flex justify-between font-bold text-base">
+          <span>Food credit:</span><span class="text-green-700">$${credit.toFixed(2)} NZD</span>
+        </div>
+      </div>
+      <p class="text-xs text-green-700 mt-3">This isn't refunded to your card — it's credited to this booking and redeemable at the venue against food/drink on the day. Mention your booking ref at check-in.</p>
+    </div>
+
+    <div class="flex gap-3 mt-4">
+      <button onclick="renderEditStep1(editState.booking, editState.savedCard ? {hasSavedCard:true,...editState.savedCard} : {hasSavedCard:false})" class="btn-secondary flex-1 py-3">← Back</button>
+      <button id="editSubmitBtn" onclick="submitReduceGuests()" class="btn-primary flex-1 py-3">
+        <span id="editSubmitText">Confirm — Apply Food Credit</span>
+        <span id="editSubmitSpinner" class="hidden">
+          <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        </span>
+      </button>
+    </div>`;
+}
+
+async function submitReduceGuests() {
+  const booking = editState.booking;
+  const btn = document.getElementById('editSubmitBtn');
+  const text = document.getElementById('editSubmitText');
+  const spinner = document.getElementById('editSubmitSpinner');
+  if (btn) btn.disabled = true;
+  if (text) text.classList.add('hidden');
+  if (spinner) spinner.classList.remove('hidden');
+
+  try {
+    const result = await callAPI(`bookings/${booking.id}/reduce-guests`, {
+      newGuestCount: editState.newGuestCount,
+    }, 'POST');
+
+    callAPI('notifications/booking-modification', {
+      bookingId: booking.id,
+      bookingRef: booking.bookingRef,
+      email: booking.contactEmail || state.user?.email || '',
+      phone: state.user?.phone || '',
+      firstName: state.user?.firstName || '',
+      roomName: booking.roomName,
+      partyDate: booking.partyDate,
+      partyTime: booking.partyTime,
+      newGuestCount: result.newGuestCount,
+      newFoodChoice: result.newFoodChoice,
+      newTotalAmount: result.newTotalAmount,
+    }).catch(() => {});
+
+    document.getElementById('editBookingContent').innerHTML = `
+      <div class="text-center py-8">
+        <div class="text-5xl mb-3">✅</div>
+        <h2 class="font-display font-bold text-xl text-gray-900 mb-2">Booking Updated</h2>
+        <p class="text-gray-500 text-sm">You now have a <strong>$${parseFloat(result.foodCreditAmount).toFixed(2)}</strong> food credit on this booking, redeemable at the venue.</p>
+        <button onclick="closeEditBooking(); viewMyBookings();" class="btn-primary mt-6 py-2 px-6">Done</button>
+      </div>`;
+  } catch (err) {
+    showFieldError(err.message || 'Something went wrong. Please try again.');
+    if (btn) btn.disabled = false;
+    if (text) text.classList.remove('hidden');
+    if (spinner) spinner.classList.add('hidden');
   }
 }
 
