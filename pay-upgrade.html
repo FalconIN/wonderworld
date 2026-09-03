@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Whole Venue Hire Upgrade Payment — Wonder World Westgate</title>
+<meta name="description" content="Pay the difference for your Wonder World Westgate Whole Venue Hire upgrade." />
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tailwind.css?v=2" />
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+<script src="https://js.stripe.com/v3/" defer></script>
+
+</head>
+<body class="min-h-screen flex flex-col font-body" style="background:#EFF6FF;">
+
+<nav class="bg-white border-b border-gray-100">
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="wwmascot-64.png?v=3" alt="Wonder World" class="w-9 h-9 rounded-xl" />
+      <span class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></span>
+    </a>
+  </div>
+</nav>
+
+<main class="flex-1 flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-md">
+
+    <div id="loadingState" class="text-center">
+      <div class="text-5xl mb-3">⏳</div>
+      <p class="text-gray-500">Loading your payment details...</p>
+    </div>
+
+    <div id="formState" class="hidden">
+      <div class="text-center mb-6">
+        <div class="text-5xl mb-3">🏛️</div>
+        <h1 class="font-display font-bold text-3xl text-gray-900 mb-1">Whole Venue Hire Upgrade</h1>
+        <p class="text-gray-500">Booking <strong id="payBookingRef"></strong></p>
+      </div>
+
+      <div class="clay-card p-6 mb-4">
+        <div class="text-sm text-gray-500 mb-2" id="payRoomSummary"></div>
+        <div id="existingAddonsRow" class="text-xs text-gray-400 mb-2 hidden">Already paid & included: <span id="existingAddonsText" class="text-gray-500"></span></div>
+        <div class="border-t border-gray-100 pt-3 flex justify-between items-baseline">
+          <span class="text-sm text-gray-500">Amount due</span>
+          <span class="font-display font-bold text-2xl text-slate-800" id="payAmountDue"></span>
+        </div>
+      </div>
+
+      <!-- Step 1: food for the full new headcount — required before payment -->
+      <div class="clay-card p-6 mb-4" id="foodStepCard">
+        <div class="font-display font-bold text-lg text-gray-900 mb-1">1. Confirm food for all <span id="foodTargetCount"></span> kids</div>
+        <p class="text-xs text-gray-400 mb-3">Since your headcount changed, please split food for everyone — including the extra kids.</p>
+        <div id="foodStepError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden"></div>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 text-center">
+            <div class="text-3xl mb-1">🍗</div>
+            <div class="font-display font-bold text-xs mb-2">Chicken Nuggets</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="changeFoodSplit('nuggets',-1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">−</button>
+              <span class="font-display font-bold text-xl text-slate-700 w-7 text-center" id="foodNuggetCount">0</span>
+              <button id="foodNuggetPlus" onclick="changeFoodSplit('nuggets',1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">+</button>
+            </div>
+          </div>
+          <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 text-center">
+            <div class="text-3xl mb-1">🍔</div>
+            <div class="font-display font-bold text-xs mb-2">Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="changeFoodSplit('burgers',-1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">−</button>
+              <span class="font-display font-bold text-xl text-slate-700 w-7 text-center" id="foodBurgerCount">0</span>
+              <button id="foodBurgerPlus" onclick="changeFoodSplit('burgers',1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">+</button>
+            </div>
+          </div>
+          <div class="bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 text-center">
+            <div class="text-3xl mb-1">🥦</div>
+            <div class="font-display font-bold text-xs mb-2">Vege Mini Burger</div>
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="changeFoodSplit('veges',-1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">−</button>
+              <span class="font-display font-bold text-xl text-slate-700 w-7 text-center" id="foodVegeCount">0</span>
+              <button id="foodVegePlus" onclick="changeFoodSplit('veges',1)" class="w-7 h-7 rounded-lg border-2 border-gray-300 font-bold hover:border-indigo-400 flex items-center justify-center text-sm">+</button>
+            </div>
+          </div>
+        </div>
+        <div id="foodSplitStatus" class="mt-2 text-xs text-center text-gray-400"></div>
+        <button onclick="submitFoodStep()" class="btn-primary w-full py-3 mt-4" id="foodStepBtn" disabled style="opacity:.5">Save &amp; Continue to Payment</button>
+      </div>
+
+      <!-- Step 2: optional extra food/drinks — same catalog as the booking wizard's Add-Ons step -->
+      <div class="clay-card p-6 mb-4 hidden" id="addonsStepCard">
+        <button type="button" onclick="goToFoodStep()" class="text-xs text-gray-400 hover:text-indigo-500 mb-2">← Back to food</button>
+        <div class="font-display font-bold text-lg text-gray-900 mb-1">2. Add extra food or drinks <span class="text-gray-400 font-normal text-sm">(optional)</span></div>
+        <p class="text-xs text-gray-400 mb-3">Prices are per item — only new items you add here are charged. Anything already on your booking is already paid for.</p>
+        <div class="space-y-2" id="upgradeAddonList">
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍕</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">11-inch Pizza</div>
+                <div class="text-xs text-gray-400">Ham &amp; Cheese · Salami &amp; Cheese · Chorizo &amp; Cheese · Plain Cheese · Vege — per pizza</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$25</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('pizza_11', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_pizza_11">0</span>
+                <button type="button" onclick="changeAddon('pizza_11', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+            <div id="pizzaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-xs text-gray-500 font-semibold">Which type(s)?</div>
+                <div id="pizzaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
+              </div>
+              <div id="pizzaTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a type of pizza before continuing.</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Ham &amp; Cheese</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changePizzaType('Ham &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="pizzaQty_HamCheese">0</span>
+                    <button type="button" onclick="changePizzaType('Ham &amp; Cheese', 1)" id="pizzaPlus_HamCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Salami &amp; Cheese</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changePizzaType('Salami &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="pizzaQty_SalamiCheese">0</span>
+                    <button type="button" onclick="changePizzaType('Salami &amp; Cheese', 1)" id="pizzaPlus_SalamiCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Chorizo &amp; Cheese</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changePizzaType('Chorizo &amp; Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="pizzaQty_ChorizoCheese">0</span>
+                    <button type="button" onclick="changePizzaType('Chorizo &amp; Cheese', 1)" id="pizzaPlus_ChorizoCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Plain Cheese</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changePizzaType('Plain Cheese', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="pizzaQty_PlainCheese">0</span>
+                    <button type="button" onclick="changePizzaType('Plain Cheese', 1)" id="pizzaPlus_PlainCheese" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Vege Pizza</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changePizzaType('Vege Pizza', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="pizzaQty_VegePizza">0</span>
+                    <button type="button" onclick="changePizzaType('Vege Pizza', 1)" id="pizzaPlus_VegePizza" class="pizza-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍗</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Fried Chicken Platter</div>
+                <div class="text-xs text-gray-400">10 Nuggets · 6 Fried Chicken · 6 Karaage · Fries · Sauces</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('platter_chicken', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_chicken">0</span>
+                <button type="button" onclick="changeAddon('platter_chicken', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🦐</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Seafood Platter</div>
+                <div class="text-xs text-gray-400">8 Fish Bites · 6 Prawn Twister · 6 Tempura · 6 Calamari · Fries · Sauces</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('platter_seafood', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_platter_seafood">0</span>
+                <button type="button" onclick="changeAddon('platter_seafood', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🥪</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Adult Platter — 15 pcs Sandwiches</div>
+                <div class="text-xs text-gray-400">Ham &amp; Cheese Sandwiches</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('adult_sandwich', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_adult_sandwich">0</span>
+                <button type="button" onclick="changeAddon('adult_sandwich', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍣</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Sushi Platter — 40 pcs</div>
+                <div class="text-xs text-gray-400">Adult sushi platter</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$60</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_40', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_40">0</span>
+                <button type="button" onclick="changeAddon('sushi_40', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍣</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Sushi Platter — 24 pcs</div>
+                <div class="text-xs text-gray-400">Smaller sushi platter</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$30</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_24', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_24">0</span>
+                <button type="button" onclick="changeAddon('sushi_24', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍣</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Salmon Supreme Platter</div>
+                <div class="text-xs text-gray-400">4 Salmon Avocado Roll · 4 Salmon Nigiri · 2 Aburi Salmon</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$28.90</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_salmon', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_salmon">0</span>
+                <button type="button" onclick="changeAddon('sushi_salmon', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍱</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Ocean Deluxe Set</div>
+                <div class="text-xs text-gray-400">4 Tempura Prawn Dragon Roll · 4 Salmon Avocado · 4 Nigiri · 2 Aburi Salmon</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$39.90</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_ocean', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_ocean">0</span>
+                <button type="button" onclick="changeAddon('sushi_ocean', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍣</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Kids Party Platter (48 pcs)</div>
+                <div class="text-xs text-gray-400">Salmon, Teriyaki Chicken, Katsu Chicken, Tuna Mayo, Crab Stick, Avocado</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$49.90</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_kids48', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_kids48">0</span>
+                <button type="button" onclick="changeAddon('sushi_kids48', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🥗</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Green Garden Platter (28 pcs)</div>
+                <div class="text-xs text-gray-400">Garden Veggie Roll, Avocado Roll, Tofu Veggie Roll, Seaweed Salad Inari, Avo Nigiri</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$42.90</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('sushi_garden28', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_sushi_garden28">0</span>
+                <button type="button" onclick="changeAddon('sushi_garden28', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🥤</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Soft Drink</div>
+                <div class="text-xs text-gray-400">Coke · Sprite · Fanta · L&amp;P — per bottle</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$10</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('drinks_soda', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_drinks_soda">0</span>
+                <button type="button" onclick="changeAddon('drinks_soda', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+            <div id="sodaTypePicker" class="hidden mt-3 pt-3 border-t border-gray-200">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-xs text-gray-500 font-semibold">Which flavour(s)?</div>
+                <div id="sodaTypeCounter" class="text-xs font-bold text-indigo-600">0 / 0 allocated</div>
+              </div>
+              <div id="sodaTypeError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 hidden">Please choose a flavour for all your soft drink(s) before continuing.</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Coke</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changeSodaType('Coke', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="sodaQty_Coke">0</span>
+                    <button type="button" onclick="changeSodaType('Coke', 1)" id="sodaPlus_Coke" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Sprite</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changeSodaType('Sprite', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="sodaQty_Sprite">0</span>
+                    <button type="button" onclick="changeSodaType('Sprite', 1)" id="sodaPlus_Sprite" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">Fanta</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changeSodaType('Fanta', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="sodaQty_Fanta">0</span>
+                    <button type="button" onclick="changeSodaType('Fanta', 1)" id="sodaPlus_Fanta" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-gray-700">L&amp;P</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="changeSodaType('L&amp;P', -1)" class="w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                    <span class="w-5 text-center text-xs font-bold" id="sodaQty_LandP">0</span>
+                    <button type="button" onclick="changeSodaType('L&amp;P', 1)" id="sodaPlus_LandP" class="soda-type-plus w-6 h-6 rounded border border-gray-300 text-xs font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍗</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Chicken Nuggets (15pc)</div>
+                <div class="text-xs text-gray-400">15 pieces</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$20</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('nuggets_15pc', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_nuggets_15pc">0</span>
+                <button type="button" onclick="changeAddon('nuggets_15pc', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="addon-row bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div class="flex items-start gap-3 mb-2">
+              <div class="text-2xl flex-shrink-0">🍟</div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-sm text-gray-800">Large Fries</div>
+                <div class="text-xs text-gray-400">Large serving</div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between pl-1">
+              <span class="bg-green-100 text-green-700 font-bold text-xs rounded-full px-2.5 py-1">$20</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="changeAddon('fries_large', -1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">−</button>
+                <span class="w-6 text-center text-sm font-bold addon-qty" id="addon_fries_large">0</span>
+                <button type="button" onclick="changeAddon('fries_large', 1)" class="w-7 h-7 rounded-lg border border-gray-300 text-sm font-bold hover:border-indigo-400 flex items-center justify-center">+</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div id="upgradeAddonSubtotal" class="mt-3 hidden bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800 flex justify-between font-semibold">
+          <span>Add-ons subtotal:</span><span id="upgradeAddonSubtotalAmount">$0.00</span>
+        </div>
+        <div id="addonsStepError" class="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2 hidden"></div>
+        <button onclick="submitAddonsStep()" class="btn-primary w-full py-3 mt-4" id="addonsStepBtn">Save &amp; Continue to Payment</button>
+      </div>
+
+      <!-- Step 3: payment — hidden until the steps above are confirmed -->
+      <div class="clay-card p-6 hidden" id="paymentStepCard">
+        <button type="button" onclick="goToAddonsStep()" class="text-xs text-gray-400 hover:text-indigo-500 mb-2">← Back to add-ons</button>
+        <div class="font-display font-bold text-lg text-gray-900 mb-3">3. Payment</div>
+        <div id="stripe-payment-wrapper" class="mb-4">
+          <div class="text-gray-400 text-sm text-center py-6">Loading payment options...</div>
+        </div>
+        <div id="pay-errors" class="text-red-500 text-sm mb-3"></div>
+        <button onclick="submitPayment()" class="btn-primary w-full py-4" id="payBtn">
+          <span id="payBtnText">Pay Now</span>
+          <span id="payBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div id="successState" class="hidden text-center">
+      <div class="text-5xl mb-3">✅</div>
+      <h1 class="font-display font-bold text-3xl text-gray-900 mb-2">Payment received!</h1>
+      <p class="text-gray-500 mb-6">Your Whole Venue Hire upgrade is confirmed. We'll be in touch with the final details.</p>
+      <a href="/" class="btn-primary inline-block py-4 px-8">Back to Home →</a>
+    </div>
+
+    <div id="errorState" class="hidden text-center">
+      <div class="text-5xl mb-3">⚠️</div>
+      <h1 class="font-display font-bold text-3xl text-gray-900 mb-2">Link unavailable</h1>
+      <p class="text-gray-500 mb-6" id="errorDetail">This payment link is no longer valid.</p>
+      <a href="mailto:bookings@wonderworldwestgate.co.nz" class="btn-primary inline-block py-4 px-8">Contact Us →</a>
+    </div>
+
+  </div>
+</main>
+
+<script src="firebase.js" defer></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const payToken = params.get('token');
+let stripeElements = null;
+let clientSecret = null;
+let foodTarget = 0;
+let foodCounts = { nuggets: 0, burgers: 0, veges: 0 };
+
+// Mirrors booking.js's ADDON_PRICES — kept in sync manually, same as the
+// server-side copy in server/services/addonPricing.js. gf_nuggets is
+// deliberately not offered here (see that file's comment).
+const ADDON_PRICES = {
+  pizza_11:        { label: '11-inch Pizza',              price: 25 },
+  platter_chicken: { label: 'Fried Chicken Platter',      price: 39 },
+  platter_seafood: { label: 'Seafood Platter',            price: 49 },
+  adult_sandwich:  { label: 'Adult Sandwich Platter',     price: 60 },
+  sushi_40:        { label: 'Sushi Platter (40 pcs)',     price: 60 },
+  sushi_24:        { label: 'Sushi Platter (24 pcs)',     price: 30 },
+  sushi_salmon:    { label: 'Salmon Supreme Platter',     price: 28.90 },
+  sushi_ocean:     { label: 'Ocean Deluxe Set',           price: 39.90 },
+  sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
+  sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
+  drinks_soda:     { label: 'Soft Drink', price: 10 },
+  nuggets_15pc:    { label: 'Chicken Nuggets (15pc)', price: 20 },
+  fries_large:     { label: 'Large Fries', price: 20 },
+};
+let addons = {};
+let pizzaTypes = {};
+let sodaTypes = {};
+let baseAmountCents = 0;
+
+function showState(name) {
+  ['loadingState', 'formState', 'successState', 'errorState'].forEach(id => {
+    document.getElementById(id).classList.toggle('hidden', id !== name);
+  });
+}
+
+// Reconstructs {nuggets, burgers, veges} from the "X Nuggets + Y Mini
+// Burgers + Z Vege Burgers" string this page itself writes via POST
+// .../food — used to repopulate the food step with what's actually saved
+// (on first load of a resumed link, and whenever navigating back to it),
+// instead of leaving it at its zeroed default.
+function parseFoodChoice(str) {
+  str = str || '';
+  const nuggets = parseInt((str.match(/(\d+)\s*Nuggets?/i) || [])[1], 10) || 0;
+  const burgers = parseInt((str.match(/(\d+)\s*Mini\s*Burgers?/i) || [])[1], 10) || 0;
+  const veges   = parseInt((str.match(/(\d+)\s*Vege\s*Burgers?/i) || [])[1], 10) || 0;
+  return { nuggets, burgers, veges };
+}
+
+// ── Step navigation ─────────────────────────────────────────────────────
+// Centralized so every transition (forward via a step's own submit, or
+// backward via a "← Back" link) repaints the card being shown from
+// current state, rather than trusting whatever it last looked like.
+function goToFoodStep() {
+  document.getElementById('addonsStepCard').classList.add('hidden');
+  document.getElementById('paymentStepCard').classList.add('hidden');
+  document.getElementById('foodStepCard').classList.remove('hidden');
+  updateFoodSplitUi();
+}
+
+function goToAddonsStep() {
+  document.getElementById('foodStepCard').classList.add('hidden');
+  document.getElementById('paymentStepCard').classList.add('hidden');
+  document.getElementById('addonsStepCard').classList.remove('hidden');
+  updatePizzaPickerUI();
+  updateSodaPickerUI();
+  updateAddonSubtotal();
+}
+
+async function goToPaymentStep() {
+  document.getElementById('foodStepCard').classList.add('hidden');
+  document.getElementById('addonsStepCard').classList.add('hidden');
+  document.getElementById('paymentStepCard').classList.remove('hidden');
+  await mountPaymentElement();
+}
+
+async function init() {
+  if (!payToken) {
+    document.getElementById('errorDetail').textContent = 'This link is missing or malformed.';
+    showState('errorState');
+    return;
+  }
+
+  let link;
+  try {
+    const res = await fetch(`/api/payments/upgrade-link/${encodeURIComponent(payToken)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      document.getElementById('errorDetail').textContent = err.error || 'This payment link is no longer valid.';
+      showState('errorState');
+      return;
+    }
+    link = await res.json();
+  } catch (err) {
+    showState('errorState');
+    return;
+  }
+
+  document.getElementById('payBookingRef').textContent = link.bookingRef;
+  document.getElementById('payRoomSummary').textContent = `${link.roomName} — ${link.guestCount} kids`;
+  document.getElementById('payAmountDue').textContent = `$${(link.amountCents / 100).toFixed(2)} NZD`;
+  baseAmountCents = link.baseAmountCents;
+  showState('formState');
+
+  if (link.existingAddonsSummary) {
+    document.getElementById('existingAddonsText').textContent = link.existingAddonsSummary;
+    document.getElementById('existingAddonsRow').classList.remove('hidden');
+  }
+
+  // Re-hydrate any addons already saved on this link (e.g. they closed the
+  // tab after step 2 and came back) — plain quantities repaint straight
+  // from state; pizza/soda flavour splits aren't stored server-side per
+  // type (only the combined summary text is), so those start blank again
+  // and the customer re-picks flavours if they still want that item.
+  addons = { ...(link.additionalAddons || {}) };
+  Object.keys(ADDON_PRICES).forEach(id => {
+    const el = document.getElementById('addon_' + id);
+    if (el) el.textContent = addons[id] || 0;
+  });
+  if (addons.pizza_11 > 0) document.getElementById('pizzaTypePicker').classList.remove('hidden');
+  if (addons.drinks_soda > 0) document.getElementById('sodaTypePicker').classList.remove('hidden');
+  updatePizzaPickerUI();
+  updateSodaPickerUI();
+  updateAddonSubtotal();
+
+  foodTarget = link.guestCount;
+  document.getElementById('foodTargetCount').textContent = foodTarget;
+  foodCounts = parseFoodChoice(link.foodChoice);
+  updateFoodSplitUi();
+
+  // Food was already confirmed for this exact headcount on a prior visit
+  // (e.g. they closed the tab after step 1 and came back) — skip straight
+  // to the add-ons step instead of making them re-pick food. They can
+  // still use "← Back to food" from there, now correctly pre-filled.
+  if (link.foodConfirmed) {
+    goToAddonsStep();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+// ── Step 1: food split ──────────────────────────────────────────────────
+function changeFoodSplit(type, delta) {
+  const next = Math.max(0, foodCounts[type] + delta);
+  foodCounts[type] = next;
+  updateFoodSplitUi();
+}
+
+function updateFoodSplitUi() {
+  document.getElementById('foodNuggetCount').textContent = foodCounts.nuggets;
+  document.getElementById('foodBurgerCount').textContent = foodCounts.burgers;
+  document.getElementById('foodVegeCount').textContent = foodCounts.veges;
+
+  const combined = foodCounts.nuggets + foodCounts.burgers + foodCounts.veges;
+  const atMax = combined >= foodTarget;
+  ['foodNuggetPlus', 'foodBurgerPlus', 'foodVegePlus'].forEach(id => {
+    document.getElementById(id).disabled = atMax;
+  });
+
+  document.getElementById('foodSplitStatus').textContent = `${combined} / ${foodTarget} selected`;
+
+  const btn = document.getElementById('foodStepBtn');
+  const ready = combined === foodTarget && foodTarget > 0;
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? 1 : .5;
+}
+
+async function submitFoodStep() {
+  const errEl = document.getElementById('foodStepError');
+  errEl.classList.add('hidden');
+  const btn = document.getElementById('foodStepBtn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/payments/upgrade-link/${encodeURIComponent(payToken)}/food`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(foodCounts),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Could not save your food selection.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      return;
+    }
+
+    goToAddonsStep();
+  } catch (err) {
+    errEl.textContent = 'Could not save your food selection. Please try again.';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+  }
+}
+
+// ── Step 2: optional add-ons (mirrors booking.js's changeAddon/changePizzaType/changeSodaType) ──
+function changeAddon(id, delta) {
+  const next = Math.max(0, (addons[id] || 0) + delta);
+  addons[id] = next;
+  const el = document.getElementById('addon_' + id);
+  if (el) el.textContent = next;
+
+  if (id === 'drinks_soda') {
+    document.getElementById('sodaTypePicker').classList.toggle('hidden', next === 0);
+    if (next === 0) sodaTypes = {};
+    else trimTypesToQty(sodaTypes, next);
+    updateSodaPickerUI();
+  }
+  if (id === 'pizza_11') {
+    document.getElementById('pizzaTypePicker').classList.toggle('hidden', next === 0);
+    if (next === 0) pizzaTypes = {};
+    else trimTypesToQty(pizzaTypes, next);
+    updatePizzaPickerUI();
+  }
+  updateAddonSubtotal();
+}
+
+function trimTypesToQty(types, qty) {
+  let total = Object.values(types).reduce((s, v) => s + v, 0);
+  let excess = total - qty;
+  const keys = Object.keys(types);
+  for (let i = keys.length - 1; i >= 0 && excess > 0; i--) {
+    const cut = Math.min(types[keys[i]], excess);
+    types[keys[i]] -= cut;
+    excess -= cut;
+    if (types[keys[i]] === 0) delete types[keys[i]];
+  }
+}
+
+function updateSodaPickerUI() {
+  const qty = addons.drinks_soda || 0;
+  const total = Object.values(sodaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = { 'Coke': 'Coke', 'Sprite': 'Sprite', 'Fanta': 'Fanta', 'L&P': 'LandP' };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('sodaQty_' + id);
+    if (qtyEl) qtyEl.textContent = sodaTypes[type] || 0;
+    const plusEl = document.getElementById('sodaPlus_' + id);
+    if (plusEl) { plusEl.classList.toggle('opacity-30', atMax); plusEl.classList.toggle('pointer-events-none', atMax); }
+  });
+  const counter = document.getElementById('sodaTypeCounter');
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
+}
+
+function changeSodaType(type, delta) {
+  const qty = addons.drinks_soda || 0;
+  const total = Object.values(sodaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (sodaTypes[type] || 0) + delta);
+  if (next === 0) delete sodaTypes[type]; else sodaTypes[type] = next;
+  updateSodaPickerUI();
+}
+
+function updatePizzaPickerUI() {
+  const qty = addons.pizza_11 || 0;
+  const total = Object.values(pizzaTypes).reduce((s, v) => s + v, 0);
+  const atMax = total >= qty;
+  const typeIds = {
+    'Ham & Cheese': 'HamCheese', 'Salami & Cheese': 'SalamiCheese', 'Chorizo & Cheese': 'ChorizoCheese',
+    'Plain Cheese': 'PlainCheese', 'Vege Pizza': 'VegePizza',
+  };
+  Object.entries(typeIds).forEach(([type, id]) => {
+    const qtyEl = document.getElementById('pizzaQty_' + id);
+    if (qtyEl) qtyEl.textContent = pizzaTypes[type] || 0;
+    const plusEl = document.getElementById('pizzaPlus_' + id);
+    if (plusEl) { plusEl.classList.toggle('opacity-30', atMax); plusEl.classList.toggle('pointer-events-none', atMax); }
+  });
+  const counter = document.getElementById('pizzaTypeCounter');
+  if (counter) counter.textContent = `${total} / ${qty} allocated`;
+}
+
+function changePizzaType(type, delta) {
+  const qty = addons.pizza_11 || 0;
+  const total = Object.values(pizzaTypes).reduce((s, v) => s + v, 0);
+  if (delta > 0 && total >= qty) return;
+  const next = Math.max(0, (pizzaTypes[type] || 0) + delta);
+  if (next === 0) delete pizzaTypes[type]; else pizzaTypes[type] = next;
+  updatePizzaPickerUI();
+}
+
+function getAddonTotal() {
+  return Object.entries(addons).reduce((sum, [id, qty]) => sum + (ADDON_PRICES[id]?.price || 0) * qty, 0);
+}
+
+function updateAddonSubtotal() {
+  const subtotal = getAddonTotal();
+  const el = document.getElementById('upgradeAddonSubtotal');
+  const amt = document.getElementById('upgradeAddonSubtotalAmount');
+  if (subtotal > 0) { el.classList.remove('hidden'); amt.textContent = '$' + subtotal.toFixed(2); }
+  else el.classList.add('hidden');
+}
+
+async function submitAddonsStep() {
+  const errEl = document.getElementById('addonsStepError');
+  errEl.classList.add('hidden');
+
+  const pizzaQty = addons.pizza_11 || 0;
+  const pizzaAllocated = Object.values(pizzaTypes).reduce((s, v) => s + v, 0);
+  if (pizzaQty > 0 && pizzaAllocated !== pizzaQty) {
+    document.getElementById('pizzaTypeError').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('pizzaTypeError').classList.add('hidden');
+
+  const sodaQty = addons.drinks_soda || 0;
+  const sodaAllocated = Object.values(sodaTypes).reduce((s, v) => s + v, 0);
+  if (sodaQty > 0 && sodaAllocated !== sodaQty) {
+    document.getElementById('sodaTypeError').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('sodaTypeError').classList.add('hidden');
+
+  const btn = document.getElementById('addonsStepBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/payments/upgrade-link/${encodeURIComponent(payToken)}/addons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addons, pizzaTypes, sodaTypes }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Could not save your add-ons.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('payAmountDue').textContent = `$${(data.amountCents / 100).toFixed(2)} NZD`;
+
+    await goToPaymentStep();
+  } catch (err) {
+    errEl.textContent = 'Could not save your add-ons. Please try again.';
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+  }
+}
+
+async function mountPaymentElement() {
+  const wrapper = document.getElementById('stripe-payment-wrapper');
+  try {
+    const res = await fetch(`/api/payments/upgrade-link/${encodeURIComponent(payToken)}/create-intent`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      wrapper.innerHTML = `<div class="text-red-500 text-sm text-center py-4">${err.error || 'Could not load payment options.'}</div>`;
+      return;
+    }
+    const data = await res.json();
+    clientSecret = data.clientSecret;
+  } catch (err) {
+    wrapper.innerHTML = '<div class="text-red-500 text-sm text-center py-4">Could not load payment options.</div>';
+    return;
+  }
+
+  wrapper.innerHTML = '<div id="stripe-payment-element"></div>';
+  stripeElements = stripe.elements({
+    clientSecret,
+    appearance: { theme: 'stripe', variables: { colorPrimary: '#334155', fontFamily: 'Inter, sans-serif', borderRadius: '12px' } },
+  });
+  stripeElements.create('payment', { layout: { type: 'tabs', defaultCollapsed: false } }).mount('#stripe-payment-element');
+}
+
+async function submitPayment() {
+  if (!stripeElements || !clientSecret) return;
+  const btn = document.getElementById('payBtn');
+  const btnText = document.getElementById('payBtnText');
+  const btnSpinner = document.getElementById('payBtnSpinner');
+  const errEl = document.getElementById('pay-errors');
+  btn.disabled = true;
+  btnText.classList.add('hidden');
+  btnSpinner.classList.remove('hidden');
+  errEl.textContent = '';
+
+  try {
+    const { error } = await stripe.confirmPayment({
+      elements: stripeElements,
+      confirmParams: { return_url: window.location.href },
+      redirect: 'if_required',
+    });
+    if (error) {
+      errEl.textContent = error.message || 'Payment failed. Please try again.';
+      btn.disabled = false;
+      btnText.classList.remove('hidden');
+      btnSpinner.classList.add('hidden');
+      return;
+    }
+    showState('successState');
+  } catch (err) {
+    errEl.textContent = err.message || 'Payment failed.';
+    btn.disabled = false;
+    btnText.classList.remove('hidden');
+    btnSpinner.classList.add('hidden');
+  }
+}
+</script>
+</body>
+</html>

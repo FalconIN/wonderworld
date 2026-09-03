@@ -8,6 +8,8 @@ const { createConfirmedBooking, SlotHoldExpiredError } = require('../services/bo
 const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const { refundOrphan } = require('../services/stripeReconcile');
+const { isValidNzMobile } = require('../services/validation');
+const { ensureUserRow } = require('../services/userAccounts');
 
 // Best-effort lookup of the customer's in-progress wizard state, keyed by the
 // booking_ref Stripe already carries — used only to tell an admin what room/
@@ -26,7 +28,10 @@ async function lookupWizardState(bookingRef) {
   }
 }
 
-// GET /api/rooms — public room list
+// GET /api/rooms — public room list. Unauthenticated, so internal QA rooms
+// (currently just 'test-room-admin' — see booking.js's ROOMS.adminOnly,
+// which is what actually keeps a room out of the customer-facing wizard)
+// are excluded by slug here too, rather than relying on is_active alone.
 router.get('/rooms', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -34,7 +39,7 @@ router.get('/rooms', async (req, res) => {
               min_guests as "minGuests", max_guests as "maxGuests",
               base_price_per_child as "basePricePerChild",
               weekday_total as "weekdayTotal", weekend_total as "weekendTotal"
-       FROM party_rooms WHERE is_active = true ORDER BY sort_order`
+       FROM party_rooms WHERE is_active = true AND slug != 'test-room-admin' ORDER BY sort_order`
     );
     res.json(rows);
   } catch (err) {
@@ -105,6 +110,11 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
     } catch (ruleErr) {
       return res.status(400).json({ error: ruleErr.message });
     }
+
+    // A signed-in customer whose POST /users/profile call never landed
+    // (blocked popup, dropped request) has no users row yet, which would
+    // otherwise 500 the INSERT below on held_by_user_id's FK constraint.
+    await ensureUserRow(pool, userId, req.user.email);
 
     // Clean up any expired hold on this exact slot
     await pool.query(
@@ -192,6 +202,10 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       `SELECT id FROM bookings WHERE stripe_payment_intent_id = $1`, [stripePaymentIntentId]
     );
     if (already) return res.json({ bookingId: already.id });
+  }
+
+  if (!isValidNzMobile(contactPhone)) {
+    return res.status(400).json({ error: 'Please enter a valid NZ mobile number.' });
   }
 
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
@@ -443,6 +457,7 @@ router.get('/bookings/:id', requireAuth, async (req, res) => {
               b.total_amount as "totalAmount", b.status, b.contact_email as "contactEmail",
               b.stripe_payment_intent_id as "stripePaymentIntentId",
               b.food_credit_amount as "foodCreditAmount",
+              b.upgrade_status as "upgradeStatus",
               r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
               r.max_guests as "roomMaxGuests", r.min_guests as "roomMinGuests",
               r.base_price_per_child as "pricePerChild", r.pricing_model as "pricingModel"
@@ -504,6 +519,15 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
   const hoursUntil = parseFloat(booking.hoursUntilParty);
   if (hoursUntil < 24) {
     return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
+  }
+
+  // A whole-venue "extra kids" upgrade is admin-only from here on — the
+  // room/date/time fields are already structurally excluded from this
+  // route's accepted body params, but guest_count wasn't, so it needs an
+  // explicit guard: once upgrade_status is set, only food/add-ons may still
+  // change through this endpoint.
+  if (booking.upgrade_status && parseInt(newGuestCount, 10) !== booking.guest_count) {
+    return res.status(400).json({ error: 'This booking is mid a Whole Venue Hire upgrade — guest count can only be changed by our team. Contact us if you have questions.' });
   }
 
   // Validate guest count
@@ -688,6 +712,12 @@ router.post('/bookings/:id/reduce-guests', requireAuth, bookingLimiter, async (r
   const hoursUntil = parseFloat(booking.hoursUntilParty);
   if (hoursUntil < 24) {
     return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
+  }
+
+  // Same admin-only guard as POST /bookings/:id/edit — a whole-venue "extra
+  // kids" upgrade locks guest_count to admin-only changes going forward.
+  if (booking.upgrade_status) {
+    return res.status(400).json({ error: 'This booking is mid a Whole Venue Hire upgrade — guest count can only be changed by our team. Contact us if you have questions.' });
   }
 
   if (booking.pricingModel === 'flat') {

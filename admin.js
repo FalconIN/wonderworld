@@ -8,6 +8,14 @@
  *   - Customers table
  */
 
+// Paused per user request while the venue-upgrade feature gets dialed in
+// first — mirrors the same-named flags in server/routes/admin.js (backend
+// is guarded independently; these just keep the UI from offering an action
+// that would 403 anyway). Flip both back to true + bump this file's
+// cache-busting version + reload PM2 to go live.
+const FEATURE_MAGIC_LINK_ENABLED = true;
+const FEATURE_NOTES_EMAIL_TOGGLE_ENABLED = true;
+
 let currentTab = 'overview';
 let allBookings   = [];
 let allPayments   = [];
@@ -1778,10 +1786,29 @@ async function viewBooking(bookingId) {
           Change Room
         </button>
       </div>` : ''}
+      ${booking.status === 'confirmed' && booking.roomPricingModel === 'per_child' && !booking.upgradeStatus ? `
+      <button onclick="openVenueUpgradeModal('${booking.id}')" class="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all mt-2" style="background: linear-gradient(135deg,#334155,#0F172A)">
+        🏛️ Upgrade to Whole Venue Hire
+      </button>` : ''}
+      ${booking.upgradeStatus === 'pending_payment' ? `
+      <div class="bg-slate-100 border border-slate-300 rounded-xl p-4 mt-2">
+        <div class="text-xs text-slate-600 mb-1 uppercase font-semibold">🏛️ Whole Venue Upgrade — Payment Pending</div>
+        <div class="text-sm text-slate-700 mb-2">Rate: $${parseFloat(booking.upgradeOverageRate || 0).toFixed(2)}/child. Deadline: ${booking.upgradeDeadlineAt ? new Date(booking.upgradeDeadlineAt).toLocaleDateString('en-NZ', { timeZone: NZ_TZ }) : '—'}</div>
+        <button onclick="sendUpgradePaymentLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary w-full py-2.5 text-sm">📧 Send Payment Link</button>
+      </div>` : ''}
+      ${booking.upgradeStatus === 'completed' ? `
+      <div class="bg-slate-100 border border-slate-300 rounded-xl p-4 mt-2">
+        <div class="text-xs text-slate-600 mb-1 uppercase font-semibold">🏛️ Whole Venue Upgrade — Paid</div>
+        <button onclick="sendUpgradePaymentLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary w-full py-2.5 text-sm">📧 Send Update Email</button>
+      </div>` : ''}
       <div class="flex gap-3 mt-2">
         ${booking.status === 'confirmed' ? `
-        <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+        <button onclick="openResendConfirmationModal('${booking.id}')" class="btn-secondary flex-1 py-3 text-sm">
           ✉️ Resend Confirmation
+        </button>` : ''}
+        ${booking.status === 'confirmed' && booking.userIsPlaceholder && FEATURE_MAGIC_LINK_ENABLED ? `
+        <button onclick="resendMagicLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+          🔑 Resend Magic Link
         </button>` : ''}
         ${booking.status !== 'cancelled' ? `
         <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
@@ -2077,13 +2104,153 @@ function closeChangeRoomModal() {
   document.getElementById('changeRoomModal').style.display = 'none';
 }
 
-async function resendConfirmationEmail(bookingId, bookingRef) {
-  if (!confirm(`Resend the confirmation email for booking ${bookingRef}?`)) return;
+// ---------------------------------------------------------------------------
+// Venue upgrade (extra-kids whole-venue-hire conversion)
+// ---------------------------------------------------------------------------
+let venueUpgradeState = { bookingId: null };
+
+function openVenueUpgradeModal(bookingId) {
+  venueUpgradeState = { bookingId };
+  const modal = document.getElementById('venueUpgradeModal');
+  const content = document.getElementById('venueUpgradeContent');
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Switches this booking's room to Whole Venue Hire and its pricing to per-child (at this booking's current per-child rate) for the new headcount. The customer will owe the difference between the new total and what's already been paid.</p>
+    <div>
+      <label class="lbl">New Total Guest Count</label>
+      <input class="field" type="number" id="vu_newGuestCount" min="24" placeholder="e.g. 30" oninput="venueUpgradePreview()" />
+    </div>
+    <div id="venueUpgradePreviewBox" class="mt-3"></div>
+    <div id="venueUpgradeError" class="text-red-500 text-sm hidden mt-3"></div>
+    <div class="flex gap-3 mt-4">
+      <button onclick="closeVenueUpgradeModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+      <button onclick="doConfirmVenueUpgrade()" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" id="venueUpgradeConfirmBtn" disabled style="background: linear-gradient(135deg,#334155,#0F172A); opacity:.5" >Confirm Upgrade</button>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function closeVenueUpgradeModal() {
+  document.getElementById('venueUpgradeModal').style.display = 'none';
+}
+
+let venueUpgradePreviewDebounce = null;
+function venueUpgradePreview() {
+  clearTimeout(venueUpgradePreviewDebounce);
+  venueUpgradePreviewDebounce = setTimeout(async () => {
+    const box = document.getElementById('venueUpgradePreviewBox');
+    const confirmBtn = document.getElementById('venueUpgradeConfirmBtn');
+    const newGuestCount = parseInt(document.getElementById('vu_newGuestCount').value, 10);
+    if (!newGuestCount) { box.innerHTML = ''; confirmBtn.disabled = true; confirmBtn.style.opacity = .5; return; }
+
+    box.innerHTML = '<p class="text-xs text-gray-400">Calculating…</p>';
+    try {
+      const preview = await callAPI(`admin/bookings/${venueUpgradeState.bookingId}/upgrade-preview?newGuestCount=${newGuestCount}`, null, 'GET');
+      let warnings = '';
+      if (!preview.dayOfWeekOk) warnings += `<div class="text-amber-600 mb-1">⚠️ This party's date isn't normally a Whole Venue Hire day (Sun/Mon/Tue) — you can still proceed, but double check this is intended.</div>`;
+      if (preview.deadlineTooClose) warnings += `<div class="text-amber-600 mb-1">⚠️ This party is close to a week away — the payment deadline may already be too tight.</div>`;
+      box.innerHTML = `
+        <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-sm space-y-1">
+          <div class="flex justify-between"><span>Per-child rate</span><span class="font-semibold">$${preview.overageRate.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>New total</span><span class="font-semibold">$${preview.newTotalAmount.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>Already paid</span><span class="font-semibold">$${preview.amountPaid.toFixed(2)}</span></div>
+          <div class="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1"><span class="font-bold">Amount due</span><span class="font-bold text-slate-800 dark:text-white">$${preview.delta.toFixed(2)}</span></div>
+        </div>
+        <div class="text-xs mt-2">${warnings}</div>`;
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = 1;
+    } catch (err) {
+      box.innerHTML = `<p class="text-red-500 text-sm">${escapeHtml(err.message)}</p>`;
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = .5;
+    }
+  }, 350);
+}
+
+async function doConfirmVenueUpgrade() {
+  const newGuestCount = parseInt(document.getElementById('vu_newGuestCount').value, 10);
+  const errEl = document.getElementById('venueUpgradeError');
+  errEl.classList.add('hidden');
   try {
-    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, {}, 'POST');
-    alert('✅ Confirmation email resent.');
+    await callAPI(`admin/bookings/${venueUpgradeState.bookingId}/upgrade-to-venue`, { newGuestCount }, 'POST');
+    closeVenueUpgradeModal();
+    closeBookingModal();
+    alert('✅ Booking upgraded to Whole Venue Hire. Use "Send Payment Link" on the booking to email the customer.');
+    await loadBookings();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function sendUpgradePaymentLink(bookingId, bookingRef) {
+  if (!confirm(`Send the whole-venue-upgrade update email (with payment link, if payment is still due) for booking ${bookingRef}? This invalidates any payment link sent previously.`)) return;
+  try {
+    const result = await callAPI(`admin/bookings/${bookingId}/send-upgrade-payment-link`, {}, 'POST');
+    alert(result.amountDue > 0 ? `✅ Update email sent — $${result.amountDue.toFixed(2)} due.` : '✅ Update email sent — no payment required.');
+  } catch (err) {
+    alert('Failed to send: ' + err.message);
+  }
+}
+
+// Replaces the old bare confirm() dialog: a plain confirm() can't offer the
+// "include admin notes" checkbox, so this is a small modal instead. The
+// checkbox is a per-send choice (not a persisted booking field) — ticked
+// fresh each time so a note added for one resend can't silently leak into
+// some later, unrelated resend nobody meant to include it in. Looks the
+// booking up from allBookings by id (rather than taking bookingRef/
+// adminNotes as onclick-attribute arguments) since admin notes are
+// arbitrary free text — unsafe to interpolate directly into an inline
+// onclick="..." attribute the way a generated booking ref safely can be.
+function openResendConfirmationModal(bookingId) {
+  const booking = allBookings.find(b => b.id === bookingId);
+  if (!booking) return;
+  const bookingRef = booking.bookingRef;
+  const adminNotes = booking.adminNotes || '';
+  const modal = document.getElementById('resendConfirmationModal');
+  const content = document.getElementById('resendConfirmationContent');
+  const hasNotes = FEATURE_NOTES_EMAIL_TOGGLE_ENABLED && !!(adminNotes && adminNotes.trim());
+
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Resend the confirmation email for booking <strong>${escapeHtml(bookingRef)}</strong>?</p>
+    ${hasNotes ? `
+    <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer mb-4">
+      <input type="checkbox" id="rc_includeNotes" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+      <span class="text-sm">Include admin notes under a <strong>NOTES:</strong> heading in this email</span>
+    </label>
+    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-xs text-gray-500 whitespace-pre-wrap mb-4">${escapeHtml(adminNotes)}</div>
+    ` : ''}
+    <div id="resendConfirmationError" class="text-red-500 text-sm hidden mb-3"></div>
+    <div class="flex gap-3">
+      <button onclick="closeResendConfirmationModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+      <button onclick="doResendConfirmationEmail('${bookingId}', '${escapeHtml(bookingRef)}')" class="btn-primary flex-1 py-3">Resend</button>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+function closeResendConfirmationModal() {
+  document.getElementById('resendConfirmationModal').style.display = 'none';
+}
+
+async function resendMagicLink(bookingId, bookingRef) {
+  if (!confirm(`Resend the account setup link for booking ${bookingRef}? This invalidates any link sent previously.`)) return;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-magic-link`, {}, 'POST');
+    alert('✅ Account setup link resent.');
   } catch (err) {
     alert('Failed to resend: ' + err.message);
+  }
+}
+
+async function doResendConfirmationEmail(bookingId, bookingRef) {
+  const includeNotes = document.getElementById('rc_includeNotes')?.checked || false;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, { includeNotes }, 'POST');
+    closeResendConfirmationModal();
+    alert('✅ Confirmation email resent.');
+  } catch (err) {
+    const errEl = document.getElementById('resendConfirmationError');
+    if (errEl) { errEl.textContent = 'Failed to resend: ' + err.message; errEl.classList.remove('hidden'); }
+    else alert('Failed to resend: ' + err.message);
   }
 }
 

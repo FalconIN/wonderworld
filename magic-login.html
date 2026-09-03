@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Set Up Your Account — Wonder World Westgate</title>
+<meta name="description" content="Set up online access for your Wonder World Westgate booking." />
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tailwind.css?v=2" />
+<link rel="stylesheet" href="styles.css?v=5" />
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" defer></script>
+
+</head>
+<body class="min-h-screen flex flex-col font-body" style="background:#EFF6FF;">
+
+<!-- Navbar -->
+<nav class="bg-white border-b border-gray-100">
+  <div class="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2">
+      <img src="wwmascot-64.png?v=3" alt="Wonder World" class="w-9 h-9 rounded-xl" />
+      <span class="font-display font-bold text-xl text-gray-900">Wonder World <span class="text-indigo-500">Westgate</span></span>
+    </a>
+    <a href="/login" class="text-sm text-gray-500 hover:text-indigo-500 transition-colors">← Back to sign in</a>
+  </div>
+</nav>
+
+<main class="flex-1 flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-md">
+
+    <div id="loadingState" class="text-center">
+      <div class="text-5xl mb-3">⏳</div>
+      <p class="text-gray-500">Checking your link...</p>
+    </div>
+
+    <div id="formState" class="hidden">
+      <div class="text-center mb-8">
+        <div class="text-5xl mb-3">🔑</div>
+        <h1 class="font-display font-bold text-3xl text-gray-900 mb-2">Set up your account</h1>
+        <p class="text-gray-500">for <strong id="magicEmail"></strong></p>
+      </div>
+
+      <div class="clay-card p-8">
+        <div class="space-y-3 mb-4">
+          <div>
+            <label class="lbl">Email</label>
+            <input class="field" type="email" id="magicNewEmail" />
+            <div class="text-xs text-gray-400 mt-1">Pre-filled from your booking — change it if you'd like to use a different one.</div>
+          </div>
+          <div><label class="lbl">Password</label><input class="field" type="password" id="magicPassword" placeholder="At least 8 characters" /></div>
+          <div><label class="lbl">Confirm Password</label><input class="field" type="password" id="magicConfirmPassword" placeholder="Re-enter your password" /></div>
+        </div>
+
+        <div id="magicMessage" class="text-sm text-center mb-3 hidden"></div>
+
+        <button onclick="submitSetup()" class="btn-primary w-full py-4" id="magicBtn">
+          <span id="magicBtnText">Set Up My Account</span>
+          <span id="magicBtnSpinner" class="hidden">
+            <svg class="animate-spin h-5 w-5 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div id="successState" class="hidden text-center">
+      <div class="text-5xl mb-3">✅</div>
+      <h1 class="font-display font-bold text-3xl text-gray-900 mb-2">You're all set!</h1>
+      <p class="text-gray-500 mb-6">Your account is ready — you can now manage your booking online.</p>
+      <a href="/" class="btn-primary inline-block py-4 px-8">Go to My Account →</a>
+    </div>
+
+    <div id="errorState" class="hidden text-center">
+      <div class="text-5xl mb-3">⚠️</div>
+      <h1 class="font-display font-bold text-3xl text-gray-900 mb-2">Link expired or invalid</h1>
+      <p class="text-gray-500 mb-6" id="errorDetail">This link is no longer valid — it may have already been used or expired.</p>
+      <a href="mailto:bookings@wonderworldwestgate.co.nz" class="btn-primary inline-block py-4 px-8">Contact Us →</a>
+    </div>
+
+  </div>
+</main>
+
+<script src="firebase.js" defer></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const magicToken = params.get('token');
+
+function showState(name) {
+  ['loadingState', 'formState', 'successState', 'errorState'].forEach(id => {
+    document.getElementById(id).classList.toggle('hidden', id !== name);
+  });
+}
+
+function showMsg(msg, isError = false) {
+  const el = document.getElementById('magicMessage');
+  el.textContent = msg;
+  el.className = `text-sm text-center mb-3 ${isError ? 'text-red-500' : 'text-teal-600'}`;
+  el.classList.remove('hidden');
+}
+
+function setLoading(on) {
+  document.getElementById('magicBtn').disabled = on;
+  document.getElementById('magicBtnText').classList.toggle('hidden', on);
+  document.getElementById('magicBtnSpinner').classList.toggle('hidden', !on);
+}
+
+let pendingEmailChange = null;
+
+async function init() {
+  if (!magicToken) {
+    document.getElementById('errorDetail').textContent = 'This link is missing or malformed. Please contact us for a new one.';
+    showState('errorState');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/magic-link/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: magicToken }),
+    });
+    if (!res.ok) { showState('errorState'); return; }
+    const { customToken, email, firstName } = await res.json();
+
+    // Exchanging the custom token establishes a real Firebase session —
+    // updatePassword()/verifyBeforeUpdateEmail() below both require being
+    // signed in, which this now satisfies.
+    await auth.signInWithCustomToken(customToken);
+
+    document.getElementById('magicEmail').textContent = email;
+    document.getElementById('magicNewEmail').value = email;
+    showState('formState');
+  } catch (err) {
+    showState('errorState');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+async function submitSetup() {
+  const newEmail = document.getElementById('magicNewEmail').value.trim().toLowerCase();
+  const pass     = document.getElementById('magicPassword').value;
+  const confirm  = document.getElementById('magicConfirmPassword').value;
+
+  if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { showMsg('Please enter a valid email address.', true); return; }
+  if (pass.length < 8) { showMsg('Password must be at least 8 characters.', true); return; }
+  if (pass !== confirm) { showMsg('Passwords do not match.', true); return; }
+
+  setLoading(true);
+  try {
+    const user = auth.currentUser;
+    if (!user) throw { code: 'auth/no-session' };
+
+    await user.updatePassword(pass);
+    if (newEmail !== user.email) {
+      // Requires re-verification before it takes effect — the account keeps
+      // its original (booking-derived) email as the source of truth until
+      // the customer confirms the new one, rather than silently swapping to
+      // an unverified address.
+      await user.verifyBeforeUpdateEmail(newEmail);
+    }
+
+    const idToken = await user.getIdToken();
+    await fetch('/api/auth/magic-link/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+    }).catch(() => {});
+
+    showState('successState');
+  } catch (err) {
+    const msgs = {
+      'auth/weak-password':        'Password must be at least 8 characters.',
+      'auth/requires-recent-login': 'For security, please contact us and we’ll send you a fresh link to finish setting up your account.',
+      'auth/no-session':           'Your session expired — please contact us for a new link.',
+    };
+    showMsg(msgs[err.code] || err.message || 'Could not finish setting up your account. Please try again.', true);
+  } finally {
+    setLoading(false);
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') submitSetup(); });
+</script>
+</body>
+</html>

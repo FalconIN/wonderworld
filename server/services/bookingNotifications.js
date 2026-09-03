@@ -22,6 +22,10 @@ async function sendBookingConfirmation({
   firstName, lastName, roomName,
   partyDate, partyTime, guestCount, foodChoice, addonsSummary, totalAmount,
   cateringChoice, noAlcoholAck,
+  // Set only for a manually-created booking whose premade account can still
+  // be claimed (see server/services/magicLink.js) — renders an extra CTA
+  // block in the email. Absent/null for every other caller of this function.
+  magicLinkUrl,
 }) {
   const results = { email: null, sms: null };
 
@@ -67,6 +71,13 @@ async function sendBookingConfirmation({
           </div>
 
           <p style="font-size:15px;margin-bottom:20px">Hi <strong>${firstName}</strong>! Your party is all locked in. Here's your summary:</p>
+
+          ${magicLinkUrl ? `
+          <div style="text-align:center;margin-bottom:24px">
+            <p style="font-size:14px;margin-bottom:12px">Set up online access to manage this booking, view receipts, and make changes:</p>
+            <a href="${magicLinkUrl}" style="display:inline-block;background:linear-gradient(135deg,#F97316,#EA6000);color:white;font-weight:700;font-size:15px;text-decoration:none;border-radius:14px;padding:14px 32px">Set Up My Account →</a>
+            <p style="font-size:12px;color:#9CA3AF;margin-top:10px">This link expires in 24 hours.</p>
+          </div>` : ''}
 
           <div style="background:#F9FAFB;border-radius:16px;padding:24px;margin-bottom:20px">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9CA3AF;margin-bottom:6px">Booking Reference</div>

@@ -91,6 +91,7 @@ app.use('/api/booking-sessions', bookingSessionsRouter);
 const cron = require('node-cron');
 const { fetchAndStoreReviews } = require('./services/googleReviewsSync');
 const { reconcileRecentOrphans } = require('./services/stripeReconcile');
+const { revertExpiredUpgrades } = require('./services/venueUpgradeExpiry');
 
 cron.schedule('0 3 * * *', () => {
   fetchAndStoreReviews().catch(err => console.error('Google reviews sync failed:', err.message));
@@ -106,6 +107,14 @@ cron.schedule('*/30 * * * *', () => {
   reconcileRecentOrphans().catch(err => console.error('Stripe backstop reconciliation failed:', err.message));
 });
 
+// Reverts a whole-venue-hire "extra kids" upgrade if its payment deadline
+// (1 week before the party) passes unpaid — see server/services/
+// venueUpgradeExpiry.js. Runs every 15 min; the deadline itself is a full
+// week out, so this granularity is more than tight enough.
+cron.schedule('*/15 * * * *', () => {
+  revertExpiredUpgrades().catch(err => console.error('Venue-upgrade expiry revert failed:', err.message));
+});
+
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -118,6 +127,8 @@ app.get('/api/config', (req, res) => res.json(clientConfig()));
 app.get(['/', '/index.html'],       serveHtml('index.html'));
 app.get(['/login', '/login.html'],   serveHtml('login.html'));
 app.get(['/reset-password', '/reset-password.html'], serveHtml('reset-password.html'));
+app.get(['/magic-login', '/magic-login.html'], serveHtml('magic-login.html'));
+app.get(['/pay-upgrade', '/pay-upgrade.html'], serveHtml('pay-upgrade.html'));
 app.get('/admin.html', (req, res) => res.redirect(301, '/admin'));
 app.get('/admin',      serveHtml('admin.html'));
 app.get(['/prices', '/prices.html'], serveHtml('prices.html'));

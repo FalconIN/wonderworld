@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS public.users (
   phone             text,
   stripe_customer_id text,
   is_admin          boolean     NOT NULL DEFAULT false,
+  -- True for a Postgres-only "premade" account created by admin manual-
+  -- booking (id minted to match a real Firebase UID, but never actually
+  -- signed into) — see server/services/magicLink.js.
+  is_placeholder    boolean     NOT NULL DEFAULT false,
   created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
@@ -115,6 +119,13 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   -- food/menu purchases. Never decremented automatically; staff track
   -- redemption manually (admin_notes) since there's no POS integration.
   food_credit_amount       numeric(10,2) NOT NULL DEFAULT 0,
+  upgrade_status           text        CHECK (upgrade_status IN ('pending_payment', 'completed')),
+  upgrade_overage_rate     numeric(10,2),
+  upgrade_deadline_at      timestamptz,
+  pre_upgrade_party_room_id uuid       REFERENCES public.party_rooms(id),
+  pre_upgrade_guest_count  integer,
+  pre_upgrade_base_amount  numeric(10,2),
+  pre_upgrade_total_amount numeric(10,2),
   created_at               timestamptz NOT NULL DEFAULT now(),
   updated_at               timestamptz NOT NULL DEFAULT now()
 );
@@ -240,6 +251,11 @@ CREATE TABLE IF NOT EXISTS public.email_logs (
   recipient  text        NOT NULL,
   resend_id  text,
   status     text        NOT NULL DEFAULT 'sent',
+  -- Which admin triggered this send, for sends an admin explicitly kicked
+  -- off (resend-confirmation, magic-link resend, venue-upgrade payment
+  -- link). NULL for customer/system-triggered sends (original confirmation,
+  -- password reset) — there's no admin actor for those.
+  sent_by_admin_id text   REFERENCES public.users(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -259,7 +275,7 @@ CREATE TABLE IF NOT EXISTS public.booking_edits (
   id                 uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id         uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   changed_by         text          NOT NULL REFERENCES public.users(id),
-  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit', 'room_change', 'reduce_kids')),
+  change_type        text          NOT NULL CHECK (change_type IN ('add_kids', 'add_addons', 'both', 'reschedule', 'admin_edit', 'room_change', 'reduce_kids', 'venue_upgrade')),
   delta_amount       numeric(10,2) NOT NULL DEFAULT 0,
   new_guest_count    integer,
   new_food_choice    text,
@@ -300,3 +316,40 @@ CREATE TABLE IF NOT EXISTS public.site_rating (
   review_count integer      NOT NULL DEFAULT 0,
   updated_at   timestamptz  NOT NULL DEFAULT now()
 );
+
+-- ── 11. MAGIC_LINK_TOKENS ────────────────────────────────────
+-- Magic-link login for manually-created bookings. See
+-- server/services/magicLink.js and migration-magic-link-tokens.sql.
+CREATE TABLE IF NOT EXISTS public.magic_link_tokens (
+  id                   uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id              text        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token_hash           text        NOT NULL UNIQUE,
+  expires_at           timestamptz NOT NULL,
+  used_at              timestamptz,
+  invalidated_at       timestamptz,
+  created_by_admin_id  text        NOT NULL REFERENCES public.users(id),
+  created_at           timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_magic_link_tokens_user ON public.magic_link_tokens (user_id);
+
+-- ── 12. BOOKING_PAYMENT_LINKS ────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.booking_payment_links (
+  id                   uuid          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id           uuid          NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
+  token_hash           text          NOT NULL UNIQUE,
+  amount_cents         integer       NOT NULL,
+  base_amount_cents    integer       NOT NULL,
+  additional_addons    jsonb         NOT NULL DEFAULT '{}'::jsonb,
+  additional_addons_summary text,
+  stripe_payment_intent_id text,
+  paid_at              timestamptz,
+  invalidated_at       timestamptz,
+  deadline_at          timestamptz   NOT NULL,
+  created_by_admin_id  text          NOT NULL REFERENCES public.users(id),
+  created_at           timestamptz   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_booking_payment_links_booking ON public.booking_payment_links (booking_id);
+
+INSERT INTO public.users (id, first_name, last_name, email)
+VALUES ('system', 'System', '', 'system@wonderworldwestgate.co.nz')
+ON CONFLICT (id) DO NOTHING;

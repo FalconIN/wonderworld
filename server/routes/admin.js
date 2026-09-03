@@ -2,13 +2,25 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin } = require('../middleware/auth'); // also ensures firebase-admin is initialised (idempotent)
+const admin   = require('firebase-admin');
 const { fetchAndStoreReviews } = require('../services/googleReviewsSync');
 const { reclaimableHoldClause } = require('../services/holdExpiry');
-const { assertBookingAllowedOnDate } = require('../services/bookingRules');
+const { assertBookingAllowedOnDate, dayOfWeekFromDateStr } = require('../services/bookingRules');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
+const { escapeHtml } = require('../utils/escapeHtml');
+const { createMagicLinkToken, sendMagicLinkEmail, buildMagicLinkUrl } = require('../services/magicLink');
+const { sendVenueUpgradePaymentLinkEmail, sendVenueUpgradeNotice } = require('../services/venueUpgradeNotifications');
+const crypto = require('crypto');
 
 const TWILIO_CONFIGURED = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+
+// Paused per user request while the venue-upgrade feature (unaffected by
+// these) gets dialed in first. Flip to true + bump admin.js's cache-busting
+// version + reload PM2 to go live — everything's already built, this is the
+// only switch.
+const FEATURE_MAGIC_LINK_ENABLED = true;
+const FEATURE_NOTES_EMAIL_TOGGLE_ENABLED = true;
 
 // All routes require admin
 router.use(requireAdmin);
@@ -92,9 +104,14 @@ router.get('/bookings', async (req, res) => {
                     b.base_amount as "baseAmount", b.addons_amount as "addonsAmount",
                     b.admin_notes as "adminNotes",
                     b.food_credit_amount as "foodCreditAmount",
+                    b.upgrade_status as "upgradeStatus",
+                    b.upgrade_deadline_at as "upgradeDeadlineAt",
+                    b.upgrade_overage_rate as "upgradeOverageRate",
                     b.created_at as "createdAt",
                     r.name as "roomName", r.emoji as "roomEmoji",
+                    r.pricing_model as "roomPricingModel",
                     u.first_name as "firstName", u.last_name as "lastName",
+                    u.is_placeholder as "userIsPlaceholder",
                     COALESCE(pay.amount_paid, 0) as "amountPaid",
                     EXTRACT(EPOCH FROM (
                       now() - (b.party_date + CASE b.party_time
@@ -167,9 +184,14 @@ router.get('/bookings/:id', async (req, res) => {
               b.admin_notes as "adminNotes",
               b.catering_choice as "cateringChoice", b.no_alcohol_ack as "noAlcoholAck",
               b.food_credit_amount as "foodCreditAmount",
+              b.upgrade_status as "upgradeStatus",
+              b.upgrade_deadline_at as "upgradeDeadlineAt",
+              b.upgrade_overage_rate as "upgradeOverageRate",
               b.created_at as "createdAt",
               r.name as "roomName", r.emoji as "roomEmoji",
+              r.pricing_model as "roomPricingModel",
               u.first_name as "firstName", u.last_name as "lastName",
+              u.is_placeholder as "userIsPlaceholder",
               COALESCE(pay.amount_paid, 0) as "amountPaid"
        FROM bookings b
        JOIN party_rooms r ON r.id = b.party_room_id
@@ -281,7 +303,7 @@ router.patch('/bookings/:id', async (req, res) => {
     const newStatus = allowedStatuses.includes(bookingStatus) ? bookingStatus : null;
 
     const baseParams = [guestCount, foodChoice, allergyNotes || '', addonsSummary || '', addonsAmount || 0,
-       baseAmount, totalAmount, email || '', phone || null, adminNotes || ''];
+       baseAmount, totalAmount, email || '', phone || null, (adminNotes || '').slice(0, 2000)];
     const statusClause = newStatus ? `status = $${baseParams.length + 1},` : '';
     if (newStatus) baseParams.push(newStatus);
     baseParams.push(req.params.id);
@@ -381,6 +403,17 @@ router.patch('/bookings/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK');
+    // Setting bookingStatus to 'confirmed' hits uq_bookings_confirmed_slot
+    // if another booking already holds that exact (room, date, time) as
+    // confirmed — a real, expected case (e.g. a hand-reconstructed payment
+    // record for a slot that was legitimately resold before it could be
+    // written), not a server error. Surface it as a clear 400 instead of the
+    // raw Postgres driver message leaking through as a scary 500.
+    if (err.code === '23505' && err.constraint === 'uq_bookings_confirmed_slot') {
+      return res.status(400).json({
+        error: 'Another booking already holds this exact room, date and time as confirmed — this one can\'t also be confirmed without double-booking the slot. Leave it as pending/cancelled, or resolve the conflicting booking first.',
+      });
+    }
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -796,22 +829,75 @@ router.post('/bookings/manual', async (req, res) => {
     // user_id), this placeholder's name is shared across every blank-email
     // booking — if you type different names on two different blank-email
     // bookings, only the most recent one will display for both.
+    //
+    // Magic-link login (see server/services/magicLink.js) only makes sense
+    // for a booking with its own distinct email — the shared ADMIN_PLACEHOLDER_EMAIL
+    // bucket below is one account backing many unrelated customers'
+    // bookings, so a login link into it would hand one customer access to
+    // every other blank-email customer's bookings. shouldSendMagicLink stays
+    // false for that entire branch, unconditionally.
     let userId;
+    let shouldSendMagicLink = false;
     if (resolvedEmail) {
-      const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [resolvedEmail]);
+      const { rows: existing } = await client.query(`SELECT id, is_placeholder as "isPlaceholder" FROM users WHERE email = $1`, [resolvedEmail]);
       if (existing[0]) {
         userId = existing[0].id;
         await client.query(
           `UPDATE users SET first_name=$1, last_name=$2, phone=COALESCE($3,phone), updated_at=now() WHERE id=$4`,
           [resolvedFirstName, resolvedLastName, phone || null, userId]
         );
-      } else {
+        // A real (already-claimed) account needs no magic link — they
+        // already know how to sign in. A still-unclaimed placeholder from an
+        // earlier manual booking can have one (re)issued.
+        shouldSendMagicLink = FEATURE_MAGIC_LINK_ENABLED && existing[0].isPlaceholder === true;
+      } else if (!FEATURE_MAGIC_LINK_ENABLED) {
+        // Feature paused — plain Postgres-only placeholder row, same as
+        // before this feature existed. No Firebase identity, no magic link.
         const newId = require('crypto').randomUUID();
         await client.query(
           `INSERT INTO users (id, first_name, last_name, email, phone) VALUES ($1,$2,$3,$4,$5)`,
           [newId, resolvedFirstName, resolvedLastName, resolvedEmail, phone || null]
         );
         userId = newId;
+      } else {
+        const newId = require('crypto').randomUUID();
+        // Mint the Firebase Auth identity with the SAME id as the Postgres
+        // row up front, rather than a Postgres-only row with no way to ever
+        // log in (the old behavior). This means the "premade account" IS
+        // the eventual real Firebase account from creation — the magic link
+        // just signs into it — so the existing claimPlaceholderBookings()
+        // merge-on-signup logic (server/routes/bookings.js) never needs to
+        // run for bookings created this way; it stays in place only as a
+        // safety net for placeholder rows that predate this feature.
+        try {
+          await admin.auth().createUser({ uid: newId, email: resolvedEmail, emailVerified: false });
+          await client.query(
+            `INSERT INTO users (id, first_name, last_name, email, phone, is_placeholder) VALUES ($1,$2,$3,$4,$5,true)`,
+            [newId, resolvedFirstName, resolvedLastName, resolvedEmail, phone || null]
+          );
+          userId = newId;
+          shouldSendMagicLink = true;
+        } catch (fbErr) {
+          if (fbErr.code === 'auth/email-already-exists') {
+            // Firebase already has a real account for this email under some
+            // other uid than any Postgres row we found (e.g. a customer
+            // signed up but their POST /users/profile upsert never landed —
+            // see ensureUserRow's comment on that race). We don't know their
+            // real uid here, so fall back to a Postgres-only row exactly as
+            // before rather than failing the whole booking; it stays
+            // claimable later via claimPlaceholderBookings() once they log
+            // in normally. No magic link — we have no Firebase identity to
+            // send one for.
+            console.error(`Manual booking: Firebase already has a user for ${resolvedEmail} under a different uid; falling back to a Postgres-only placeholder row.`);
+            await client.query(
+              `INSERT INTO users (id, first_name, last_name, email, phone, is_placeholder) VALUES ($1,$2,$3,$4,$5,true)`,
+              [newId, resolvedFirstName, resolvedLastName, resolvedEmail, phone || null]
+            );
+            userId = newId;
+          } else {
+            throw fbErr;
+          }
+        }
       }
     } else {
       const { rows: existing } = await client.query(`SELECT id FROM users WHERE email = $1`, [ADMIN_PLACEHOLDER_EMAIL]);
@@ -841,7 +927,7 @@ router.post('/bookings/manual', async (req, res) => {
        RETURNING id`,
       [userId, roomId, bookingRef, date, time, guests, foodChoice, notes || '',
        addonsSummary || '', baseAmount, addonsAmount || 0, totalAmount,
-       status, resolvedEmail || ADMIN_PLACEHOLDER_EMAIL, phone || null, adminNotes || '',
+       status, resolvedEmail || ADMIN_PLACEHOLDER_EMAIL, phone || null, (adminNotes || '').slice(0, 2000),
        room.pricingModel === 'flat' ? cateringChoice : null,
        room.pricingModel === 'flat' ? !!noAlcoholAck : false]
     );
@@ -881,14 +967,26 @@ router.post('/bookings/manual', async (req, res) => {
     // server-side, same as the POLi return handler does. Only for bookings
     // actually confirmed (a manual booking can be entered as 'pending').
     if (status === 'confirmed') {
-      sendBookingConfirmation({
-        bookingRef, bookingId: booking.id, email: resolvedEmail || null, phone: phone || null,
-        firstName: resolvedFirstName, lastName: resolvedLastName, roomName: room.name,
-        partyDate: date, partyTime: time, guestCount: guests, foodChoice,
-        addonsSummary, totalAmount,
-        cateringChoice: room.pricingModel === 'flat' ? cateringChoice : null,
-        noAlcoholAck: room.pricingModel === 'flat' ? !!noAlcoholAck : false,
-      }).catch(err => console.error('Manual booking confirmation notification failed:', err));
+      (async () => {
+        let magicLinkUrl = null;
+        if (shouldSendMagicLink) {
+          try {
+            const rawToken = await createMagicLinkToken({ userId, adminUid: req.user.uid });
+            magicLinkUrl = buildMagicLinkUrl(rawToken);
+          } catch (err) {
+            console.error('Magic-link token creation failed for manual booking:', err);
+          }
+        }
+        await sendBookingConfirmation({
+          bookingRef, bookingId: booking.id, email: resolvedEmail || null, phone: phone || null,
+          firstName: resolvedFirstName, lastName: resolvedLastName, roomName: room.name,
+          partyDate: date, partyTime: time, guestCount: guests, foodChoice,
+          addonsSummary, totalAmount,
+          cateringChoice: room.pricingModel === 'flat' ? cateringChoice : null,
+          noAlcoholAck: room.pricingModel === 'flat' ? !!noAlcoholAck : false,
+          magicLinkUrl,
+        });
+      })().catch(err => console.error('Manual booking confirmation notification failed:', err));
     }
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1078,6 +1176,11 @@ router.get('/month-revenue', async (req, res) => {
 
 // POST /api/admin/bookings/:id/resend-confirmation
 router.post('/bookings/:id/resend-confirmation', async (req, res) => {
+  // includeNotes is a per-send choice, not a persisted flag on the booking —
+  // an admin ticks it fresh each time they resend, so a note added for one
+  // resend can't silently leak into some unrelated later resend that nobody
+  // meant to include it in.
+  const includeNotes = FEATURE_NOTES_EMAIL_TOGGLE_ENABLED && req.body?.includeNotes === true;
   try {
     const { rows } = await pool.query(
       `SELECT b.id, b.booking_ref as "bookingRef", b.status,
@@ -1085,6 +1188,7 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
               b.guest_count as "guestCount", b.food_choice as "foodChoice",
               b.addons_summary as "addonsSummary", b.total_amount as "totalAmount",
               b.contact_email as "contactEmail", b.contact_phone as "contactPhone",
+              b.admin_notes as "adminNotes",
               r.name as "roomName",
               u.first_name as "firstName", u.last_name as "lastName"
        FROM bookings b
@@ -1120,6 +1224,10 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
               <p style="color:rgba(255,255,255,0.85);margin:0;font-size:14px">Wonder World Westgate</p>
             </div>
             <p style="font-size:15px;margin-bottom:20px">Hi <strong>${b.firstName || 'there'}</strong>! Your party is all locked in. Here's your summary:</p>
+            ${includeNotes && b.adminNotes ? `
+            <div style="background:#FEE2E2;border:2px solid #FCA5A5;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;color:#111827">
+              <strong style="display:block;margin-bottom:4px">NOTES:</strong>${escapeHtml(b.adminNotes).replace(/\n/g, '<br>')}
+            </div>` : ''}
             <div style="background:#F9FAFB;border-radius:16px;padding:24px;margin-bottom:20px">
               <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#9CA3AF;margin-bottom:6px">Booking Reference</div>
               <div style="font-size:22px;font-weight:700;color:#4F46E5;margin-bottom:20px">${b.bookingRef}</div>
@@ -1146,8 +1254,8 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
       if (error) throw new Error(error.message);
       results.email = 'sent';
       await pool.query(
-        'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status) VALUES ($1, $2, $3, $4, $5)',
-        [b.id, 'resend_confirmation', b.contactEmail, data?.id || null, 'sent']
+        'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status, sent_by_admin_id) VALUES ($1, $2, $3, $4, $5, $6)',
+        [b.id, 'resend_confirmation', b.contactEmail, data?.id || null, 'sent', req.user.uid]
       );
     } catch (err) {
       console.error('Resend confirmation email failed:', err.message);
@@ -1185,6 +1293,47 @@ router.post('/bookings/:id/resend-confirmation', async (req, res) => {
     }
 
     res.json({ ok: true, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/bookings/:id/resend-magic-link
+// Always invalidates any outstanding unused token for this user and issues
+// a brand new one (see createMagicLinkToken) — never extends/reuses the old
+// one, so a leaked-then-expired link can't silently become valid again.
+router.post('/bookings/:id/resend-magic-link', async (req, res) => {
+  if (!FEATURE_MAGIC_LINK_ENABLED) {
+    return res.status(403).json({ error: 'Magic-link login is currently disabled.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT b.booking_ref as "bookingRef", b.contact_email as "contactEmail",
+              b.user_id as "userId", u.first_name as "firstName",
+              u.is_placeholder as "isPlaceholder"
+       FROM bookings b
+       LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.id = $1`,
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Booking not found' });
+    const b = rows[0];
+    if (!b.isPlaceholder) {
+      return res.status(400).json({ error: 'This booking has no online-access account to resend a link for.' });
+    }
+    if (!b.contactEmail) {
+      return res.status(400).json({ error: 'This booking has no email on file.' });
+    }
+
+    const rawToken = await createMagicLinkToken({ userId: b.userId, adminUid: req.user.uid });
+    const data = await sendMagicLinkEmail({
+      email: b.contactEmail, firstName: b.firstName, rawToken, bookingRef: b.bookingRef,
+    });
+    await pool.query(
+      'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status, sent_by_admin_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      [req.params.id, 'magic_link', b.contactEmail, data?.id || null, 'sent', req.user.uid]
+    );
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1547,6 +1696,328 @@ router.post('/bookings/:id/change-room', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     if (client) client.release();
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Extra-kids whole-venue-hire upgrade (24+ kids)
+// ─────────────────────────────────────────────────────────────
+const WHOLE_VENUE_UPGRADE_MIN_KIDS = 24;
+
+async function loadWholeVenueRoom(queryable) {
+  const { rows: [room] } = await queryable.query(
+    `SELECT id, name, min_guests as "minGuests", max_guests as "maxGuests",
+            pricing_model as "pricingModel", flat_price as "flatPrice",
+            allowed_days_of_week as "allowedDaysOfWeek"
+     FROM party_rooms WHERE slug = 'whole-venue' AND is_active = true`
+  );
+  if (!room) throw new Error('Whole Venue Hire room is not configured or is inactive.');
+  return room;
+}
+
+// GET /api/admin/bookings/:id/upgrade-preview?newGuestCount=N — read-only,
+// lets the admin UI show the price breakdown before committing to
+// /upgrade-to-venue.
+router.get('/bookings/:id/upgrade-preview', async (req, res) => {
+  const newGuestCount = parseInt(req.query.newGuestCount, 10);
+  if (!newGuestCount || newGuestCount < WHOLE_VENUE_UPGRADE_MIN_KIDS) {
+    return res.status(400).json({ error: `New guest count must be at least ${WHOLE_VENUE_UPGRADE_MIN_KIDS}.` });
+  }
+  try {
+    const { rows: [booking] } = await pool.query(
+      `SELECT b.id, b.status, b.upgrade_status as "upgradeStatus", b.guest_count as "guestCount",
+              b.party_room_id as "partyRoomId", b.addons_amount as "addonsAmount",
+              to_char(b.party_date, 'YYYY-MM-DD') as "partyDate",
+              r.pricing_model as "pricingModel", r.base_price_per_child as "basePricePerChild",
+              COALESCE(pay.amount_paid, 0) as "amountPaid"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN (
+         SELECT booking_id, SUM(amount) FILTER (WHERE status = 'succeeded') as amount_paid
+         FROM payments GROUP BY booking_id
+       ) pay ON pay.booking_id = b.id
+       WHERE b.id = $1`,
+      [req.params.id]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (booking.status !== 'confirmed') return res.status(400).json({ error: 'Only confirmed bookings can be upgraded.' });
+    if (booking.upgradeStatus) return res.status(400).json({ error: 'This booking has already been upgraded.' });
+    if (booking.pricingModel !== 'per_child') return res.status(400).json({ error: 'This booking is not a per-child room — cannot compute an overage rate.' });
+    if (newGuestCount <= booking.guestCount) return res.status(400).json({ error: 'New guest count must be greater than the current guest count.' });
+
+    const wholeVenueRoom = await loadWholeVenueRoom(pool);
+    if (wholeVenueRoom.id === booking.partyRoomId) return res.status(400).json({ error: 'This booking is already Whole Venue Hire.' });
+    if (newGuestCount > wholeVenueRoom.maxGuests) {
+      return res.status(400).json({ error: `Whole Venue Hire fits at most ${wholeVenueRoom.maxGuests} guests.` });
+    }
+
+    const overageRate = parseFloat(booking.basePricePerChild);
+    const newBaseAmount = overageRate * newGuestCount;
+    const newTotalAmount = newBaseAmount + parseFloat(booking.addonsAmount || 0);
+    const amountPaid = parseFloat(booking.amountPaid) || 0;
+    const delta = Math.max(0, newTotalAmount - amountPaid);
+
+    const dow = dayOfWeekFromDateStr(booking.partyDate);
+    const dayOfWeekOk = !Array.isArray(wholeVenueRoom.allowedDaysOfWeek)
+      || wholeVenueRoom.allowedDaysOfWeek.length === 0
+      || wholeVenueRoom.allowedDaysOfWeek.includes(dow);
+
+    // Coarse client-side-timezone-agnostic check — the authoritative check
+    // (in Postgres, against NZ wall-clock time) happens again in
+    // /upgrade-to-venue itself; this is just for the admin UI's warning.
+    const [y, m, d] = booking.partyDate.split('-').map(Number);
+    const deadlineMs = Date.UTC(y, m - 1, d - 7);
+    const deadlineTooClose = deadlineMs <= Date.now();
+
+    res.json({
+      overageRate, newBaseAmount, newTotalAmount, amountPaid, delta,
+      wholeVenueRoomId: wholeVenueRoom.id, wholeVenueRoomName: wholeVenueRoom.name,
+      dayOfWeekOk, deadlineTooClose,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/bookings/:id/upgrade-to-venue
+// Converts a confirmed per-child-room booking to Whole Venue Hire for 24+
+// kids: switches pricing to per-child (at the ORIGINAL room's rate — the
+// user's own decision, since whole-venue itself has no per-child rate
+// stored), holds the original room/slot for a possible revert, and marks
+// the booking upgrade_status='pending_payment' (or 'completed' if whatever
+// was already paid happens to already cover the new total). Sending the
+// customer an email is a deliberately separate action — see
+// /send-upgrade-payment-link — so an admin iterating on the guest count a
+// few times before finalizing doesn't spam multiple emails/payment links.
+router.post('/bookings/:id/upgrade-to-venue', async (req, res) => {
+  const newGuestCount = parseInt(req.body.newGuestCount, 10);
+  if (!newGuestCount || newGuestCount < WHOLE_VENUE_UPGRADE_MIN_KIDS) {
+    return res.status(400).json({ error: `New guest count must be at least ${WHOLE_VENUE_UPGRADE_MIN_KIDS}.` });
+  }
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const { rows: [booking] } = await client.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.status, b.upgrade_status as "upgradeStatus",
+              b.guest_count as "guestCount", b.party_time, b.party_room_id,
+              b.base_amount as "baseAmount", b.addons_amount as "addonsAmount", b.total_amount as "totalAmount",
+              b.user_id,
+              to_char(b.party_date, 'YYYY-MM-DD') as party_date,
+              r.pricing_model as "pricingModel", r.base_price_per_child as "basePricePerChild"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       WHERE b.id = $1 AND b.status = 'confirmed'
+       FOR UPDATE OF b`,
+      [req.params.id]
+    );
+    if (!booking) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Booking not found or not confirmed.' }); }
+    if (booking.upgradeStatus) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'This booking has already been upgraded.' }); }
+    if (booking.pricingModel !== 'per_child') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'This booking is not a per-child room — cannot compute an overage rate.' }); }
+    if (newGuestCount <= booking.guestCount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'New guest count must be greater than the current guest count.' }); }
+
+    const wholeVenueRoom = await loadWholeVenueRoom(client);
+    if (wholeVenueRoom.id === booking.party_room_id) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'This booking is already Whole Venue Hire.' }); }
+    if (newGuestCount > wholeVenueRoom.maxGuests) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Whole Venue Hire fits at most ${wholeVenueRoom.maxGuests} guests.` });
+    }
+
+    // Day-of-week: whole-venue hire is normally Sun/Mon/Tue only
+    // (party_rooms.allowed_days_of_week), but an admin converting an
+    // already-existing booking can override that here — explicit product
+    // decision, since the booking's date was fixed long before this
+    // upgrade path existed and re-dating it isn't part of this flow.
+
+    // Deadline: "at least one week before the party date" per spec. If that
+    // window has already passed (the party is under 7 days out), the
+    // customer-facing promise this feature makes can't be honored — block
+    // it rather than create an already-expired deadline. Admins can still
+    // use the general PATCH editor by hand for a last-minute case like that.
+    const { rows: [deadlineCheck] } = await client.query(
+      `SELECT (party_date - INTERVAL '7 days') as "deadlineAt",
+              (party_date - INTERVAL '7 days') <= now() as "tooLate"
+       FROM bookings WHERE id = $1`,
+      [req.params.id]
+    );
+    if (deadlineCheck.tooLate) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "This party is less than a week away, so the whole-venue upgrade's payment deadline would already have passed. Use the general edit tools instead if you need to change this booking." });
+    }
+
+    const overageRate = parseFloat(booking.basePricePerChild);
+    const newBaseAmount = overageRate * newGuestCount;
+    const newTotalAmount = newBaseAmount + parseFloat(booking.addonsAmount || 0);
+
+    const { rows: [paidRow] } = await client.query(
+      `SELECT COALESCE(SUM(amount) FILTER (WHERE status = 'succeeded'), 0) as "amountPaid" FROM payments WHERE booking_id = $1`,
+      [req.params.id]
+    );
+    const amountPaid = parseFloat(paidRow.amountPaid) || 0;
+    const delta = Math.max(0, newTotalAmount - amountPaid);
+
+    const preRoomId = booking.party_room_id;
+
+    // Claim the whole-venue room's slot at the SAME date/time — same atomic
+    // claim-then-hold pattern as /change-room.
+    const { rows: claimed } = await client.query(
+      `INSERT INTO booking_timeslots (party_room_id, slot_date, slot_time, status, booking_id)
+       VALUES ($1, $2, $3, 'confirmed', $4)
+       ON CONFLICT (party_room_id, slot_date, slot_time) DO UPDATE
+         SET status = 'confirmed', booking_id = EXCLUDED.booking_id, held_by_user_id = NULL, hold_expires_at = NULL
+         WHERE booking_timeslots.status = 'released'
+            OR (booking_timeslots.status = 'held' AND ${reclaimableHoldClause('booking_timeslots')})
+       RETURNING id`,
+      [wholeVenueRoom.id, booking.party_date, booking.party_time, booking.id]
+    );
+    if (claimed.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Whole Venue Hire is already booked for this date and time.' });
+    }
+
+    // HOLD (not release) the original room's slot for the pending-payment
+    // window, rather than freeing it immediately — chosen so an automatic
+    // revert on a missed deadline is always possible without a "someone
+    // else already took it" race; costs a bit of inventory in the meantime.
+    // hold_expires_at is deliberately left NULL, NOT set to the payment
+    // deadline: reclaimableHoldClause() (used by every other hold/booking
+    // path — customer checkout, change-room, reschedule, manual booking)
+    // treats any 'held' row whose hold_expires_at has passed as fair game
+    // to reclaim, which here would mean the exact moment the payment
+    // deadline arrives, anyone could grab this slot out from under the
+    // pending revert — the opposite of what "hold it" is for. A NULL
+    // hold_expires_at makes `hold_expires_at < now()` evaluate to NULL
+    // (falsy) in that WHERE guard, so this row is never reclaimable through
+    // the generic path — only the webhook finalize (on payment) or the
+    // revert cron (on missed deadline) ever change its status again.
+    // booking_id also stays pointed at this booking (unlike an ordinary
+    // customer wizard hold, which has booking_id NULL) so those two are the
+    // only code paths that will ever touch it.
+    await client.query(
+      `UPDATE booking_timeslots
+       SET status = 'held', held_by_user_id = $1, hold_expires_at = NULL
+       WHERE booking_id = $2 AND id != $3`,
+      [booking.user_id, booking.id, claimed[0].id]
+    );
+
+    const newUpgradeStatus = delta > 0 ? 'pending_payment' : 'completed';
+    await client.query(
+      `UPDATE bookings SET
+         party_room_id = $1, guest_count = $2, base_amount = $3, total_amount = $4,
+         upgrade_status = $5, upgrade_overage_rate = $6,
+         upgrade_deadline_at = (party_date - INTERVAL '7 days'),
+         pre_upgrade_party_room_id = $7, pre_upgrade_guest_count = $8,
+         pre_upgrade_base_amount = $9, pre_upgrade_total_amount = $10,
+         updated_at = now()
+       WHERE id = $11`,
+      [wholeVenueRoom.id, newGuestCount, newBaseAmount, newTotalAmount,
+       newUpgradeStatus, overageRate,
+       preRoomId, booking.guestCount, booking.baseAmount, booking.totalAmount,
+       booking.id]
+    );
+
+    // Audit trail: who converted this booking and what it changed — directly
+    // affects what the customer is charged, so this is the dispute record.
+    await client.query(
+      `INSERT INTO booking_edits
+         (booking_id, changed_by, change_type, delta_amount, new_guest_count, old_party_room_id, new_party_room_id)
+       VALUES ($1, $2, 'venue_upgrade', $3, $4, $5, $6)`,
+      [booking.id, req.user.uid, delta, newGuestCount, preRoomId, wholeVenueRoom.id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({
+      ok: true, bookingRef: booking.bookingRef, newGuestCount, overageRate,
+      newTotalAmount, amountPaid, delta, upgradeStatus: newUpgradeStatus,
+    });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// POST /api/admin/bookings/:id/send-upgrade-payment-link — the explicit
+// "send update email" action, deliberately separate from /upgrade-to-venue
+// itself (see that route's comment). Recomputes the amount due fresh from
+// current payments every call rather than trusting any stored one-off
+// value, and invalidates any prior outstanding link first so there's only
+// ever one live payment link per booking.
+router.post('/bookings/:id/send-upgrade-payment-link', async (req, res) => {
+  try {
+    const { rows: [booking] } = await pool.query(
+      `SELECT b.id, b.booking_ref as "bookingRef", b.upgrade_status as "upgradeStatus",
+              b.guest_count as "guestCount", b.total_amount as "totalAmount",
+              b.upgrade_overage_rate as "overageRate", b.upgrade_deadline_at as "deadlineAt",
+              b.contact_email as "contactEmail",
+              u.first_name as "firstName",
+              r.name as "roomName"
+       FROM bookings b
+       JOIN party_rooms r ON r.id = b.party_room_id
+       LEFT JOIN users u ON u.id = b.user_id
+       WHERE b.id = $1`,
+      [req.params.id]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+    if (!booking.upgradeStatus) return res.status(400).json({ error: 'This booking has not been upgraded.' });
+    if (!booking.contactEmail) return res.status(400).json({ error: 'This booking has no email on file.' });
+
+    if (booking.upgradeStatus === 'completed') {
+      const data = await sendVenueUpgradeNotice({
+        email: booking.contactEmail, firstName: booking.firstName, bookingRef: booking.bookingRef,
+        roomName: booking.roomName, newGuestCount: booking.guestCount, overageRate: booking.overageRate,
+        newTotalAmount: booking.totalAmount,
+      });
+      await pool.query(
+        'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status, sent_by_admin_id) VALUES ($1,$2,$3,$4,$5,$6)',
+        [booking.id, 'venue_upgrade_notice', booking.contactEmail, data?.id || null, 'sent', req.user.uid]
+      );
+      return res.json({ ok: true, amountDue: 0 });
+    }
+
+    const { rows: [paidRow] } = await pool.query(
+      `SELECT COALESCE(SUM(amount) FILTER (WHERE status = 'succeeded'), 0) as "amountPaid" FROM payments WHERE booking_id = $1`,
+      [req.params.id]
+    );
+    const amountPaid = parseFloat(paidRow.amountPaid) || 0;
+    const amountDue = Math.max(0, parseFloat(booking.totalAmount) - amountPaid);
+    if (amountDue <= 0) {
+      return res.status(400).json({ error: 'This booking has already been paid in full.' });
+    }
+
+    await pool.query(
+      `UPDATE booking_payment_links SET invalidated_at = now()
+       WHERE booking_id = $1 AND paid_at IS NULL AND invalidated_at IS NULL`,
+      [req.params.id]
+    );
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const amountDueCents = Math.round(amountDue * 100);
+    await pool.query(
+      `INSERT INTO booking_payment_links (booking_id, token_hash, amount_cents, base_amount_cents, deadline_at, created_by_admin_id)
+       VALUES ($1, $2, $3, $3, $4, $5)`,
+      [booking.id, tokenHash, amountDueCents, booking.deadlineAt, req.user.uid]
+    );
+
+    const data = await sendVenueUpgradePaymentLinkEmail({
+      email: booking.contactEmail, firstName: booking.firstName, bookingRef: booking.bookingRef,
+      roomName: booking.roomName, newGuestCount: booking.guestCount, overageRate: booking.overageRate,
+      newTotalAmount: booking.totalAmount, amountPaid, amountDue,
+      deadlineAt: booking.deadlineAt, rawToken,
+    });
+    await pool.query(
+      'INSERT INTO email_logs (booking_id, email_type, recipient, resend_id, status, sent_by_admin_id) VALUES ($1,$2,$3,$4,$5,$6)',
+      [booking.id, 'venue_upgrade_payment_link', booking.contactEmail, data?.id || null, 'sent', req.user.uid]
+    );
+
+    res.json({ ok: true, amountDue });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

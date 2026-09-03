@@ -52,6 +52,13 @@ const ROOMS = [
     description: 'The entire venue, exclusively yours, 5:30–8:30 PM. Venue rental only — choose self-catering or our venue menu at checkout. Sunday, Monday or Tuesday only.',
     badge: 'EXCLUSIVE',
   },
+  {
+    id: 'test-room-admin', name: 'Test Room (Admin Only)', emoji: '🧪', color: 'slate',
+    tagLine: 'Internal QA — not for customer use',
+    minGuests: 1, maxGuests: 1, basePricePerChild: 0,
+    description: 'Free, 1-child test room for QA (e.g. exercising the edit-booking flow). Only rendered for signed-in admins — see adminOnly below.',
+    adminOnly: true,
+  },
 ];
 
 const ROOM_COLOR_MAP = {
@@ -123,8 +130,12 @@ function renderRooms() {
   const container = document.getElementById('roomCards');
   if (!container) return;
 
-  const eligible   = ROOMS.filter(r => state.guests >= r.minGuests && state.guests <= r.maxGuests);
-  const ineligible = ROOMS.filter(r => state.guests < r.minGuests || state.guests > r.maxGuests);
+  // adminOnly rooms (QA fixtures) never render for ordinary customers — this
+  // is a client-side convenience, not a server-enforced restriction, so
+  // don't rely on it to keep a room fully private.
+  const visibleRooms = ROOMS.filter(r => !r.adminOnly || state.user?.isAdmin);
+  const eligible   = visibleRooms.filter(r => state.guests >= r.minGuests && state.guests <= r.maxGuests);
+  const ineligible = visibleRooms.filter(r => state.guests < r.minGuests || state.guests > r.maxGuests);
 
   let html = '';
 
@@ -1202,9 +1213,15 @@ function isValidEmail(email) {
 }
 
 function isValidNzMobile(phone) {
-  // Strip spaces, dashes, and an optional leading +64 / 0064 / 64
+  // Strip spaces and dashes, then any international prefix (+64/0064/64)
+  // AND a leading domestic 0 — the confirmPhone field sits right next to a
+  // fixed "+64" label in the UI, so what's actually typed here never has
+  // either (e.g. "21 234 5678", not "+6421234 5678" or "021 234 5678"),
+  // though we still accept those forms too in case they're pasted in.
   let cleaned = phone.replace(/[\s-]/g, '');
-  cleaned = cleaned.replace(/^(\+?64|0064)/, '0');
-  // NZ mobiles: 02x followed by 7-9 digits (total 9-10 digits starting with 02)
-  return /^02[0-9]\d{6,8}$/.test(cleaned);
+  cleaned = cleaned.replace(/^(\+?64|0064)/, '');
+  cleaned = cleaned.replace(/^0/, '');
+  // NZ mobiles: 2x followed by 7-9 digits (total 8-10 digits after the
+  // country code/leading 0 is stripped)
+  return /^2[0-9]\d{6,8}$/.test(cleaned);
 }

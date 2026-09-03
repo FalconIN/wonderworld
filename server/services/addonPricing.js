@@ -1,8 +1,11 @@
-// Server-side mirror of booking.js's ADDON_PRICES / getAddonSummaryLines —
-// needed so the Stripe safety-net reconciliation (stripeReconcile.js) can
-// rebuild an order summary purely from booking_sessions.wizard_state,
-// without the browser ever coming back. Keep in sync with booking.js if
-// the menu changes.
+// Canonical add-on catalog for server-side pricing. Mirrors booking.js's
+// ADDON_PRICES (customer wizard) — kept in sync manually, same
+// two-copies-by-hand convention already used for the FEATURE_* flags in
+// admin.js/server/routes/admin.js. gf_nuggets is deliberately NOT
+// supported here — in the wizard it's a hybrid food+addon item (folded
+// into the nugget count for kitchen-prep, priced as a $5/kid upcharge),
+// which doesn't fit this module's pure "id -> qty -> price" model without
+// coordinating with the food-choice endpoint too. Left out on purpose.
 const ADDON_PRICES = {
   pizza_11:        { label: '11-inch Pizza',              price: 25 },
   platter_chicken: { label: 'Fried Chicken Platter',      price: 39 },
@@ -14,42 +17,58 @@ const ADDON_PRICES = {
   sushi_ocean:     { label: 'Ocean Deluxe Set',           price: 39.90 },
   sushi_kids48:    { label: 'Kids Party Platter (48pcs)', price: 49.90 },
   sushi_garden28:  { label: 'Green Garden Platter (28pcs)', price: 42.90 },
-  drinks_soda:     { label: 'Soft Drink',                 price: 10 },
-  nuggets_15pc:    { label: 'Chicken Nuggets (15pc)',     price: 20 },
-  fries_large:     { label: 'Large Fries',                price: 20 },
-  gf_nuggets:      { label: 'Gluten-Free Nuggets',        price: 5 },
+  drinks_soda:     { label: 'Soft Drink', price: 10 },
+  nuggets_15pc:    { label: 'Chicken Nuggets (15pc)', price: 20 },
+  fries_large:     { label: 'Large Fries', price: 20 },
 };
 
-function getAddonTotal(addons) {
-  if (!addons) return 0;
-  return Object.entries(addons).reduce((sum, [id, qty]) => {
-    return sum + (ADDON_PRICES[id]?.price || 0) * qty;
-  }, 0);
+const PIZZA_TYPES = ['Ham & Cheese', 'Salami & Cheese', 'Chorizo & Cheese', 'Plain Cheese', 'Vege Pizza'];
+const SODA_TYPES  = ['Coke', 'Sprite', 'Fanta', 'L&P'];
+
+// Prices and validates a customer's add-on selection — never trusts a
+// client-submitted dollar amount, only known addon ids at their canonical
+// prices (see /upgrade-link/:token/create-intent's comment on why: this
+// codebase already has one known gap elsewhere, the general edit-addons
+// flow, where the client's own delta is trusted; not repeating that here).
+function priceAddons(addons, pizzaTypes, sodaTypes) {
+  addons = addons && typeof addons === 'object' ? addons : {};
+  pizzaTypes = pizzaTypes && typeof pizzaTypes === 'object' ? pizzaTypes : {};
+  sodaTypes  = sodaTypes && typeof sodaTypes === 'object' ? sodaTypes : {};
+
+  let amount = 0;
+  const lines = [];
+  const cleanAddons = {};
+
+  for (const [id, rawQty] of Object.entries(addons)) {
+    const item = ADDON_PRICES[id];
+    const qty = parseInt(rawQty, 10) || 0;
+    if (!item || qty <= 0) continue;
+    if (qty > 500) throw new Error(`Unreasonable quantity for ${item.label}.`);
+
+    cleanAddons[id] = qty;
+    amount += item.price * qty;
+
+    let label = item.label;
+    if (id === 'drinks_soda') {
+      const total = Object.values(sodaTypes).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+      if (total !== qty) throw new Error('Soft drink flavour selections must add up to the soft drink quantity.');
+      const parts = Object.entries(sodaTypes)
+        .filter(([t, n]) => SODA_TYPES.includes(t) && (parseInt(n, 10) || 0) > 0)
+        .map(([t, n]) => (n > 1 ? `${t} x${n}` : t));
+      label = `Soft Drink (${parts.join(', ')})`;
+    }
+    if (id === 'pizza_11') {
+      const total = Object.values(pizzaTypes).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+      if (total !== qty) throw new Error('Pizza flavour selections must add up to the pizza quantity.');
+      const parts = Object.entries(pizzaTypes)
+        .filter(([t, n]) => PIZZA_TYPES.includes(t) && (parseInt(n, 10) || 0) > 0)
+        .map(([t, n]) => (n > 1 ? `${t} x${n}` : t));
+      label = `11-inch Pizza (${parts.join(', ')})`;
+    }
+    lines.push(`${label} x${qty} ($${(item.price * qty).toFixed(2)})`);
+  }
+
+  return { amount, amountCents: Math.round(amount * 100), summary: lines.join(', '), cleanAddons };
 }
 
-// Mirrors booking.js's getAddonSummaryLines()/addonsSummary text format
-// exactly, so a server-rebuilt summary reads the same as a customer-built one.
-function buildAddonsSummary({ addons, sodaTypes, pizzaTypes }) {
-  if (!addons) return '';
-  return Object.entries(addons)
-    .filter(([, qty]) => qty > 0)
-    .map(([id, qty]) => {
-      const a = ADDON_PRICES[id];
-      if (!a) return null;
-      let label = a.label;
-      if (id === 'drinks_soda' && sodaTypes && Object.keys(sodaTypes).length > 0) {
-        const parts = Object.entries(sodaTypes).filter(([, n]) => n > 0).map(([t, n]) => n > 1 ? `${t} x${n}` : t);
-        label = 'Soft Drink (' + parts.join(', ') + ')';
-      }
-      if (id === 'pizza_11' && pizzaTypes && Object.keys(pizzaTypes).length > 0) {
-        const parts = Object.entries(pizzaTypes).filter(([, n]) => n > 0).map(([t, n]) => n > 1 ? `${t} x${n}` : t);
-        label = '11-inch Pizza (' + parts.join(', ') + ')';
-      }
-      const subtotal = a.price * qty;
-      return `${label} ×${qty} ($${subtotal.toFixed(2)})`;
-    })
-    .filter(Boolean)
-    .join(', ');
-}
-
-module.exports = { ADDON_PRICES, getAddonTotal, buildAddonsSummary };
+module.exports = { ADDON_PRICES, PIZZA_TYPES, SODA_TYPES, priceAddons };

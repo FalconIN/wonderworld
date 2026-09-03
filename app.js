@@ -1101,6 +1101,12 @@ function renderEditStep1(booking, savedCardInfo) {
     </div>
 
     <!-- Guest count -->
+    ${booking.upgradeStatus ? `
+    <div class="mb-5 bg-gray-50 border-2 border-gray-100 rounded-2xl p-4">
+      <label class="lbl">Number of Kids Attending</label>
+      <p class="text-sm font-semibold text-gray-700">🔒 ${booking.guestCount} kids</p>
+      <p class="text-xs text-gray-400 mt-1">This booking is being upgraded to Whole Venue Hire — guest count can't be changed here while that's in progress. Contact us if you have questions.</p>
+    </div>` : `
     <div class="mb-5">
       <label class="lbl">Number of Kids Attending</label>
       <p class="text-xs text-gray-400 mb-2" id="editGuestRangeHint">Between ${minGuests} and ${maxGuests}. Reducing kids credits the difference as food credit — no cash refund.</p>
@@ -1111,7 +1117,7 @@ function renderEditStep1(booking, savedCardInfo) {
         <span class="text-gray-400 text-sm ml-1">kids</span>
       </div>
       <div id="editCreditPreview" class="mt-2 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 hidden"></div>
-    </div>
+    </div>`}
 
     <!-- Food split (shown only if guest count increased) -->
     <div id="editFoodSplitSection" class="hidden mb-5">

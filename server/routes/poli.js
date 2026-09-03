@@ -7,6 +7,7 @@ const { createConfirmedBooking } = require('../services/bookingCreator');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const poli = require('../services/poliClient');
+const { isValidNzMobile } = require('../services/validation');
 
 const SITE_URL = process.env.SITE_URL || 'https://wonderworldwestgate.co.nz';
 
@@ -37,6 +38,9 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
 
   if (!slotHoldId) return res.status(400).json({ error: 'Missing slot hold.' });
   if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
+  if (!isValidNzMobile(contactPhone)) {
+    return res.status(400).json({ error: 'Please enter a valid NZ mobile number.' });
+  }
 
   try {
     const { rows: [room] } = await pool.query(
