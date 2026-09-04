@@ -3,7 +3,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { createConfirmedBooking, SlotHoldExpiredError } = require('./bookingCreator');
 const { sendBookingConfirmation } = require('./bookingNotifications');
 const { assertBookingAllowedOnDate } = require('./bookingRules');
-const { getAddonTotal, buildAddonsSummary } = require('./addonPricing');
+const { priceAddons } = require('./addonPricing');
 
 const ALERT_EMAIL = process.env.BOOKING_ALERTS_EMAIL || 'Bookings@wonderworldwestgate.co.nz';
 
@@ -137,7 +137,8 @@ async function verifyAndConfirmStripePayment(paymentIntentId) {
     }
 
     const baseAmount   = room.pricing_model === 'flat' ? parseFloat(room.flat_price) : parseFloat(room.base_price_per_child) * guests;
-    const addonsAmount = getAddonTotal(s.addons);
+    const priced = priceAddons(s.addons, s.pizzaTypes, s.sodaTypes);
+    const addonsAmount = priced.amount;
     const expectedCents = Math.round((baseAmount + addonsAmount) * 100);
     if (pi.amount !== expectedCents) {
       throw new Error(`Amount mismatch: Stripe charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`);
@@ -149,7 +150,7 @@ async function verifyAndConfirmStripePayment(paymentIntentId) {
       bookingRef, uid, room,
       partyDate: s.selectedDate, partyTime: s.selectedTime, guestCount: guests,
       foodChoice: s.selectedFood, allergyNotes: s.allergyNotes || '',
-      addonsSummary: buildAddonsSummary(s),
+      addonsSummary: priced.summary,
       baseAmount, addonsAmount, totalAmount: pi.amount / 100,
       contactEmail: s.confirmEmail || user?.email || pi.receipt_email || null,
       contactPhone: s.confirmPhone ? ('+64' + String(s.confirmPhone).replace(/\s/g, '')) : (user?.phone || null),
@@ -176,7 +177,7 @@ async function verifyAndConfirmStripePayment(paymentIntentId) {
       phone: s.confirmPhone || user?.phone,
       firstName: user?.first_name || '', lastName: user?.last_name || '',
       roomName: room.name, partyDate: s.selectedDate, partyTime: s.selectedTime,
-      guestCount: guests, foodChoice: s.selectedFood, addonsSummary: buildAddonsSummary(s),
+      guestCount: guests, foodChoice: s.selectedFood, addonsSummary: priced.summary,
       totalAmount: pi.amount / 100,
       cateringChoice: room.pricing_model === 'flat' ? s.cateringChoice : null,
       noAlcoholAck: !!s.noAlcoholAck,

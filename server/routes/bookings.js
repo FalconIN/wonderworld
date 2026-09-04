@@ -204,6 +204,10 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     if (already) return res.json({ bookingId: already.id });
   }
 
+  if (!stripePaymentIntentId || typeof stripePaymentIntentId !== 'string') {
+    return res.status(400).json({ error: 'Missing payment confirmation.' });
+  }
+
   if (!isValidNzMobile(contactPhone)) {
     return res.status(400).json({ error: 'Please enter a valid NZ mobile number.' });
   }
@@ -545,6 +549,21 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
   let editCardholderName = null;
   if (delta > 0) {
     if (!paymentIntentId) return res.status(400).json({ error: 'Payment required for this edit.' });
+
+    // A double-tapped "Confirm" or a client retry after a slow/lost response
+    // resends the same paymentIntentId — the PaymentIntent itself is still
+    // 'succeeded' in Stripe on the second call, so without this check the
+    // request would sail through verification again and only fail later at
+    // the `INSERT INTO payments` unique constraint, surfacing a raw DB error
+    // to the customer instead of the harmless no-op this should be. The
+    // insert below only ever runs once per edit inside a single committed
+    // transaction, so a payments row existing for this intent means the
+    // earlier attempt already fully applied.
+    const { rows: [existingPayment] } = await pool.query(
+      `SELECT id FROM payments WHERE stripe_payment_intent_id = $1`, [paymentIntentId]
+    );
+    if (existingPayment) return res.json({ ok: true });
+
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['payment_method'] });
       if (pi.status !== 'succeeded') return res.status(400).json({ error: 'Payment has not succeeded.' });
@@ -611,6 +630,15 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK');
+    // Belt-and-braces for the narrow window the pre-check above can't close:
+    // two truly concurrent double-taps can both pass that SELECT before
+    // either COMMITs. The loser's whole transaction rolls back here (so its
+    // guest_count/addons update never applied), which is fine — the winner
+    // already committed the identical update. Report it as the success it
+    // effectively is instead of leaking the raw unique-violation to the customer.
+    if (err.code === '23505' && err.constraint === 'payments_stripe_payment_intent_id_key') {
+      return res.json({ ok: true });
+    }
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
