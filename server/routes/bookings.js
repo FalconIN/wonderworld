@@ -158,6 +158,16 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
     if (rows.length === 0) {
       return res.status(409).json({ error: 'That slot was just taken — please choose another.' });
     }
+
+    // Backstop for a dropped DELETE /slots/hold/:holdId (e.g. the room-switch
+    // release call never landed): a customer only ever holds one slot at a
+    // time, so clean up any other still-'held' row under this user rather
+    // than letting it sit until its own hold_expires_at lapses.
+    await pool.query(
+      `DELETE FROM booking_timeslots WHERE held_by_user_id = $1 AND status = 'held' AND id != $2`,
+      [userId, rows[0].id]
+    );
+
     res.json({ holdId: rows[0].id, expiresAt });
   } catch (err) {
     if (err.code === '23505') {

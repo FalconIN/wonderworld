@@ -413,10 +413,30 @@ async function createSlotHold(slot) {
 
 async function releaseSlotHold(holdId) {
   if (!holdId) return;
+  // Clear immediately so the UI (room switch, new hold) never waits on the
+  // network — retries below happen in the background regardless of outcome.
+  state.slotHoldId = null;
+  retryReleaseSlotHold(holdId);
+}
+
+// A dropped DELETE here used to just leave the old room's slot sitting held
+// until its 30-min hold_expires_at lapsed on its own — annoying for other
+// customers browsing that same slot in the meantime. Retry a few times on a
+// short backoff before giving up; POST /api/slots/hold also cleans up any
+// stale hold still open under this user as a server-side backstop, so this
+// is a best-effort speed-up, not the only safety net.
+const RELEASE_HOLD_RETRY_DELAYS_MS = [500, 1500, 4000];
+
+async function retryReleaseSlotHold(holdId, attempt = 0) {
   try {
     await callAPI(`slots/hold/${holdId}`, null, 'DELETE');
-  } catch { /* best-effort */ }
-  state.slotHoldId = null;
+  } catch (err) {
+    if (attempt < RELEASE_HOLD_RETRY_DELAYS_MS.length) {
+      setTimeout(() => retryReleaseSlotHold(holdId, attempt + 1), RELEASE_HOLD_RETRY_DELAYS_MS[attempt]);
+    } else {
+      console.warn(`Could not release slot hold ${holdId} after retries:`, err.message);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
