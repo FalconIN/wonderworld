@@ -2711,10 +2711,10 @@ const AB_ROOMS = [
     pricingModel: 'flat', flatPrice: 2899, allowedDaysOfWeek: [0, 1, 2] }, // Sun/Mon/Tue
 ];
 
-// '5:30 PM' mirrors the customer-facing evening slot (Fri/Sat only, ordinary
-// rooms). Whole-venue hire has its own single slot, kept in a separate list
-// with a distinct label (5:30-8:30 PM vs the ordinary rooms' 5:30-7:00 PM)
-// so the two are never conflated in the booking list.
+// '5:30 PM' mirrors the customer-facing evening slot (Wed/Thu/Fri/Sat only,
+// ordinary rooms). Whole-venue hire has its own single slot, kept in a
+// separate list with a distinct label (5:30-8:30 PM vs the ordinary rooms'
+// 5:30-7:00 PM) so the two are never conflated in the booking list.
 const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
 const AB_SLOT_END_TIMES = {
   '9:30 AM':  '11:00 AM',
@@ -2723,7 +2723,7 @@ const AB_SLOT_END_TIMES = {
   '3:30 PM':  '5:00 PM',
   '5:30 PM':  '7:00 PM',
 };
-const AB_RESTRICTED_SLOT_DAYS = { '5:30 PM': [5, 6] }; // Friday & Saturday
+const AB_RESTRICTED_SLOT_DAYS = { '5:30 PM': [3, 4, 5, 6] }; // Wed/Thu/Fri/Sat
 const AB_WHOLE_VENUE_SLOTS = ['5:30 PM – 8:30 PM'];
 const AB_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 function abDescribeDays(days) { return days.map(d => AB_DAY_NAMES[d]).join('/'); }
@@ -3185,6 +3185,7 @@ function ebChangeType(addonId, type, delta) {
   if (next === 0) delete editBookingState[stateKey][type]; else editBookingState[stateKey][type] = next;
   ebUpdateTypePickerUI(addonId);
   ebUpdateOrderSummary();
+  ebScheduleAddonAutosave();
 }
 
 // ── Add-booking addon list ────────────────────────────────────────────────────
@@ -3422,50 +3423,55 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function parseAddonsSummary(summary) {
-  const addons = {};
-  if (!summary) return addons;
-
-  // Typed items have variant names embedded in the label, so match on the base prefix only
-  const flexMatchers = {
-    drinks_soda:    /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
-    pizza_11:       /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
-  };
-  Object.entries(flexMatchers).forEach(([id, pattern]) => {
-    const m = summary.match(pattern);
-    if (m) addons[id] = parseInt(m[1]);
-  });
-
-  // All other items use the standard label match
-  Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
-    if (addons[id] !== undefined) return;
-    const match = summary.match(new RegExp(escapeRegex(a.label) + '[^×]*×(\\d+)', 'i'));
-    if (match) addons[id] = parseInt(match[1]);
-  });
-
-  return addons;
+// Customer bookings write "(28pcs)" where this catalog says "(28 pcs)", so
+// labels are compared case- and whitespace-insensitively.
+function normAddonLabel(label) {
+  return label.toLowerCase().replace(/\s+/g, '');
 }
 
-function parseTypesFromSummary(summary, addonId) {
-  if (!summary) return {};
-  const basePatterns = {
-    drinks_soda:    /Soft Drink\s*\(([^)]+)\)/i,
-    pizza_11:       /11-inch Pizza\s*\(([^)]+)\)/i,
-  };
-  const pattern = basePatterns[addonId];
-  if (!pattern) return {};
-  const outer = summary.match(pattern);
-  if (!outer) return {};
-  const typeNames = Object.keys(getAddonTypeMap(addonId));
-  const types = {};
-  outer[1].split(',').forEach(part => {
-    const trimmed = part.trim();
-    const xMatch = trimmed.match(/^(.+?)\s+x(\d+)$/i);
-    const name = xMatch ? xMatch[1].trim() : trimmed;
-    const qty  = xMatch ? parseInt(xMatch[2]) : 1;
-    if (typeNames.includes(name) && qty > 0) types[name] = qty;
+// Parses an addons_summary into { addons, pizzaTypes, sodaTypes, unmatched }.
+// Walks EVERY top-level line and sums quantities: customer add-on purchases
+// append to the summary, so the same addon can appear on several lines
+// ("11-inch Pizza (Ham & Cheese) ×1 ($25.00), ..., 11-inch Pizza (Salami &
+// Cheese) ×1 ($25.00)"). This used to take a single non-global match per
+// addon, so only the first line was read and the rebuild on save silently
+// deleted the rest along with their dollars (WW-QW3RJW, WW-ZS0R3P).
+// Lines it can't map land in `unmatched` so the modal can refuse to save
+// rather than drop them.
+function parseAddonsSummaryFull(summary) {
+  const result = { addons: {}, pizzaTypes: {}, sodaTypes: {}, unmatched: [] };
+  if (!summary) return result;
+  const typedBases = { '11-inch pizza': 'pizza_11', 'soft drink': 'drinks_soda' };
+  splitTopLevelCommas(summary).forEach(chunk => {
+    // Outer quantity is normally the unicode "×", but some older rows use a plain "x".
+    const m = chunk.match(/^(.*?)\s*[×x]\s*(\d+)\s*\(\$[\d,.]+\)\s*$/i);
+    if (!m) { result.unmatched.push(chunk); return; }
+    const label = m[1].trim();
+    const qty = parseInt(m[2], 10);
+
+    const typedMatch = label.match(/^(11-inch Pizza|Soft Drink)\s*(?:\(([^)]*)\))?$/i);
+    if (typedMatch) {
+      const id = typedBases[typedMatch[1].toLowerCase()];
+      const stateKey = getAddonTypeStateKey(id);
+      result.addons[id] = (result.addons[id] || 0) + qty;
+      const typeNames = Object.keys(getAddonTypeMap(id));
+      (typedMatch[2] || '').split(',').forEach(part => {
+        const trimmed = part.trim();
+        const xMatch = trimmed.match(/^(.+?)\s+x(\d+)$/i);
+        const name = xMatch ? xMatch[1].trim() : trimmed;
+        const typeQty = xMatch ? parseInt(xMatch[2], 10) : 1;
+        if (typeNames.includes(name) && typeQty > 0) {
+          result[stateKey][name] = (result[stateKey][name] || 0) + typeQty;
+        }
+      });
+      return;
+    }
+
+    const id = Object.keys(AB_ADDON_PRICES).find(k => normAddonLabel(AB_ADDON_PRICES[k].label) === normAddonLabel(label));
+    if (id) result.addons[id] = (result.addons[id] || 0) + qty;
+    else result.unmatched.push(chunk);
   });
-  return types;
+  return result;
 }
 
 function openEditBookingModal(bookingId) {
@@ -3475,9 +3481,11 @@ function openEditBookingModal(bookingId) {
   editBookingState.bookingId = bookingId;
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
-  editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
-  editBookingState.pizzaTypes = parseTypesFromSummary(booking.addonsSummary, 'pizza_11');
-  editBookingState.sodaTypes  = parseTypesFromSummary(booking.addonsSummary, 'drinks_soda');
+  const parsedAddons = parseAddonsSummaryFull(booking.addonsSummary);
+  editBookingState.addons = parsedAddons.addons;
+  editBookingState.pizzaTypes = parsedAddons.pizzaTypes;
+  editBookingState.sodaTypes  = parsedAddons.sodaTypes;
+  editBookingState.addonsUnmatched = parsedAddons.unmatched;
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -3502,14 +3510,33 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_adminNotes').value = booking.adminNotes || '';
   document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
   document.getElementById('eb_amountPaid').value = parseFloat(booking.amountPaid || 0).toFixed(2);
-  document.getElementById('editBookingError').classList.add('hidden');
+  const ebErrEl = document.getElementById('editBookingError');
+  if (editBookingState.addonsUnmatched.length) {
+    ebErrEl.textContent = ebUnmatchedAddonsMessage();
+    ebErrEl.classList.remove('hidden');
+  } else {
+    ebErrEl.classList.add('hidden');
+  }
 
   ebRenderAddonsList();
   ebUpdateOrderSummary();
+  ebAutosaveTimer = null;
+  ebAutosaveInFlight = false;
+  ebAutosavePending = false;
+  const statusEl = document.getElementById('eb_addonsSaveStatus');
+  if (statusEl) statusEl.classList.add('hidden');
   document.getElementById('editBookingModal').style.display = 'flex';
 }
 
+// Saving rebuilds addons_summary from the parsed state, so any line the
+// parser couldn't map would be deleted (and its dollars dropped from the
+// total). Block saving instead; the admin needs to fix those by hand.
+function ebUnmatchedAddonsMessage() {
+  return `⚠️ Can't safely edit this booking: these add-on lines weren't recognised and would be lost on save: ${editBookingState.addonsUnmatched.join('; ')}`;
+}
+
 function closeEditBookingModal() {
+  ebFlushAddonAutosave();
   document.getElementById('editBookingModal').style.display = 'none';
 }
 
@@ -3582,6 +3609,114 @@ function ebChangeAddon(id, delta) {
     ebUpdateTypePickerUI(id);
   }
   ebUpdateOrderSummary();
+  ebScheduleAddonAutosave();
+}
+
+// ---------------------------------------------------------------------------
+// Edit Booking Modal — Add-Ons autosave
+//
+// The Add-Ons list (pizza/platters/soda/nuggets/fries/GF nuggets) saves
+// itself in the background as the admin clicks +/-, instead of waiting for
+// the modal-wide "Save Changes" button. It PATCHes only the addon-derived
+// columns (addons_summary/addons_amount/total_amount) and resends every
+// other field exactly as it was when the modal opened — never the live
+// values sitting in the other form fields — so an addon click can't
+// accidentally commit an in-progress, not-yet-saved edit to the name,
+// notes, status or payment fields. Those still only commit via the
+// "Save Changes" button, so Cancel still discards them.
+// ---------------------------------------------------------------------------
+let ebAutosaveTimer = null;
+let ebAutosaveInFlight = false;
+let ebAutosavePending = false;
+
+function ebScheduleAddonAutosave() {
+  clearTimeout(ebAutosaveTimer);
+  ebSetAddonsSaveStatus('pending');
+  ebAutosaveTimer = setTimeout(ebRunAddonAutosave, 700);
+}
+
+// Saves immediately if a debounced autosave is still waiting — used when the
+// modal closes, so the very last click isn't lost to the debounce window.
+function ebFlushAddonAutosave() {
+  if (!ebAutosaveTimer) return;
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+  ebRunAddonAutosave();
+}
+
+async function ebRunAddonAutosave() {
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+  if (!editBookingState.bookingId || !editBookingState.booking) return;
+  if (editBookingState.addonsUnmatched?.length) { ebSetAddonsSaveStatus('error', 'unrecognised add-on lines, see above'); return; }
+
+  // Leave it pending rather than saving a half-chosen pizza/soda type split.
+  const pizzaQty = editBookingState.addons['pizza_11'] || 0;
+  if (pizzaQty > 0) {
+    const picked = Object.values(editBookingState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < pizzaQty) { ebSetAddonsSaveStatus('needs-type'); return; }
+  }
+  const sodaQty = editBookingState.addons['drinks_soda'] || 0;
+  if (sodaQty > 0) {
+    const picked = Object.values(editBookingState.sodaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < sodaQty) { ebSetAddonsSaveStatus('needs-type'); return; }
+  }
+
+  if (ebAutosaveInFlight) { ebAutosavePending = true; return; }
+  ebAutosaveInFlight = true;
+  ebSetAddonsSaveStatus('saving');
+
+  const booking = editBookingState.booking;
+  const addonsAmount = ebGetAddonTotal();
+  const baseAmount = parseFloat(booking.baseAmount) || 0;
+  const totalAmount = baseAmount + addonsAmount;
+  const addonLines = Object.entries(editBookingState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, editBookingState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+  const addonsSummary = addonLines.join(', ');
+
+  try {
+    await callAPI(`admin/bookings/${editBookingState.bookingId}`, {
+      firstName: booking.firstName || '',
+      lastName: booking.lastName || '',
+      email: booking.contactEmail || '',
+      phone: booking.contactPhone || '',
+      guestCount: booking.guestCount,
+      foodChoice: booking.foodChoice,
+      allergyNotes: booking.allergyNotes || '',
+      addonsSummary, addonsAmount, baseAmount, totalAmount,
+      bookingStatus: booking.status === 'pending' ? 'pending' : (booking.status === 'cancelled' ? 'cancelled' : 'confirmed'),
+      amountPaid: parseFloat(booking.amountPaid || 0),
+      adminNotes: booking.adminNotes || '',
+    }, 'PATCH');
+
+    // Keep the pristine snapshot (and the table's cached row) in step so the
+    // next autosave — or the final "Save Changes" — diffs against what the
+    // server actually has now, not the value from when the modal opened.
+    booking.addonsSummary = addonsSummary;
+    booking.addonsAmount = addonsAmount;
+    booking.totalAmount = totalAmount;
+    const cached = allBookings.find(b => b.id === editBookingState.bookingId);
+    if (cached) { cached.addonsSummary = addonsSummary; cached.addonsAmount = addonsAmount; cached.totalAmount = totalAmount; }
+
+    ebSetAddonsSaveStatus('saved');
+  } catch (err) {
+    ebSetAddonsSaveStatus('error', err.message);
+  } finally {
+    ebAutosaveInFlight = false;
+    if (ebAutosavePending) { ebAutosavePending = false; ebRunAddonAutosave(); }
+  }
+}
+
+function ebSetAddonsSaveStatus(state, errMsg) {
+  const el = document.getElementById('eb_addonsSaveStatus');
+  if (!el) return;
+  el.classList.remove('hidden');
+  if (state === 'pending')        { el.textContent = 'Unsaved changes…'; el.className = 'text-xs text-gray-400'; }
+  else if (state === 'saving')    { el.textContent = 'Saving…';          el.className = 'text-xs text-gray-400'; }
+  else if (state === 'saved')     { el.textContent = '✓ Saved';          el.className = 'text-xs text-green-600 font-semibold'; }
+  else if (state === 'needs-type'){ el.textContent = 'Choose a type above to save'; el.className = 'text-xs text-amber-600 font-semibold'; }
+  else if (state === 'error')     { el.textContent = `⚠️ Autosave failed: ${errMsg || 'please retry'}`; el.className = 'text-xs text-red-500 font-semibold'; }
 }
 
 function ebGetAddonTotal() {
@@ -3636,6 +3771,9 @@ function ebUpdateBalanceDue() {
 }
 
 async function submitEditBooking() {
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+
   const btn = document.getElementById('editBookingBtn');
   const btnText = document.getElementById('editBookingBtnText');
   const spinner = document.getElementById('editBookingBtnSpinner');
@@ -3651,6 +3789,12 @@ async function submitEditBooking() {
   const lastName  = document.getElementById('eb_lastName').value.trim();
   const email     = document.getElementById('eb_email').value.trim().toLowerCase();
   const phone     = document.getElementById('eb_phone').value.trim();
+
+  if (editBookingState.addonsUnmatched?.length) {
+    errEl.textContent = ebUnmatchedAddonsMessage();
+    errEl.classList.remove('hidden');
+    return;
+  }
 
   if (nuggets + burgers + veges !== guests) {
     errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers + veges} selected.`;

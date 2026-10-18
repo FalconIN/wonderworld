@@ -243,7 +243,7 @@ async function signOut() {
 }
 
 // ---------------------------------------------------------------------------
-// Upsert user profile (called from booking.js finaliseBooking)
+// Upsert user profile (called from app.js validateStep, step 4)
 // ---------------------------------------------------------------------------
 async function upsertUserProfile(userId, firstName, lastName, email, phone = null) {
   try {

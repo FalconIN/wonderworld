@@ -748,7 +748,10 @@
 
       <!-- Add-ons -->
       <div class="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 space-y-2 transition-colors">
-        <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm mb-1">➕ Add-Ons</div>
+        <div class="flex items-center justify-between mb-1">
+          <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">➕ Add-Ons</div>
+          <div id="eb_addonsSaveStatus" class="text-xs text-gray-400 hidden"></div>
+        </div>
         <div id="eb_addonsList" class="space-y-2"></div>
       </div>
 
@@ -894,6 +897,6 @@
 </style>
 
 <script src="firebase.js" defer></script>
-<script src="admin.js?v=47" defer></script>
+<script src="admin.js?v=49" defer></script>
 </body>
 </html>
