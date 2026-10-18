@@ -6,7 +6,7 @@ const pool    = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { paymentLimiter, publicTokenLimiter } = require('../middleware/rateLimit');
 const { verifyAndConfirmStripePayment } = require('../services/stripeReconcile');
-const { ADDON_PRICES, priceAddons } = require('../services/addonPricing');
+const { ADDON_PRICES, priceAddons, priceCheckoutAddons } = require('../services/addonPricing');
 
 function hashUpgradeToken(rawToken) {
   return crypto.createHash('sha256').update(String(rawToken || '')).digest('hex');
@@ -133,7 +133,7 @@ async function resolveStripeCustomer(uid, email) {
 
 // POST /api/payments/create-intent
 router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
-  const { roomId, roomSlug, guestCount, addonsAmount = 0, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
+  const { roomId, roomSlug, guestCount, currency = 'nzd', bookingRef, customerEmail, metadata = {} } = req.body;
   const uid = req.user.uid;
   if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
   try {
@@ -153,7 +153,15 @@ router.post('/create-intent', requireAuth, paymentLimiter, async (req, res) => {
     const baseAmount = room.pricing_model === 'flat'
       ? parseFloat(room.flat_price)
       : parseFloat(room.base_price_per_child) * guests;
-    const amount = Math.round((baseAmount + parseFloat(addonsAmount || 0)) * 100);
+    // Add-ons priced here, not taken from the client's addonsAmount — this
+    // amount is what the card actually gets charged.
+    let priced;
+    try {
+      priced = await priceCheckoutAddons(pool, req.body, bookingRef, uid, guests);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    const amount = Math.round((baseAmount + priced.amount) * 100);
     if (!amount || amount < 100) return res.status(400).json({ error: 'Invalid booking amount.' });
 
     // Create or retrieve Stripe Customer for saved-card support

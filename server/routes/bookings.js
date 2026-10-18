@@ -9,6 +9,7 @@ const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const { refundOrphan } = require('../services/stripeReconcile');
 const { isValidNzMobile } = require('../services/validation');
+const { priceCheckoutAddons } = require('../services/addonPricing');
 const { ensureUserRow } = require('../services/userAccounts');
 
 // Best-effort lookup of the customer's in-progress wizard state, keyed by the
@@ -163,8 +164,12 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
     // release call never landed): a customer only ever holds one slot at a
     // time, so clean up any other still-'held' row under this user rather
     // than letting it sit until its own hold_expires_at lapses.
+    // booking_id IS NULL limits this to wizard holds — a whole-venue upgrade
+    // keeps the customer's original room 'held' under their own user id with
+    // booking_id set (see /upgrade-to-venue), and deleting that made the
+    // deadline revert impossible (WW-MTFK8A2U lost its hold this way).
     await pool.query(
-      `DELETE FROM booking_timeslots WHERE held_by_user_id = $1 AND status = 'held' AND id != $2`,
+      `DELETE FROM booking_timeslots WHERE held_by_user_id = $1 AND status = 'held' AND booking_id IS NULL AND id != $2`,
       [userId, rows[0].id]
     );
 
@@ -180,9 +185,13 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
 // DELETE /api/slots/hold/:holdId — release a slot hold
 router.delete('/slots/hold/:holdId', requireAuth, async (req, res) => {
   try {
+    // Scoped to the caller's own wizard hold — previously any signed-in user
+    // could delete any 'held' row by id, including other customers' checkout
+    // holds and venue-upgrade holds (booking_id set).
     await pool.query(
-      `DELETE FROM booking_timeslots WHERE id = $1 AND status = 'held'`,
-      [req.params.holdId]
+      `DELETE FROM booking_timeslots
+       WHERE id = $1 AND status = 'held' AND held_by_user_id = $2 AND booking_id IS NULL`,
+      [req.params.holdId, req.user.uid]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -195,7 +204,7 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
   const uid = req.user.uid;
   const {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
-    allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
+    allergyNotes,
     contactEmail, contactPhone, stripePaymentIntentId, slotHoldId, cardholderName,
     cateringChoice, noAlcoholAck,
   } = req.body;
@@ -224,6 +233,8 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
 
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
   let verifiedTotalAmount;
+  let verifiedBaseAmount;
+  let pricedAddons;
   let room;
   let stripeBillingName = null;
   let stripeCardBrand = null;
@@ -268,9 +279,18 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     const serverBaseAmount = room.pricing_model === 'flat'
       ? parseFloat(room.flat_price)
       : parseFloat(room.base_price_per_child) * guests;
-    const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
+    // Add-ons are priced server-side, never from the client's addonsAmount —
+    // otherwise a tampered request could pay only the room price while the
+    // stored addons_summary still lists the add-ons for the kitchen.
+    let pricingError = null;
+    try {
+      pricedAddons = await priceCheckoutAddons(pool, req.body, bookingRef, uid, guests, { lenientFlavours: true });
+    } catch (err) {
+      pricingError = err.message;
+    }
+    const expectedCents = pricedAddons ? Math.round((serverBaseAmount + pricedAddons.amount) * 100) : null;
 
-    if (pi.amount !== expectedCents) {
+    if (!pricedAddons || pi.amount !== expectedCents) {
       // The card has already been captured (pi.status === 'succeeded' above) for a stale
       // amount — most likely the guest count/add-ons changed after the Payment Element was
       // mounted. Refund immediately rather than leaving the customer charged with no booking,
@@ -279,7 +299,9 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       const wizardState = await lookupWizardState(bookingRef);
       const refundStatus = await refundOrphan(
         stripePaymentIntentId, pi.amount / 100, uid,
-        `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`,
+        pricedAddons
+          ? `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`
+          : `Add-on selection could not be priced: ${pricingError}`,
         bookingRef, wizardState
       );
 
@@ -291,6 +313,7 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     }
 
     verifiedTotalAmount = pi.amount / 100;
+    verifiedBaseAmount = serverBaseAmount;
     stripeBillingName = pi.payment_method?.billing_details?.name || null;
     stripeCardBrand = pi.payment_method?.card?.brand || null;
     stripeCardLast4 = pi.payment_method?.card?.last4 || null;
@@ -305,7 +328,8 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     // client-submitted value, which isn't independently verified.
     const bookingId = await createConfirmedBooking({
       bookingRef, uid, room, partyDate, partyTime, guestCount, foodChoice,
-      allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount: verifiedTotalAmount,
+      allergyNotes, addonsSummary: pricedAddons.summary, baseAmount: verifiedBaseAmount,
+      addonsAmount: pricedAddons.amount, totalAmount: verifiedTotalAmount,
       contactEmail, contactPhone, slotHoldId, cardholderName: stripeBillingName || cardholderName,
       cardBrand: stripeCardBrand, cardLast4: stripeCardLast4,
       paymentProvider: 'stripe', stripePaymentIntentId,
@@ -323,6 +347,16 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     res.json({ bookingId });
   } catch (err) {
     if (err instanceof SlotHoldExpiredError) {
+      // The webhook safety net (stripeReconcile.js) may have claimed this
+      // same hold and created the booking while this request was in flight —
+      // the check near the top of this handler only covers it finishing
+      // FIRST. Losing the hold to it isn't a lost slot; don't refund a
+      // booking that actually succeeded.
+      const { rows: [raced] } = await pool.query(
+        `SELECT id FROM bookings WHERE stripe_payment_intent_id = $1`, [stripePaymentIntentId]
+      );
+      if (raced) return res.json({ bookingId: raced.id });
+
       // The card has already been captured (verified above) but the slot
       // hold no longer holds the slot — most likely it expired while the
       // customer was mid-payment, and someone else may now hold it. Same

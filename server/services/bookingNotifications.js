@@ -101,7 +101,7 @@ async function sendBookingConfirmation({
             Outside birthday cake is welcome! 🎂
           </div>
 
-          <p style="font-size:13px;color:#6B7280">Our team will be in touch within 24 hours to confirm the final details.<br>Questions? Email us at <a href="mailto:hello@wonderworldwestgate.co.nz" style="color:#4F46E5">hello@wonderworldwestgate.co.nz</a></p>
+          <p style="font-size:13px;color:#6B7280">Our team will be in touch within 24 hours to confirm the final details.<br>Questions? Email us at <a href="mailto:bookings@wonderworldwestgate.co.nz" style="color:#4F46E5">Bookings@wonderworldwestgate.co.nz</a></p>
 
           <p style="font-size:13px;color:#9CA3AF;margin-top:24px">See you soon! 🎠<br><strong>Wonder World Westgate Team</strong></p>
         </div>

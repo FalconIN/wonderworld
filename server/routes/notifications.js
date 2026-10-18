@@ -169,7 +169,7 @@ router.post('/booking-rescheduled', requireAuth, async (req, res) => {
             </table>
           </div>
 
-          <p style="font-size:13px;color:#6B7280">Questions? Email us at <a href="mailto:hello@wonderworldwestgate.co.nz" style="color:#1E3A8A">hello@wonderworldwestgate.co.nz</a></p>
+          <p style="font-size:13px;color:#6B7280">Questions? Email us at <a href="mailto:bookings@wonderworldwestgate.co.nz" style="color:#1E3A8A">Bookings@wonderworldwestgate.co.nz</a></p>
           <p style="font-size:13px;color:#9CA3AF;margin-top:24px">See you soon! 🎠<br><strong>Wonder World Westgate Team</strong></p>
         </div>
       `,

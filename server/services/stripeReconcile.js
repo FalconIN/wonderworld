@@ -137,7 +137,7 @@ async function verifyAndConfirmStripePayment(paymentIntentId) {
     }
 
     const baseAmount   = room.pricing_model === 'flat' ? parseFloat(room.flat_price) : parseFloat(room.base_price_per_child) * guests;
-    const priced = priceAddons(s.addons, s.pizzaTypes, s.sodaTypes);
+    const priced = priceAddons(s.addons, s.pizzaTypes, s.sodaTypes, { maxGfNuggets: guests, lenientFlavours: true });
     const addonsAmount = priced.amount;
     const expectedCents = Math.round((baseAmount + addonsAmount) * 100);
     if (pi.amount !== expectedCents) {
@@ -196,6 +196,15 @@ Amount: $${(pi.amount / 100).toFixed(2)} NZD`
 
     return { ok: true, bookingId };
   } catch (err) {
+    // Mirror of the browser-side check in POST /api/bookings: if the
+    // customer's own browser call won the race for the hold and booked it,
+    // this failure is expected — refunding here would refund a real booking.
+    const { rows: [raced] } = await pool.query(
+      `SELECT id FROM bookings WHERE stripe_payment_intent_id = $1 OR booking_ref = $2`,
+      [paymentIntentId, bookingRef]
+    );
+    if (raced) return { ok: true, alreadyProcessed: true, bookingId: raced.id };
+
     const reason = err instanceof SlotHoldExpiredError
       ? `Slot hold expired or no longer matched by the time the safety net ran: ${err.message}`
       : `Safety-net booking confirmation failed: ${err.message}`;
