@@ -8,9 +8,10 @@ const fs       = require('fs');
 const app  = express();
 const ROOT = path.join(__dirname, '..');
 
-// Single reverse proxy hop (nginx) in front of us — needed so req.ip / rate
-// limiting see the real client IP from X-Forwarded-For instead of nginx's.
-app.set('trust proxy', 1);
+// nginx on this machine is the only proxy. Trusting just loopback means
+// req.ip / rate limiting use the real client IP that nginx forwards, and a
+// client can never spoof X-Forwarded-For by reaching the app directly.
+app.set('trust proxy', 'loopback');
 
 // Node's own guidance: after an uncaught exception the process is in an
 // unknown state, so exit and let PM2 restart it clean rather than limping
@@ -115,8 +116,23 @@ cron.schedule('*/15 * * * *', () => {
   revertExpiredUpgrades().catch(err => console.error('Venue-upgrade expiry revert failed:', err.message));
 });
 
-// Health check
+// Health check (process only)
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Uptime monitor check: 200 only if the database answers within 3s, else 500.
+app.get('/health', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    await Promise.race([
+      require('./db').query('SELECT 1'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('db timeout')), 3000)),
+    ]);
+    res.json({ ok: true, db: 'ok' });
+  } catch (err) {
+    console.error('Health check failed:', err.message);
+    res.status(500).json({ ok: false, db: 'error' });
+  }
+});
 
 // JSON config endpoint (kept for reference / future use)
 app.get('/api/config', (req, res) => res.json(clientConfig()));
@@ -156,4 +172,5 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Localhost only: the public reaches the app through nginx, never directly.
+app.listen(PORT, '127.0.0.1', () => console.log(`Server running on 127.0.0.1:${PORT}`));
