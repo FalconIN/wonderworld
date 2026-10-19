@@ -3,6 +3,7 @@ const router  = express.Router();
 const pool    = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { bookingLimiter } = require('../middleware/rateLimit');
+const { ensureUserRow } = require('../services/userAccounts');
 
 // Same ref scheme booking.js used client-side — now generated once, here,
 // server-side, so the same ref flows through to the PaymentIntent and the
@@ -18,6 +19,13 @@ function generateBookingRef() {
 router.post('/open', requireAuth, bookingLimiter, async (req, res) => {
   const uid = req.user.uid;
   try {
+    // A signed-in customer whose POST /users/profile call never landed
+    // (blocked popup, dropped request) has no users row yet, which would
+    // otherwise 500 the INSERT below on user_id's FK constraint — silently,
+    // per resumeOrStartWizard()'s fallback in booking.js, masking the real
+    // cause until it resurfaces louder at the slot-hold step.
+    await ensureUserRow(pool, uid, req.user.email);
+
     // Lazy sweep, scoped to this user — mirrors the expired-slot-hold cleanup
     // in bookings.js. No cron; a session only gets marked expired when someone
     // next asks about it.

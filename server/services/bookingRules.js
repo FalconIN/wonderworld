@@ -11,7 +11,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 // slot_time values (independent of room) that are only bookable on certain
 // days, regardless of which ordinary per-child room they're booked against.
 const RESTRICTED_SLOT_DAYS = {
-  '5:30 PM': [5, 6], // Friday & Saturday only
+  '5:30 PM': [3, 4, 5, 6], // Wednesday, Thursday, Friday & Saturday only
 };
 
 function describeDays(days) {

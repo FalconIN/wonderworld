@@ -1,9 +1,10 @@
 const express = require('express');
 const router  = express.Router();
-require('../middleware/auth'); // ensures firebase-admin is initialised (idempotent)
+const { requireAuth } = require('../middleware/auth'); // also ensures firebase-admin is initialised (idempotent)
 const admin   = require('firebase-admin');
 const pool    = require('../db');
-const { passwordResetLimiter } = require('../middleware/rateLimit');
+const { passwordResetLimiter, publicTokenLimiter } = require('../middleware/rateLimit');
+const { consumeMagicLinkToken } = require('../services/magicLink');
 
 const RESET_PASSWORD_URL = 'https://wonderworldwestgate.co.nz/reset-password';
 
@@ -66,6 +67,57 @@ router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
   }
 
   res.json({ ok: true, message: 'If an account exists for that email, a reset link has been sent.' });
+});
+
+// POST /api/auth/magic-link/verify — public, token-gated. Validates a
+// magic-link token (see server/services/magicLink.js) and, if valid, mints a
+// short-lived Firebase custom token the client can exchange for a real
+// session via signInWithCustomToken(). Marking the row used_at happens
+// inside consumeMagicLinkToken's single UPDATE...RETURNING, so a second
+// request with the same token always finds nothing to consume (single-use).
+router.post('/magic-link/verify', publicTokenLimiter, async (req, res) => {
+  const rawToken = String(req.body?.token || '');
+  if (!rawToken) return res.status(400).json({ error: 'Missing token.' });
+
+  const consumed = await consumeMagicLinkToken(rawToken).catch(() => null);
+  // Generic failure — deliberately not distinguishing not-found / expired /
+  // already-used, same anti-enumeration posture as forgot-password above.
+  if (!consumed) return res.status(410).json({ error: 'This link has expired or already been used.' });
+
+  try {
+    const { rows: [user] } = await pool.query(
+      `SELECT id, email, first_name as "firstName" FROM users WHERE id = $1`,
+      [consumed.userId]
+    );
+    if (!user) return res.status(410).json({ error: 'This link has expired or already been used.' });
+
+    const customToken = await admin.auth().createCustomToken(user.id);
+    res.json({ customToken, email: user.email, firstName: user.firstName });
+  } catch (err) {
+    console.error('Magic-link verify failed:', err.message);
+    res.status(500).json({ error: 'Could not process this link. Please contact us for help.' });
+  }
+});
+
+// POST /api/auth/magic-link/complete — called once the customer has signed
+// in via the custom token and set their password, to clear is_placeholder
+// (so the admin "Resend Magic Link" button stops offering one, and this
+// account is no longer treated as an unclaimed premade account elsewhere).
+// requireAuth, not the raw token, is the guard here: only the now-signed-in
+// account itself can complete its own claim. Deliberately doesn't touch
+// first_name/last_name/email — those are already correct from the manual
+// booking (or mid-verification via verifyBeforeUpdateEmail on the client),
+// and POST /users/profile's upsert would blank the name if called with none.
+router.post('/magic-link/complete', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE users SET is_placeholder = false, updated_at = now() WHERE id = $1`,
+      [req.user.uid]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

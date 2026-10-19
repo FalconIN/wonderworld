@@ -32,6 +32,10 @@ async function checkAfterPayReturn() {
     guests:          pending.guests,
     selectedFood:    pending.food,
     addons:          pending.addons || {},
+    pizzaTypes:      pending.pizzaTypes || {},
+    sodaTypes:       pending.sodaTypes || {},
+    cateringChoice:  pending.cateringChoice,
+    noAlcoholAck:    pending.noAlcoholAck,
     calculatedTotal: pending.calculatedTotal,
     bookingRef:      pending.bookingRef,
     sessionId:       pending.sessionId,
@@ -51,7 +55,16 @@ async function checkAfterPayReturn() {
     const overlay = document.getElementById('bookingOverlay');
     if (overlay) overlay.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    setTimeout(() => goToStep(5), 150);
+    // Contact details (state.confirmEmail/confirmPhone) were already
+    // collected at step 4 before the Afterpay redirect and restored above,
+    // so the booking can be finalised immediately without another click.
+    setTimeout(async () => {
+      try {
+        await finaliseBookingAfterPayment();
+      } catch (err) {
+        alert('Your payment succeeded, but we had trouble finishing your booking. Please check "My Bookings" or contact us at Bookings@wonderworldwestgate.co.nz — your payment is safe.');
+      }
+    }, 150);
   } else {
     alert('Your Afterpay payment could not be confirmed. Please try booking again.');
   }
@@ -142,15 +155,13 @@ async function processPoliPayment() {
   const errEl = document.getElementById('poli-payment-errors');
   if (errEl) errEl.textContent = '';
 
-  const email = document.getElementById('poliEmail')?.value.trim();
-  const phone = document.getElementById('poliPhone')?.value.trim();
+  // Already collected and validated at step 4 — POLi no longer asks for its
+  // own copy of these (it used to, redundantly, right before the redirect).
+  const email = state.confirmEmail;
+  const phone = state.confirmPhone;
 
-  if (!email || !isValidEmail(email)) {
-    if (errEl) errEl.textContent = 'Please enter a valid email address.';
-    return;
-  }
-  if (!phone || !isValidNzMobile(phone)) {
-    if (errEl) errEl.textContent = 'Please enter a valid NZ mobile number (e.g. 021 234 5678).';
+  if (!email || !phone) {
+    if (errEl) errEl.textContent = 'Missing contact details — please go back and re-enter them.';
     return;
   }
 
@@ -176,11 +187,16 @@ async function processPoliPayment() {
       allergyNotes:   state.allergyNotes,
       addonsSummary:  addonsSummaryText,
       addonsAmount:   getAddonTotal(),
+      addons:         state.addons || {},
+      pizzaTypes:     state.pizzaTypes || {},
+      sodaTypes:      state.sodaTypes || {},
       contactEmail:   email,
       contactPhone:   phone.replace(/\s/g, ''),
       slotHoldId:     state.slotHoldId,
       firstName:      state.user?.firstName || '',
       lastName:       state.user?.lastName || '',
+      cateringChoice: state.cateringChoice,
+      noAlcoholAck:   state.noAlcoholAck,
     });
 
     // Stash just enough to redisplay the confirmation nicely when the
@@ -238,6 +254,10 @@ async function mountStripeElements() {
       roomSlug:      state.selectedRoom?.id,
       guestCount:    state.guests,
       addonsAmount:  getAddonTotal(),
+      // Server prices add-ons from these; addonsAmount is informational only.
+      addons:        state.addons || {},
+      pizzaTypes:    state.pizzaTypes || {},
+      sodaTypes:     state.sodaTypes || {},
       currency:      'nzd',
       bookingRef:    state.bookingRef,
       customerEmail: state.user?.email || '',
@@ -320,6 +340,13 @@ async function processStripePayment() {
     guests:          state.guests,
     food:            state.selectedFood,
     addons:          state.addons,
+    // Flavour splits and whole-venue fields must survive the Afterpay
+    // redirect too — the server re-prices add-ons from them and rejects a
+    // flat-rate booking without its catering choice/no-alcohol ack.
+    pizzaTypes:      state.pizzaTypes,
+    sodaTypes:       state.sodaTypes,
+    cateringChoice:  state.cateringChoice,
+    noAlcoholAck:    state.noAlcoholAck,
     calculatedTotal: state.calculatedTotal,
     bookingRef:      state.bookingRef,
     sessionId:       state.sessionId,
@@ -363,10 +390,26 @@ async function processStripePayment() {
       return;
     }
 
-    // Non-redirect payment succeeded (card, Apple Pay, Google Pay)
+    // Non-redirect payment succeeded (card, Apple Pay, Google Pay). Contact
+    // details were already collected and validated back at step 4, so all
+    // that's left is writing the booking itself.
     sessionStorage.removeItem('ww_pending_booking');
     state.stripePaymentIntentId = paymentIntent?.id || clientSecret.split('_secret_')[0];
-    goToStep(5);
+
+    try {
+      await finaliseBookingAfterPayment();
+    } catch (saveErr) {
+      // The card has already been charged — never tell the customer payment
+      // failed here. Leave Pay re-enabled so they can retry the save itself
+      // (re-confirming an already-succeeded PaymentIntent is a safe no-op);
+      // the server-side safety net will also pick this up shortly either way.
+      if (errEl) errEl.textContent = saveErr.message
+        ? `Your payment succeeded, but we had trouble finishing your booking: ${saveErr.message}. Please try again, or contact us at Bookings@wonderworldwestgate.co.nz — your payment is safe.`
+        : 'Your payment succeeded, but we had trouble finishing your booking. Please try again, or contact us at Bookings@wonderworldwestgate.co.nz — your payment is safe.';
+      btn.disabled = false;
+      btnText?.classList.remove('hidden');
+      btnSpinner?.classList.add('hidden');
+    }
 
   } catch (err) {
     sessionStorage.removeItem('ww_pending_booking');

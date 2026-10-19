@@ -8,6 +8,9 @@ const { createConfirmedBooking, SlotHoldExpiredError } = require('../services/bo
 const { reclaimableHoldClause } = require('../services/holdExpiry');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const { refundOrphan } = require('../services/stripeReconcile');
+const { isValidNzMobile } = require('../services/validation');
+const { priceCheckoutAddons } = require('../services/addonPricing');
+const { ensureUserRow } = require('../services/userAccounts');
 
 // Best-effort lookup of the customer's in-progress wizard state, keyed by the
 // booking_ref Stripe already carries — used only to tell an admin what room/
@@ -26,7 +29,10 @@ async function lookupWizardState(bookingRef) {
   }
 }
 
-// GET /api/rooms — public room list
+// GET /api/rooms — public room list. Unauthenticated, so internal QA rooms
+// (currently just 'test-room-admin' — see booking.js's ROOMS.adminOnly,
+// which is what actually keeps a room out of the customer-facing wizard)
+// are excluded by slug here too, rather than relying on is_active alone.
 router.get('/rooms', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -34,7 +40,7 @@ router.get('/rooms', async (req, res) => {
               min_guests as "minGuests", max_guests as "maxGuests",
               base_price_per_child as "basePricePerChild",
               weekday_total as "weekdayTotal", weekend_total as "weekendTotal"
-       FROM party_rooms WHERE is_active = true ORDER BY sort_order`
+       FROM party_rooms WHERE is_active = true AND slug != 'test-room-admin' ORDER BY sort_order`
     );
     res.json(rows);
   } catch (err) {
@@ -106,6 +112,11 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
       return res.status(400).json({ error: ruleErr.message });
     }
 
+    // A signed-in customer whose POST /users/profile call never landed
+    // (blocked popup, dropped request) has no users row yet, which would
+    // otherwise 500 the INSERT below on held_by_user_id's FK constraint.
+    await ensureUserRow(pool, userId, req.user.email);
+
     // Clean up any expired hold on this exact slot
     await pool.query(
       `DELETE FROM booking_timeslots
@@ -148,6 +159,20 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
     if (rows.length === 0) {
       return res.status(409).json({ error: 'That slot was just taken — please choose another.' });
     }
+
+    // Backstop for a dropped DELETE /slots/hold/:holdId (e.g. the room-switch
+    // release call never landed): a customer only ever holds one slot at a
+    // time, so clean up any other still-'held' row under this user rather
+    // than letting it sit until its own hold_expires_at lapses.
+    // booking_id IS NULL limits this to wizard holds — a whole-venue upgrade
+    // keeps the customer's original room 'held' under their own user id with
+    // booking_id set (see /upgrade-to-venue), and deleting that made the
+    // deadline revert impossible (WW-MTFK8A2U lost its hold this way).
+    await pool.query(
+      `DELETE FROM booking_timeslots WHERE held_by_user_id = $1 AND status = 'held' AND booking_id IS NULL AND id != $2`,
+      [userId, rows[0].id]
+    );
+
     res.json({ holdId: rows[0].id, expiresAt });
   } catch (err) {
     if (err.code === '23505') {
@@ -160,9 +185,13 @@ router.post('/slots/hold', requireAuth, bookingLimiter, async (req, res) => {
 // DELETE /api/slots/hold/:holdId — release a slot hold
 router.delete('/slots/hold/:holdId', requireAuth, async (req, res) => {
   try {
+    // Scoped to the caller's own wizard hold — previously any signed-in user
+    // could delete any 'held' row by id, including other customers' checkout
+    // holds and venue-upgrade holds (booking_id set).
     await pool.query(
-      `DELETE FROM booking_timeslots WHERE id = $1 AND status = 'held'`,
-      [req.params.holdId]
+      `DELETE FROM booking_timeslots
+       WHERE id = $1 AND status = 'held' AND held_by_user_id = $2 AND booking_id IS NULL`,
+      [req.params.holdId, req.user.uid]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -175,7 +204,7 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
   const uid = req.user.uid;
   const {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
-    allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount,
+    allergyNotes,
     contactEmail, contactPhone, stripePaymentIntentId, slotHoldId, cardholderName,
     cateringChoice, noAlcoholAck,
   } = req.body;
@@ -194,8 +223,18 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     if (already) return res.json({ bookingId: already.id });
   }
 
+  if (!stripePaymentIntentId || typeof stripePaymentIntentId !== 'string') {
+    return res.status(400).json({ error: 'Missing payment confirmation.' });
+  }
+
+  if (!isValidNzMobile(contactPhone)) {
+    return res.status(400).json({ error: 'Please enter a valid NZ mobile number.' });
+  }
+
   // Verify the Stripe PaymentIntent was actually charged for the correct amount
   let verifiedTotalAmount;
+  let verifiedBaseAmount;
+  let pricedAddons;
   let room;
   let stripeBillingName = null;
   let stripeCardBrand = null;
@@ -240,9 +279,18 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     const serverBaseAmount = room.pricing_model === 'flat'
       ? parseFloat(room.flat_price)
       : parseFloat(room.base_price_per_child) * guests;
-    const expectedCents = Math.round((serverBaseAmount + (parseFloat(addonsAmount) || 0)) * 100);
+    // Add-ons are priced server-side, never from the client's addonsAmount —
+    // otherwise a tampered request could pay only the room price while the
+    // stored addons_summary still lists the add-ons for the kitchen.
+    let pricingError = null;
+    try {
+      pricedAddons = await priceCheckoutAddons(pool, req.body, bookingRef, uid, guests, { lenientFlavours: true });
+    } catch (err) {
+      pricingError = err.message;
+    }
+    const expectedCents = pricedAddons ? Math.round((serverBaseAmount + pricedAddons.amount) * 100) : null;
 
-    if (pi.amount !== expectedCents) {
+    if (!pricedAddons || pi.amount !== expectedCents) {
       // The card has already been captured (pi.status === 'succeeded' above) for a stale
       // amount — most likely the guest count/add-ons changed after the Payment Element was
       // mounted. Refund immediately rather than leaving the customer charged with no booking,
@@ -251,7 +299,9 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
       const wizardState = await lookupWizardState(bookingRef);
       const refundStatus = await refundOrphan(
         stripePaymentIntentId, pi.amount / 100, uid,
-        `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`,
+        pricedAddons
+          ? `Amount mismatch: charged $${(pi.amount / 100).toFixed(2)}, expected $${(expectedCents / 100).toFixed(2)}.`
+          : `Add-on selection could not be priced: ${pricingError}`,
         bookingRef, wizardState
       );
 
@@ -263,6 +313,7 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     }
 
     verifiedTotalAmount = pi.amount / 100;
+    verifiedBaseAmount = serverBaseAmount;
     stripeBillingName = pi.payment_method?.billing_details?.name || null;
     stripeCardBrand = pi.payment_method?.card?.brand || null;
     stripeCardLast4 = pi.payment_method?.card?.last4 || null;
@@ -277,7 +328,8 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     // client-submitted value, which isn't independently verified.
     const bookingId = await createConfirmedBooking({
       bookingRef, uid, room, partyDate, partyTime, guestCount, foodChoice,
-      allergyNotes, addonsSummary, baseAmount, addonsAmount, totalAmount: verifiedTotalAmount,
+      allergyNotes, addonsSummary: pricedAddons.summary, baseAmount: verifiedBaseAmount,
+      addonsAmount: pricedAddons.amount, totalAmount: verifiedTotalAmount,
       contactEmail, contactPhone, slotHoldId, cardholderName: stripeBillingName || cardholderName,
       cardBrand: stripeCardBrand, cardLast4: stripeCardLast4,
       paymentProvider: 'stripe', stripePaymentIntentId,
@@ -295,6 +347,16 @@ router.post('/bookings', requireAuth, bookingLimiter, async (req, res) => {
     res.json({ bookingId });
   } catch (err) {
     if (err instanceof SlotHoldExpiredError) {
+      // The webhook safety net (stripeReconcile.js) may have claimed this
+      // same hold and created the booking while this request was in flight —
+      // the check near the top of this handler only covers it finishing
+      // FIRST. Losing the hold to it isn't a lost slot; don't refund a
+      // booking that actually succeeded.
+      const { rows: [raced] } = await pool.query(
+        `SELECT id FROM bookings WHERE stripe_payment_intent_id = $1`, [stripePaymentIntentId]
+      );
+      if (raced) return res.json({ bookingId: raced.id });
+
       // The card has already been captured (verified above) but the slot
       // hold no longer holds the slot — most likely it expired while the
       // customer was mid-payment, and someone else may now hold it. Same
@@ -443,6 +505,7 @@ router.get('/bookings/:id', requireAuth, async (req, res) => {
               b.total_amount as "totalAmount", b.status, b.contact_email as "contactEmail",
               b.stripe_payment_intent_id as "stripePaymentIntentId",
               b.food_credit_amount as "foodCreditAmount",
+              b.upgrade_status as "upgradeStatus",
               r.name as "roomName", r.emoji as "roomEmoji", r.slug as "roomSlug",
               r.max_guests as "roomMaxGuests", r.min_guests as "roomMinGuests",
               r.base_price_per_child as "pricePerChild", r.pricing_model as "pricingModel"
@@ -506,6 +569,15 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
     return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
   }
 
+  // A whole-venue "extra kids" upgrade is admin-only from here on — the
+  // room/date/time fields are already structurally excluded from this
+  // route's accepted body params, but guest_count wasn't, so it needs an
+  // explicit guard: once upgrade_status is set, only food/add-ons may still
+  // change through this endpoint.
+  if (booking.upgrade_status && parseInt(newGuestCount, 10) !== booking.guest_count) {
+    return res.status(400).json({ error: 'This booking is mid a Whole Venue Hire upgrade — guest count can only be changed by our team. Contact us if you have questions.' });
+  }
+
   // Validate guest count
   if (parseInt(newGuestCount, 10) < booking.guest_count) {
     return res.status(400).json({ error: 'Guest count cannot be reduced.' });
@@ -521,6 +593,21 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
   let editCardholderName = null;
   if (delta > 0) {
     if (!paymentIntentId) return res.status(400).json({ error: 'Payment required for this edit.' });
+
+    // A double-tapped "Confirm" or a client retry after a slow/lost response
+    // resends the same paymentIntentId — the PaymentIntent itself is still
+    // 'succeeded' in Stripe on the second call, so without this check the
+    // request would sail through verification again and only fail later at
+    // the `INSERT INTO payments` unique constraint, surfacing a raw DB error
+    // to the customer instead of the harmless no-op this should be. The
+    // insert below only ever runs once per edit inside a single committed
+    // transaction, so a payments row existing for this intent means the
+    // earlier attempt already fully applied.
+    const { rows: [existingPayment] } = await pool.query(
+      `SELECT id FROM payments WHERE stripe_payment_intent_id = $1`, [paymentIntentId]
+    );
+    if (existingPayment) return res.json({ ok: true });
+
     try {
       const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['payment_method'] });
       if (pi.status !== 'succeeded') return res.status(400).json({ error: 'Payment has not succeeded.' });
@@ -587,6 +674,15 @@ router.post('/bookings/:id/edit', requireAuth, bookingLimiter, async (req, res) 
     res.json({ ok: true });
   } catch (err) {
     await client.query('ROLLBACK');
+    // Belt-and-braces for the narrow window the pre-check above can't close:
+    // two truly concurrent double-taps can both pass that SELECT before
+    // either COMMITs. The loser's whole transaction rolls back here (so its
+    // guest_count/addons update never applied), which is fine — the winner
+    // already committed the identical update. Report it as the success it
+    // effectively is instead of leaking the raw unique-violation to the customer.
+    if (err.code === '23505' && err.constraint === 'payments_stripe_payment_intent_id_key') {
+      return res.json({ ok: true });
+    }
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -688,6 +784,12 @@ router.post('/bookings/:id/reduce-guests', requireAuth, bookingLimiter, async (r
   const hoursUntil = parseFloat(booking.hoursUntilParty);
   if (hoursUntil < 24) {
     return res.status(400).json({ error: 'Edits cannot be accepted within 24 hours of your party.' });
+  }
+
+  // Same admin-only guard as POST /bookings/:id/edit — a whole-venue "extra
+  // kids" upgrade locks guest_count to admin-only changes going forward.
+  if (booking.upgrade_status) {
+    return res.status(400).json({ error: 'This booking is mid a Whole Venue Hire upgrade — guest count can only be changed by our team. Contact us if you have questions.' });
   }
 
   if (booking.pricingModel === 'flat') {

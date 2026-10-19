@@ -7,6 +7,8 @@ const { createConfirmedBooking } = require('../services/bookingCreator');
 const { sendBookingConfirmation } = require('../services/bookingNotifications');
 const { assertBookingAllowedOnDate } = require('../services/bookingRules');
 const poli = require('../services/poliClient');
+const { isValidNzMobile } = require('../services/validation');
+const { priceCheckoutAddons } = require('../services/addonPricing');
 
 const SITE_URL = process.env.SITE_URL || 'https://wonderworldwestgate.co.nz';
 
@@ -30,13 +32,16 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
 
   const {
     bookingRef, roomId, roomSlug, partyDate, partyTime, guestCount, foodChoice,
-    allergyNotes, addonsSummary, addonsAmount = 0, contactEmail, contactPhone, slotHoldId,
+    allergyNotes, contactEmail, contactPhone, slotHoldId,
     firstName, lastName, cateringChoice, noAlcoholAck,
   } = req.body;
   const uid = req.user.uid;
 
   if (!slotHoldId) return res.status(400).json({ error: 'Missing slot hold.' });
   if (!bookingRef || !bookingRef.trim()) return res.status(400).json({ error: 'Missing booking reference.' });
+  if (!isValidNzMobile(contactPhone)) {
+    return res.status(400).json({ error: 'Please enter a valid NZ mobile number.' });
+  }
 
   try {
     const { rows: [room] } = await pool.query(
@@ -69,7 +74,18 @@ router.post('/initiate', requireAuth, paymentLimiter, async (req, res) => {
     const baseAmount = room.pricing_model === 'flat'
       ? parseFloat(room.flat_price)
       : parseFloat(room.base_price_per_child) * guests;
-    const totalAmount = baseAmount + parseFloat(addonsAmount || 0);
+    // Priced server-side rather than from the client's addonsAmount/
+    // addonsSummary — the stashed payload below is what verifyAndConfirm
+    // later trusts, so it must only ever hold server-computed values.
+    let priced;
+    try {
+      priced = await priceCheckoutAddons(pool, req.body, bookingRef, uid, guests);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    const addonsSummary = priced.summary;
+    const addonsAmount = priced.amount;
+    const totalAmount = baseAmount + addonsAmount;
     if (!totalAmount || totalAmount < 1) return res.status(400).json({ error: 'Invalid booking amount.' });
 
     await pool.query(

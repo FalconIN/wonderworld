@@ -2,3 +2,14 @@
 node_modules/
 server/node_modules/
 backups/
+
+# Secrets (never commit, including backup copies)
+.env.*
+!.env.example
+
+# Backup copies made before edits
+*.bak
+*.bak-*
+*.bak.*
+*.backup
+.pre-reschedule-backups/

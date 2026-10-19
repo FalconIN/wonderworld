@@ -8,6 +8,14 @@
  *   - Customers table
  */
 
+// Paused per user request while the venue-upgrade feature gets dialed in
+// first — mirrors the same-named flags in server/routes/admin.js (backend
+// is guarded independently; these just keep the UI from offering an action
+// that would 403 anyway). Flip both back to true + bump this file's
+// cache-busting version + reload PM2 to go live.
+const FEATURE_MAGIC_LINK_ENABLED = true;
+const FEATURE_NOTES_EMAIL_TOGGLE_ENABLED = true;
+
 let currentTab = 'overview';
 let allBookings   = [];
 let allPayments   = [];
@@ -1778,10 +1786,29 @@ async function viewBooking(bookingId) {
           Change Room
         </button>
       </div>` : ''}
+      ${booking.status === 'confirmed' && booking.roomPricingModel === 'per_child' && !booking.upgradeStatus ? `
+      <button onclick="openVenueUpgradeModal('${booking.id}')" class="w-full py-3 rounded-xl font-semibold text-sm text-white transition-all mt-2" style="background: linear-gradient(135deg,#334155,#0F172A)">
+        🏛️ Upgrade to Whole Venue Hire
+      </button>` : ''}
+      ${booking.upgradeStatus === 'pending_payment' ? `
+      <div class="bg-slate-100 border border-slate-300 rounded-xl p-4 mt-2">
+        <div class="text-xs text-slate-600 mb-1 uppercase font-semibold">🏛️ Whole Venue Upgrade — Payment Pending</div>
+        <div class="text-sm text-slate-700 mb-2">Rate: $${parseFloat(booking.upgradeOverageRate || 0).toFixed(2)}/child. Deadline: ${booking.upgradeDeadlineAt ? new Date(booking.upgradeDeadlineAt).toLocaleDateString('en-NZ', { timeZone: NZ_TZ }) : '—'}</div>
+        <button onclick="sendUpgradePaymentLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary w-full py-2.5 text-sm">📧 Send Payment Link</button>
+      </div>` : ''}
+      ${booking.upgradeStatus === 'completed' ? `
+      <div class="bg-slate-100 border border-slate-300 rounded-xl p-4 mt-2">
+        <div class="text-xs text-slate-600 mb-1 uppercase font-semibold">🏛️ Whole Venue Upgrade — Paid</div>
+        <button onclick="sendUpgradePaymentLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary w-full py-2.5 text-sm">📧 Send Update Email</button>
+      </div>` : ''}
       <div class="flex gap-3 mt-2">
         ${booking.status === 'confirmed' ? `
-        <button onclick="resendConfirmationEmail('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+        <button onclick="openResendConfirmationModal('${booking.id}')" class="btn-secondary flex-1 py-3 text-sm">
           ✉️ Resend Confirmation
+        </button>` : ''}
+        ${booking.status === 'confirmed' && booking.userIsPlaceholder && FEATURE_MAGIC_LINK_ENABLED ? `
+        <button onclick="resendMagicLink('${booking.id}', '${escapeHtml(booking.bookingRef)}')" class="btn-secondary flex-1 py-3 text-sm">
+          🔑 Resend Magic Link
         </button>` : ''}
         ${booking.status !== 'cancelled' ? `
         <button onclick="cancelBooking('${booking.id}', '${booking.bookingRef}')" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" style="background: linear-gradient(135deg,#EF4444,#DC2626)">
@@ -2077,13 +2104,153 @@ function closeChangeRoomModal() {
   document.getElementById('changeRoomModal').style.display = 'none';
 }
 
-async function resendConfirmationEmail(bookingId, bookingRef) {
-  if (!confirm(`Resend the confirmation email for booking ${bookingRef}?`)) return;
+// ---------------------------------------------------------------------------
+// Venue upgrade (extra-kids whole-venue-hire conversion)
+// ---------------------------------------------------------------------------
+let venueUpgradeState = { bookingId: null };
+
+function openVenueUpgradeModal(bookingId) {
+  venueUpgradeState = { bookingId };
+  const modal = document.getElementById('venueUpgradeModal');
+  const content = document.getElementById('venueUpgradeContent');
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Switches this booking's room to Whole Venue Hire and its pricing to per-child (at this booking's current per-child rate) for the new headcount. The customer will owe the difference between the new total and what's already been paid.</p>
+    <div>
+      <label class="lbl">New Total Guest Count</label>
+      <input class="field" type="number" id="vu_newGuestCount" min="24" placeholder="e.g. 30" oninput="venueUpgradePreview()" />
+    </div>
+    <div id="venueUpgradePreviewBox" class="mt-3"></div>
+    <div id="venueUpgradeError" class="text-red-500 text-sm hidden mt-3"></div>
+    <div class="flex gap-3 mt-4">
+      <button onclick="closeVenueUpgradeModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+      <button onclick="doConfirmVenueUpgrade()" class="flex-1 py-3 rounded-xl font-semibold text-sm text-white transition-all" id="venueUpgradeConfirmBtn" disabled style="background: linear-gradient(135deg,#334155,#0F172A); opacity:.5" >Confirm Upgrade</button>
+    </div>`;
+  modal.style.display = 'flex';
+}
+
+function closeVenueUpgradeModal() {
+  document.getElementById('venueUpgradeModal').style.display = 'none';
+}
+
+let venueUpgradePreviewDebounce = null;
+function venueUpgradePreview() {
+  clearTimeout(venueUpgradePreviewDebounce);
+  venueUpgradePreviewDebounce = setTimeout(async () => {
+    const box = document.getElementById('venueUpgradePreviewBox');
+    const confirmBtn = document.getElementById('venueUpgradeConfirmBtn');
+    const newGuestCount = parseInt(document.getElementById('vu_newGuestCount').value, 10);
+    if (!newGuestCount) { box.innerHTML = ''; confirmBtn.disabled = true; confirmBtn.style.opacity = .5; return; }
+
+    box.innerHTML = '<p class="text-xs text-gray-400">Calculating…</p>';
+    try {
+      const preview = await callAPI(`admin/bookings/${venueUpgradeState.bookingId}/upgrade-preview?newGuestCount=${newGuestCount}`, null, 'GET');
+      let warnings = '';
+      if (!preview.dayOfWeekOk) warnings += `<div class="text-amber-600 mb-1">⚠️ This party's date isn't normally a Whole Venue Hire day (Sun/Mon/Tue) — you can still proceed, but double check this is intended.</div>`;
+      if (preview.deadlineTooClose) warnings += `<div class="text-amber-600 mb-1">⚠️ This party is close to a week away — the payment deadline may already be too tight.</div>`;
+      box.innerHTML = `
+        <div class="bg-slate-50 dark:bg-gray-800 rounded-xl p-3 text-sm space-y-1">
+          <div class="flex justify-between"><span>Per-child rate</span><span class="font-semibold">$${preview.overageRate.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>New total</span><span class="font-semibold">$${preview.newTotalAmount.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span>Already paid</span><span class="font-semibold">$${preview.amountPaid.toFixed(2)}</span></div>
+          <div class="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1"><span class="font-bold">Amount due</span><span class="font-bold text-slate-800 dark:text-white">$${preview.delta.toFixed(2)}</span></div>
+        </div>
+        <div class="text-xs mt-2">${warnings}</div>`;
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = 1;
+    } catch (err) {
+      box.innerHTML = `<p class="text-red-500 text-sm">${escapeHtml(err.message)}</p>`;
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = .5;
+    }
+  }, 350);
+}
+
+async function doConfirmVenueUpgrade() {
+  const newGuestCount = parseInt(document.getElementById('vu_newGuestCount').value, 10);
+  const errEl = document.getElementById('venueUpgradeError');
+  errEl.classList.add('hidden');
   try {
-    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, {}, 'POST');
-    alert('✅ Confirmation email resent.');
+    await callAPI(`admin/bookings/${venueUpgradeState.bookingId}/upgrade-to-venue`, { newGuestCount }, 'POST');
+    closeVenueUpgradeModal();
+    closeBookingModal();
+    alert('✅ Booking upgraded to Whole Venue Hire. Use "Send Payment Link" on the booking to email the customer.');
+    await loadBookings();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
+async function sendUpgradePaymentLink(bookingId, bookingRef) {
+  if (!confirm(`Send the whole-venue-upgrade update email (with payment link, if payment is still due) for booking ${bookingRef}? This invalidates any payment link sent previously.`)) return;
+  try {
+    const result = await callAPI(`admin/bookings/${bookingId}/send-upgrade-payment-link`, {}, 'POST');
+    alert(result.amountDue > 0 ? `✅ Update email sent — $${result.amountDue.toFixed(2)} due.` : '✅ Update email sent — no payment required.');
+  } catch (err) {
+    alert('Failed to send: ' + err.message);
+  }
+}
+
+// Replaces the old bare confirm() dialog: a plain confirm() can't offer the
+// "include admin notes" checkbox, so this is a small modal instead. The
+// checkbox is a per-send choice (not a persisted booking field) — ticked
+// fresh each time so a note added for one resend can't silently leak into
+// some later, unrelated resend nobody meant to include it in. Looks the
+// booking up from allBookings by id (rather than taking bookingRef/
+// adminNotes as onclick-attribute arguments) since admin notes are
+// arbitrary free text — unsafe to interpolate directly into an inline
+// onclick="..." attribute the way a generated booking ref safely can be.
+function openResendConfirmationModal(bookingId) {
+  const booking = allBookings.find(b => b.id === bookingId);
+  if (!booking) return;
+  const bookingRef = booking.bookingRef;
+  const adminNotes = booking.adminNotes || '';
+  const modal = document.getElementById('resendConfirmationModal');
+  const content = document.getElementById('resendConfirmationContent');
+  const hasNotes = FEATURE_NOTES_EMAIL_TOGGLE_ENABLED && !!(adminNotes && adminNotes.trim());
+
+  content.innerHTML = `
+    <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Resend the confirmation email for booking <strong>${escapeHtml(bookingRef)}</strong>?</p>
+    ${hasNotes ? `
+    <label class="flex items-start gap-2 p-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 cursor-pointer mb-4">
+      <input type="checkbox" id="rc_includeNotes" class="mt-0.5 w-4 h-4 accent-indigo-500 flex-shrink-0" />
+      <span class="text-sm">Include admin notes under a <strong>NOTES:</strong> heading in this email</span>
+    </label>
+    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-xs text-gray-500 whitespace-pre-wrap mb-4">${escapeHtml(adminNotes)}</div>
+    ` : ''}
+    <div id="resendConfirmationError" class="text-red-500 text-sm hidden mb-3"></div>
+    <div class="flex gap-3">
+      <button onclick="closeResendConfirmationModal()" class="btn-secondary flex-1 py-3">Cancel</button>
+      <button onclick="doResendConfirmationEmail('${bookingId}', '${escapeHtml(bookingRef)}')" class="btn-primary flex-1 py-3">Resend</button>
+    </div>`;
+
+  modal.style.display = 'flex';
+}
+
+function closeResendConfirmationModal() {
+  document.getElementById('resendConfirmationModal').style.display = 'none';
+}
+
+async function resendMagicLink(bookingId, bookingRef) {
+  if (!confirm(`Resend the account setup link for booking ${bookingRef}? This invalidates any link sent previously.`)) return;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-magic-link`, {}, 'POST');
+    alert('✅ Account setup link resent.');
   } catch (err) {
     alert('Failed to resend: ' + err.message);
+  }
+}
+
+async function doResendConfirmationEmail(bookingId, bookingRef) {
+  const includeNotes = document.getElementById('rc_includeNotes')?.checked || false;
+  try {
+    await callAPI(`admin/bookings/${bookingId}/resend-confirmation`, { includeNotes }, 'POST');
+    closeResendConfirmationModal();
+    alert('✅ Confirmation email resent.');
+  } catch (err) {
+    const errEl = document.getElementById('resendConfirmationError');
+    if (errEl) { errEl.textContent = 'Failed to resend: ' + err.message; errEl.classList.remove('hidden'); }
+    else alert('Failed to resend: ' + err.message);
   }
 }
 
@@ -2544,10 +2711,10 @@ const AB_ROOMS = [
     pricingModel: 'flat', flatPrice: 2899, allowedDaysOfWeek: [0, 1, 2] }, // Sun/Mon/Tue
 ];
 
-// '5:30 PM' mirrors the customer-facing evening slot (Fri/Sat only, ordinary
-// rooms). Whole-venue hire has its own single slot, kept in a separate list
-// with a distinct label (5:30-8:30 PM vs the ordinary rooms' 5:30-7:00 PM)
-// so the two are never conflated in the booking list.
+// '5:30 PM' mirrors the customer-facing evening slot (Wed/Thu/Fri/Sat only,
+// ordinary rooms). Whole-venue hire has its own single slot, kept in a
+// separate list with a distinct label (5:30-8:30 PM vs the ordinary rooms'
+// 5:30-7:00 PM) so the two are never conflated in the booking list.
 const AB_ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
 const AB_SLOT_END_TIMES = {
   '9:30 AM':  '11:00 AM',
@@ -2556,7 +2723,7 @@ const AB_SLOT_END_TIMES = {
   '3:30 PM':  '5:00 PM',
   '5:30 PM':  '7:00 PM',
 };
-const AB_RESTRICTED_SLOT_DAYS = { '5:30 PM': [5, 6] }; // Friday & Saturday
+const AB_RESTRICTED_SLOT_DAYS = { '5:30 PM': [3, 4, 5, 6] }; // Wed/Thu/Fri/Sat
 const AB_WHOLE_VENUE_SLOTS = ['5:30 PM – 8:30 PM'];
 const AB_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 function abDescribeDays(days) { return days.map(d => AB_DAY_NAMES[d]).join('/'); }
@@ -3018,6 +3185,7 @@ function ebChangeType(addonId, type, delta) {
   if (next === 0) delete editBookingState[stateKey][type]; else editBookingState[stateKey][type] = next;
   ebUpdateTypePickerUI(addonId);
   ebUpdateOrderSummary();
+  ebScheduleAddonAutosave();
 }
 
 // ── Add-booking addon list ────────────────────────────────────────────────────
@@ -3255,50 +3423,55 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function parseAddonsSummary(summary) {
-  const addons = {};
-  if (!summary) return addons;
-
-  // Typed items have variant names embedded in the label, so match on the base prefix only
-  const flexMatchers = {
-    drinks_soda:    /Soft Drink(?:\s*\([^)]*\))?\s*×(\d+)/i,
-    pizza_11:       /11-inch Pizza(?:\s*\([^)]*\))?\s*×(\d+)/i,
-  };
-  Object.entries(flexMatchers).forEach(([id, pattern]) => {
-    const m = summary.match(pattern);
-    if (m) addons[id] = parseInt(m[1]);
-  });
-
-  // All other items use the standard label match
-  Object.entries(AB_ADDON_PRICES).forEach(([id, a]) => {
-    if (addons[id] !== undefined) return;
-    const match = summary.match(new RegExp(escapeRegex(a.label) + '[^×]*×(\\d+)', 'i'));
-    if (match) addons[id] = parseInt(match[1]);
-  });
-
-  return addons;
+// Customer bookings write "(28pcs)" where this catalog says "(28 pcs)", so
+// labels are compared case- and whitespace-insensitively.
+function normAddonLabel(label) {
+  return label.toLowerCase().replace(/\s+/g, '');
 }
 
-function parseTypesFromSummary(summary, addonId) {
-  if (!summary) return {};
-  const basePatterns = {
-    drinks_soda:    /Soft Drink\s*\(([^)]+)\)/i,
-    pizza_11:       /11-inch Pizza\s*\(([^)]+)\)/i,
-  };
-  const pattern = basePatterns[addonId];
-  if (!pattern) return {};
-  const outer = summary.match(pattern);
-  if (!outer) return {};
-  const typeNames = Object.keys(getAddonTypeMap(addonId));
-  const types = {};
-  outer[1].split(',').forEach(part => {
-    const trimmed = part.trim();
-    const xMatch = trimmed.match(/^(.+?)\s+x(\d+)$/i);
-    const name = xMatch ? xMatch[1].trim() : trimmed;
-    const qty  = xMatch ? parseInt(xMatch[2]) : 1;
-    if (typeNames.includes(name) && qty > 0) types[name] = qty;
+// Parses an addons_summary into { addons, pizzaTypes, sodaTypes, unmatched }.
+// Walks EVERY top-level line and sums quantities: customer add-on purchases
+// append to the summary, so the same addon can appear on several lines
+// ("11-inch Pizza (Ham & Cheese) ×1 ($25.00), ..., 11-inch Pizza (Salami &
+// Cheese) ×1 ($25.00)"). This used to take a single non-global match per
+// addon, so only the first line was read and the rebuild on save silently
+// deleted the rest along with their dollars (WW-QW3RJW, WW-ZS0R3P).
+// Lines it can't map land in `unmatched` so the modal can refuse to save
+// rather than drop them.
+function parseAddonsSummaryFull(summary) {
+  const result = { addons: {}, pizzaTypes: {}, sodaTypes: {}, unmatched: [] };
+  if (!summary) return result;
+  const typedBases = { '11-inch pizza': 'pizza_11', 'soft drink': 'drinks_soda' };
+  splitTopLevelCommas(summary).forEach(chunk => {
+    // Outer quantity is normally the unicode "×", but some older rows use a plain "x".
+    const m = chunk.match(/^(.*?)\s*[×x]\s*(\d+)\s*\(\$[\d,.]+\)\s*$/i);
+    if (!m) { result.unmatched.push(chunk); return; }
+    const label = m[1].trim();
+    const qty = parseInt(m[2], 10);
+
+    const typedMatch = label.match(/^(11-inch Pizza|Soft Drink)\s*(?:\(([^)]*)\))?$/i);
+    if (typedMatch) {
+      const id = typedBases[typedMatch[1].toLowerCase()];
+      const stateKey = getAddonTypeStateKey(id);
+      result.addons[id] = (result.addons[id] || 0) + qty;
+      const typeNames = Object.keys(getAddonTypeMap(id));
+      (typedMatch[2] || '').split(',').forEach(part => {
+        const trimmed = part.trim();
+        const xMatch = trimmed.match(/^(.+?)\s+x(\d+)$/i);
+        const name = xMatch ? xMatch[1].trim() : trimmed;
+        const typeQty = xMatch ? parseInt(xMatch[2], 10) : 1;
+        if (typeNames.includes(name) && typeQty > 0) {
+          result[stateKey][name] = (result[stateKey][name] || 0) + typeQty;
+        }
+      });
+      return;
+    }
+
+    const id = Object.keys(AB_ADDON_PRICES).find(k => normAddonLabel(AB_ADDON_PRICES[k].label) === normAddonLabel(label));
+    if (id) result.addons[id] = (result.addons[id] || 0) + qty;
+    else result.unmatched.push(chunk);
   });
-  return types;
+  return result;
 }
 
 function openEditBookingModal(bookingId) {
@@ -3308,9 +3481,11 @@ function openEditBookingModal(bookingId) {
   editBookingState.bookingId = bookingId;
   editBookingState.booking = booking;
   editBookingState.guests = booking.guestCount || 10;
-  editBookingState.addons = parseAddonsSummary(booking.addonsSummary);
-  editBookingState.pizzaTypes = parseTypesFromSummary(booking.addonsSummary, 'pizza_11');
-  editBookingState.sodaTypes  = parseTypesFromSummary(booking.addonsSummary, 'drinks_soda');
+  const parsedAddons = parseAddonsSummaryFull(booking.addonsSummary);
+  editBookingState.addons = parsedAddons.addons;
+  editBookingState.pizzaTypes = parsedAddons.pizzaTypes;
+  editBookingState.sodaTypes  = parsedAddons.sodaTypes;
+  editBookingState.addonsUnmatched = parsedAddons.unmatched;
   const ebRoom = AB_ROOMS.find(r => r.name === booking.roomName);
   editBookingState.roomMin = ebRoom ? ebRoom.minGuests : 1;
   editBookingState.roomMax = ebRoom ? ebRoom.maxGuests : 24;
@@ -3335,14 +3510,33 @@ function openEditBookingModal(bookingId) {
   document.getElementById('eb_adminNotes').value = booking.adminNotes || '';
   document.getElementById('eb_status').value = booking.status === 'pending' ? 'pending' : 'confirmed';
   document.getElementById('eb_amountPaid').value = parseFloat(booking.amountPaid || 0).toFixed(2);
-  document.getElementById('editBookingError').classList.add('hidden');
+  const ebErrEl = document.getElementById('editBookingError');
+  if (editBookingState.addonsUnmatched.length) {
+    ebErrEl.textContent = ebUnmatchedAddonsMessage();
+    ebErrEl.classList.remove('hidden');
+  } else {
+    ebErrEl.classList.add('hidden');
+  }
 
   ebRenderAddonsList();
   ebUpdateOrderSummary();
+  ebAutosaveTimer = null;
+  ebAutosaveInFlight = false;
+  ebAutosavePending = false;
+  const statusEl = document.getElementById('eb_addonsSaveStatus');
+  if (statusEl) statusEl.classList.add('hidden');
   document.getElementById('editBookingModal').style.display = 'flex';
 }
 
+// Saving rebuilds addons_summary from the parsed state, so any line the
+// parser couldn't map would be deleted (and its dollars dropped from the
+// total). Block saving instead; the admin needs to fix those by hand.
+function ebUnmatchedAddonsMessage() {
+  return `⚠️ Can't safely edit this booking: these add-on lines weren't recognised and would be lost on save: ${editBookingState.addonsUnmatched.join('; ')}`;
+}
+
 function closeEditBookingModal() {
+  ebFlushAddonAutosave();
   document.getElementById('editBookingModal').style.display = 'none';
 }
 
@@ -3415,6 +3609,114 @@ function ebChangeAddon(id, delta) {
     ebUpdateTypePickerUI(id);
   }
   ebUpdateOrderSummary();
+  ebScheduleAddonAutosave();
+}
+
+// ---------------------------------------------------------------------------
+// Edit Booking Modal — Add-Ons autosave
+//
+// The Add-Ons list (pizza/platters/soda/nuggets/fries/GF nuggets) saves
+// itself in the background as the admin clicks +/-, instead of waiting for
+// the modal-wide "Save Changes" button. It PATCHes only the addon-derived
+// columns (addons_summary/addons_amount/total_amount) and resends every
+// other field exactly as it was when the modal opened — never the live
+// values sitting in the other form fields — so an addon click can't
+// accidentally commit an in-progress, not-yet-saved edit to the name,
+// notes, status or payment fields. Those still only commit via the
+// "Save Changes" button, so Cancel still discards them.
+// ---------------------------------------------------------------------------
+let ebAutosaveTimer = null;
+let ebAutosaveInFlight = false;
+let ebAutosavePending = false;
+
+function ebScheduleAddonAutosave() {
+  clearTimeout(ebAutosaveTimer);
+  ebSetAddonsSaveStatus('pending');
+  ebAutosaveTimer = setTimeout(ebRunAddonAutosave, 700);
+}
+
+// Saves immediately if a debounced autosave is still waiting — used when the
+// modal closes, so the very last click isn't lost to the debounce window.
+function ebFlushAddonAutosave() {
+  if (!ebAutosaveTimer) return;
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+  ebRunAddonAutosave();
+}
+
+async function ebRunAddonAutosave() {
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+  if (!editBookingState.bookingId || !editBookingState.booking) return;
+  if (editBookingState.addonsUnmatched?.length) { ebSetAddonsSaveStatus('error', 'unrecognised add-on lines, see above'); return; }
+
+  // Leave it pending rather than saving a half-chosen pizza/soda type split.
+  const pizzaQty = editBookingState.addons['pizza_11'] || 0;
+  if (pizzaQty > 0) {
+    const picked = Object.values(editBookingState.pizzaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < pizzaQty) { ebSetAddonsSaveStatus('needs-type'); return; }
+  }
+  const sodaQty = editBookingState.addons['drinks_soda'] || 0;
+  if (sodaQty > 0) {
+    const picked = Object.values(editBookingState.sodaTypes || {}).reduce((s, v) => s + v, 0);
+    if (picked < sodaQty) { ebSetAddonsSaveStatus('needs-type'); return; }
+  }
+
+  if (ebAutosaveInFlight) { ebAutosavePending = true; return; }
+  ebAutosaveInFlight = true;
+  ebSetAddonsSaveStatus('saving');
+
+  const booking = editBookingState.booking;
+  const addonsAmount = ebGetAddonTotal();
+  const baseAmount = parseFloat(booking.baseAmount) || 0;
+  const totalAmount = baseAmount + addonsAmount;
+  const addonLines = Object.entries(editBookingState.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => `${getAddonLabelWithTypes(id, editBookingState)} ×${qty} ($${(AB_ADDON_PRICES[id].price * qty).toFixed(2)})`);
+  const addonsSummary = addonLines.join(', ');
+
+  try {
+    await callAPI(`admin/bookings/${editBookingState.bookingId}`, {
+      firstName: booking.firstName || '',
+      lastName: booking.lastName || '',
+      email: booking.contactEmail || '',
+      phone: booking.contactPhone || '',
+      guestCount: booking.guestCount,
+      foodChoice: booking.foodChoice,
+      allergyNotes: booking.allergyNotes || '',
+      addonsSummary, addonsAmount, baseAmount, totalAmount,
+      bookingStatus: booking.status === 'pending' ? 'pending' : (booking.status === 'cancelled' ? 'cancelled' : 'confirmed'),
+      amountPaid: parseFloat(booking.amountPaid || 0),
+      adminNotes: booking.adminNotes || '',
+    }, 'PATCH');
+
+    // Keep the pristine snapshot (and the table's cached row) in step so the
+    // next autosave — or the final "Save Changes" — diffs against what the
+    // server actually has now, not the value from when the modal opened.
+    booking.addonsSummary = addonsSummary;
+    booking.addonsAmount = addonsAmount;
+    booking.totalAmount = totalAmount;
+    const cached = allBookings.find(b => b.id === editBookingState.bookingId);
+    if (cached) { cached.addonsSummary = addonsSummary; cached.addonsAmount = addonsAmount; cached.totalAmount = totalAmount; }
+
+    ebSetAddonsSaveStatus('saved');
+  } catch (err) {
+    ebSetAddonsSaveStatus('error', err.message);
+  } finally {
+    ebAutosaveInFlight = false;
+    if (ebAutosavePending) { ebAutosavePending = false; ebRunAddonAutosave(); }
+  }
+}
+
+function ebSetAddonsSaveStatus(state, errMsg) {
+  const el = document.getElementById('eb_addonsSaveStatus');
+  if (!el) return;
+  el.classList.remove('hidden');
+  if (state === 'pending')        { el.textContent = 'Unsaved changes…'; el.className = 'text-xs text-gray-400'; }
+  else if (state === 'saving')    { el.textContent = 'Saving…';          el.className = 'text-xs text-gray-400'; }
+  else if (state === 'saved')     { el.textContent = '✓ Saved';          el.className = 'text-xs text-green-600 font-semibold'; }
+  else if (state === 'needs-type'){ el.textContent = 'Choose a type above to save'; el.className = 'text-xs text-amber-600 font-semibold'; }
+  else if (state === 'error')     { el.textContent = `⚠️ Autosave failed: ${errMsg || 'please retry'}`; el.className = 'text-xs text-red-500 font-semibold'; }
 }
 
 function ebGetAddonTotal() {
@@ -3469,6 +3771,9 @@ function ebUpdateBalanceDue() {
 }
 
 async function submitEditBooking() {
+  clearTimeout(ebAutosaveTimer);
+  ebAutosaveTimer = null;
+
   const btn = document.getElementById('editBookingBtn');
   const btnText = document.getElementById('editBookingBtnText');
   const spinner = document.getElementById('editBookingBtnSpinner');
@@ -3484,6 +3789,12 @@ async function submitEditBooking() {
   const lastName  = document.getElementById('eb_lastName').value.trim();
   const email     = document.getElementById('eb_email').value.trim().toLowerCase();
   const phone     = document.getElementById('eb_phone').value.trim();
+
+  if (editBookingState.addonsUnmatched?.length) {
+    errEl.textContent = ebUnmatchedAddonsMessage();
+    errEl.classList.remove('hidden');
+    return;
+  }
 
   if (nuggets + burgers + veges !== guests) {
     errEl.textContent = `Food selection must add up to ${guests} kids. Currently ${nuggets + burgers + veges} selected.`;

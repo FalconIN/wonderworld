@@ -52,6 +52,13 @@ const ROOMS = [
     description: 'The entire venue, exclusively yours, 5:30–8:30 PM. Venue rental only — choose self-catering or our venue menu at checkout. Sunday, Monday or Tuesday only.',
     badge: 'EXCLUSIVE',
   },
+  {
+    id: 'test-room-admin', name: 'Test Room (Admin Only)', emoji: '🧪', color: 'slate',
+    tagLine: 'Internal QA — not for customer use',
+    minGuests: 1, maxGuests: 1, basePricePerChild: 0,
+    description: 'Free, 1-child test room for QA (e.g. exercising the edit-booking flow). Only rendered for signed-in admins — see adminOnly below.',
+    adminOnly: true,
+  },
 ];
 
 const ROOM_COLOR_MAP = {
@@ -63,12 +70,12 @@ const ROOM_COLOR_MAP = {
 };
 
 // Official party room booking times (from poster). '5:30 PM' is the new
-// evening slot — Friday & Saturday only, see RESTRICTED_SLOT_DAYS below
+// evening slot — Wed/Thu/Fri/Sat only, see RESTRICTED_SLOT_DAYS below
 // (mirrors server/services/bookingRules.js, the actual source of truth —
 // this copy is UI-only, greying out the option; the server independently
 // rejects it on any other day).
 const ALL_SLOTS = ['9:30 AM', '11:30 AM', '1:30 PM', '3:30 PM', '5:30 PM'];
-const RESTRICTED_SLOT_DAYS = { '5:30 PM': [5, 6] }; // Friday & Saturday
+const RESTRICTED_SLOT_DAYS = { '5:30 PM': [3, 4, 5, 6] }; // Wed/Thu/Fri/Sat
 
 // Whole-venue hire has exactly one time option, distinct from the ordinary
 // rooms' 5:30 PM slot (that one ends 7:00 PM; this one runs to 8:30 PM) —
@@ -123,8 +130,12 @@ function renderRooms() {
   const container = document.getElementById('roomCards');
   if (!container) return;
 
-  const eligible   = ROOMS.filter(r => state.guests >= r.minGuests && state.guests <= r.maxGuests);
-  const ineligible = ROOMS.filter(r => state.guests < r.minGuests || state.guests > r.maxGuests);
+  // adminOnly rooms (QA fixtures) never render for ordinary customers — this
+  // is a client-side convenience, not a server-enforced restriction, so
+  // don't rely on it to keep a room fully private.
+  const visibleRooms = ROOMS.filter(r => !r.adminOnly || state.user?.isAdmin);
+  const eligible   = visibleRooms.filter(r => state.guests >= r.minGuests && state.guests <= r.maxGuests);
+  const ineligible = visibleRooms.filter(r => state.guests < r.minGuests || state.guests > r.maxGuests);
 
   let html = '';
 
@@ -174,6 +185,7 @@ function buildRoomCard(room, dimmed) {
             <div class="${c.text} font-display font-bold text-sm">${room.pricingModel === 'flat' ? `$${room.flatPrice.toLocaleString()} flat (venue only)` : `$${room.basePricePerChild}/child`}</div>
             ${selected ? '<div class="text-blue-500 text-xs font-semibold flex items-center gap-1">✓ Selected</div>' : ''}
           </div>
+          ${room.pricingModel === 'flat' ? '' : `<div class="text-gray-500 opacity-60 mt-0.5" style="font-size:11px">$${room.basePricePerChild} does not include grip socks</div>`}
         </div>
         ${thumb}
       </div>
@@ -218,7 +230,7 @@ function updateStep2SlotsHint() {
   if (room && room.pricingModel === 'flat') {
     hint.textContent = `${room.name} sessions: 5:30 PM – 8:30 PM · available ${describeDays(room.allowedDaysOfWeek)} only`;
   } else {
-    hint.textContent = 'Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM · 5:30 PM (Fri/Sat only)';
+    hint.textContent = 'Party room sessions: 9:30 AM · 11:30 AM · 1:30 PM · 3:30 PM · 5:30 PM (Wed/Thu/Fri/Sat only)';
   }
 }
 
@@ -402,10 +414,30 @@ async function createSlotHold(slot) {
 
 async function releaseSlotHold(holdId) {
   if (!holdId) return;
+  // Clear immediately so the UI (room switch, new hold) never waits on the
+  // network — retries below happen in the background regardless of outcome.
+  state.slotHoldId = null;
+  retryReleaseSlotHold(holdId);
+}
+
+// A dropped DELETE here used to just leave the old room's slot sitting held
+// until its 30-min hold_expires_at lapsed on its own — annoying for other
+// customers browsing that same slot in the meantime. Retry a few times on a
+// short backoff before giving up; POST /api/slots/hold also cleans up any
+// stale hold still open under this user as a server-side backstop, so this
+// is a best-effort speed-up, not the only safety net.
+const RELEASE_HOLD_RETRY_DELAYS_MS = [500, 1500, 4000];
+
+async function retryReleaseSlotHold(holdId, attempt = 0) {
   try {
     await callAPI(`slots/hold/${holdId}`, null, 'DELETE');
-  } catch { /* best-effort */ }
-  state.slotHoldId = null;
+  } catch (err) {
+    if (attempt < RELEASE_HOLD_RETRY_DELAYS_MS.length) {
+      setTimeout(() => retryReleaseSlotHold(holdId, attempt + 1), RELEASE_HOLD_RETRY_DELAYS_MS[attempt]);
+    } else {
+      console.warn(`Could not release slot hold ${holdId} after retries:`, err.message);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -740,6 +772,11 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
     baseAmount,
     addonsAmount,
     totalAmount:             amountPaid,
+    // Server prices and summarises add-ons from these; the amounts/summary
+    // above are informational only.
+    addons:                  state.addons || {},
+    pizzaTypes:              state.pizzaTypes || {},
+    sodaTypes:               state.sodaTypes || {},
     contactEmail:            state.confirmEmail,
     contactPhone:            '+64' + state.confirmPhone.replace(/\s/g, ''),
     stripePaymentIntentId:   paymentIntentId,
@@ -754,70 +791,52 @@ async function saveBookingToSupabase(paymentIntentId, amountPaid) {
 }
 
 // ---------------------------------------------------------------------------
-// Finalise booking (called after payment success)
+// Finalise booking — called once a payment has actually succeeded (Stripe
+// card/Apple Pay/Google Pay via processStripePayment, or the Afterpay return
+// handler, both in payment.js). Contact details are validated and stored in
+// state.confirmEmail/confirmPhone earlier, at step 4 (see validateStep in
+// app.js) — before the card is ever charged — so this only needs to write
+// the booking itself. Throws on failure; callers decide how to surface that
+// (the card has already been charged by this point either way).
 // ---------------------------------------------------------------------------
-async function finaliseBooking() {
-  const email = document.getElementById('confirmEmail').value.trim();
-  const phone = document.getElementById('confirmPhone').value.trim();
+async function finaliseBookingAfterPayment() {
+  const email = state.confirmEmail;
+  const phone = state.confirmPhone;
 
-  if (!email || !phone) { showFieldError('Please enter both your email and mobile number.'); return; }
-  if (!isValidEmail(email)) { showFieldError('Please enter a valid email address.'); return; }
-  if (!isValidNzMobile(phone)) {
-    showFieldError('Please enter a valid NZ mobile number (e.g. 021 234 5678).');
-    return;
-  }
+  const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
+  state.bookingId = bookingId;
 
-  state.confirmEmail = email;
-  state.confirmPhone = phone;
+  // Booking succeeded — the server also marks the session completed, but
+  // stop autosaving locally regardless so no further PATCHes fire.
+  state.sessionId = null;
+  stopSessionTimer();
 
-  // Update user profile with phone
-  if (state.user.id) {
-    await upsertUserProfile(state.user.id, state.user.firstName, state.user.lastName, state.user.email, '+64' + phone.replace(/\s/g, ''));
-  }
+  // Trigger Edge Functions: email + SMS
+  const addonLines = getAddonSummaryLines();
+  const addonsSummaryText = addonLines.map(a => `${a.label} ×${a.qty} ($${a.subtotal.toFixed(2)})`).join(', ');
 
-  setFinaliseLoading(true);
+  await callEdgeFunction('send-booking-confirmation', {
+    bookingRef:     state.bookingRef,
+    bookingId,
+    email,
+    phone:          phone.replace(/\s/g, ''),
+    firstName:      state.user.firstName,
+    lastName:       state.user.lastName,
+    roomName:       state.selectedRoom.name,
+    partyDate:      state.selectedDate,
+    partyTime:      state.selectedTime,
+    guestCount:     state.guests,
+    foodChoice:     state.selectedFood,
+    addonsSummary:  addonsSummaryText,
+    totalAmount:    state.calculatedTotal,
+    cateringChoice: state.cateringChoice,
+    noAlcoholAck:   state.noAlcoholAck,
+  });
 
-  try {
-    // Save confirmed booking
-    const bookingId = await saveBookingToSupabase(state.stripePaymentIntentId, state.calculatedTotal);
-    state.bookingId = bookingId;
-
-    // Booking succeeded — the server also marks the session completed, but
-    // stop autosaving locally regardless so no further PATCHes fire.
-    state.sessionId = null;
-    stopSessionTimer();
-
-    // Trigger Edge Functions: email + SMS
-    const addonLines = getAddonSummaryLines();
-    const addonsSummaryText = addonLines.map(a => `${a.label} ×${a.qty} ($${a.subtotal.toFixed(2)})`).join(', ');
-
-    await callEdgeFunction('send-booking-confirmation', {
-      bookingRef:     state.bookingRef,
-      bookingId,
-      email,
-      phone:          phone.replace(/\s/g, ''),
-      firstName:      state.user.firstName,
-      lastName:       state.user.lastName,
-      roomName:       state.selectedRoom.name,
-      partyDate:      state.selectedDate,
-      partyTime:      state.selectedTime,
-      guestCount:     state.guests,
-      foodChoice:     state.selectedFood,
-      addonsSummary:  addonsSummaryText,
-      totalAmount:    state.calculatedTotal,
-      cateringChoice: state.cateringChoice,
-      noAlcoholAck:   state.noAlcoholAck,
-    });
-
-    stopTimer();
-    buildConfirmationCard();
-    goToStep(6);
-    launchConfetti();
-  } catch (err) {
-    showFieldError('Something went wrong: ' + err.message + '. Please contact us at Bookings@wonderworldwestgate.co.nz');
-  } finally {
-    setFinaliseLoading(false);
-  }
+  stopTimer();
+  buildConfirmationCard();
+  goToStep(6);
+  launchConfetti();
 }
 
 function buildConfirmationCard() {
@@ -1157,8 +1176,8 @@ function startTimer() {
 // card can still succeed a moment later with the hold already gone and no
 // wizard state left to save a booking against (see WW-129HC4 incident
 // writeup). Defer instead of acting: by the time paymentInFlight clears,
-// this is either moot (payment succeeded, wizard already moved to step 5)
-// or the hold really is dead and this runs for real.
+// this is either moot (payment succeeded and the booking is already being
+// finalised) or the hold really is dead and this runs for real.
 async function handleTimerExpiry() {
   if (state.paymentInFlight) {
     setTimeout(handleTimerExpiry, 1000);
@@ -1187,24 +1206,21 @@ function stopTimer() {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function setFinaliseLoading(loading) {
-  const btn     = document.getElementById('finaliseBtn');
-  const text    = document.getElementById('finaliseBtnText');
-  const spinner = document.getElementById('finaliseBtnSpinner');
-  if (!btn) return;
-  btn.disabled = loading;
-  if (text)    text.classList.toggle('hidden', loading);
-  if (spinner) spinner.classList.toggle('hidden', !loading);
-}
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function isValidNzMobile(phone) {
-  // Strip spaces, dashes, and an optional leading +64 / 0064 / 64
+  // Strip spaces and dashes, then any international prefix (+64/0064/64)
+  // AND a leading domestic 0 — the confirmPhone field sits right next to a
+  // fixed "+64" label in the UI, so what's actually typed here never has
+  // either (e.g. "21 234 5678", not "+6421234 5678" or "021 234 5678"),
+  // though we still accept those forms too in case they're pasted in.
   let cleaned = phone.replace(/[\s-]/g, '');
-  cleaned = cleaned.replace(/^(\+?64|0064)/, '0');
-  // NZ mobiles: 02x followed by 7-9 digits (total 9-10 digits starting with 02)
-  return /^02[0-9]\d{6,8}$/.test(cleaned);
+  cleaned = cleaned.replace(/^(\+?64|0064)/, '');
+  cleaned = cleaned.replace(/^0/, '');
+  // NZ mobiles: 2x followed by 7-9 digits (total 8-10 digits after the
+  // country code/leading 0 is stripped)
+  return /^2[0-9]\d{6,8}$/.test(cleaned);
 }

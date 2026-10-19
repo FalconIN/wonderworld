@@ -90,7 +90,6 @@ async function goToStep(n) {
   // Timer management
   if (n === 2) startTimer();
   if (n === 0 || n === 6) stopTimer();
-  if (n >= 5) stopTimer();
 
   // Step-specific hooks
   if (n === 3) {
@@ -98,17 +97,17 @@ async function goToStep(n) {
   }
 
   if (n === 4) {
-    renderOrderSummary();
-    if (typeof initPoliOption === 'function') initPoliOption();
-    // Mount Stripe elements after a short delay (DOM must be ready)
-    setTimeout(mountStripeElements, 100);
-  }
-
-  if (n === 5) {
     const emailField = document.getElementById('confirmEmail');
     if (emailField && state.user.email) emailField.value = state.user.email;
     const phoneField = document.getElementById('confirmPhone');
     if (phoneField && state.user.phone) phoneField.value = state.user.phone.replace('+64', '').trim();
+  }
+
+  if (n === 5) {
+    renderOrderSummary();
+    if (typeof initPoliOption === 'function') initPoliOption();
+    // Mount Stripe elements after a short delay (DOM must be ready)
+    setTimeout(mountStripeElements, 100);
   }
 
   if (n === 6) {
@@ -145,7 +144,7 @@ function renderStepIndicator(activeStep) {
   el.style.display = 'flex';
   el.style.alignItems = 'center';
 
-  const steps = ['Room', 'Date', 'Food', 'Pay', 'Confirm'];
+  const steps = ['Room', 'Date', 'Food', 'Details', 'Pay'];
   let html = '';
   for (let i = 1; i <= 5; i++) {
     let cls = 'pending';
@@ -183,6 +182,11 @@ async function validateStep(n) {
     }
     if (!state.slotHoldId) {
       showFieldError('Still reserving your slot — please wait a moment and try again.');
+      return false;
+    }
+    const refundAck = document.getElementById('refundPolicyAck');
+    if (!refundAck || !refundAck.checked) {
+      showFieldError('Please agree to the Refund & Reschedule Policy to continue.');
       return false;
     }
   }
@@ -260,6 +264,43 @@ async function validateStep(n) {
     if (waiver && !waiver.checked) {
       showFieldError('Please read and accept the Terms of Entry & Liability Waiver to continue.');
       return false;
+    }
+  }
+  // Contact details are collected here, before payment, so the booking can
+  // always be reconstructed with a real phone number even if the customer's
+  // browser never returns after the card is charged (see the Stripe safety
+  // net in server/services/stripeReconcile.js, which otherwise falls back to
+  // an empty phone whenever a session was stranded before this step ran).
+  if (n === 4) {
+    const emailInput = document.getElementById('confirmEmail');
+    const phoneInput = document.getElementById('confirmPhone');
+    const email = emailInput?.value.trim();
+    const phone = phoneInput?.value.trim();
+
+    if (!email || !phone) { showFieldError('Please enter both your email and mobile number.'); return false; }
+    if (!isValidEmail(email)) { showFieldError('Please enter a valid email address.'); return false; }
+    if (!isValidNzMobile(phone)) {
+      showFieldError('Please enter a valid NZ mobile number (e.g. 021 234 5678).');
+      return false;
+    }
+
+    state.confirmEmail = email;
+    state.confirmPhone = phone;
+
+    if (state.user.id) {
+      const btn = document.getElementById('finaliseBtn');
+      const btnText = document.getElementById('finaliseBtnText');
+      const btnSpinner = document.getElementById('finaliseBtnSpinner');
+      if (btn) btn.disabled = true;
+      btnText?.classList.add('hidden');
+      btnSpinner?.classList.remove('hidden');
+      try {
+        await upsertUserProfile(state.user.id, state.user.firstName, state.user.lastName, state.user.email, '+64' + phone.replace(/\s/g, ''));
+      } finally {
+        if (btn) btn.disabled = false;
+        btnText?.classList.remove('hidden');
+        btnSpinner?.classList.add('hidden');
+      }
     }
   }
   return true;
@@ -470,6 +511,8 @@ function resetWizard() {
   });
   const waiver = document.getElementById('liabilityWaiver');
   if (waiver) waiver.checked = false;
+  const refundAckEl = document.getElementById('refundPolicyAck');
+  if (refundAckEl) refundAckEl.checked = false;
 
   // Reset whole-venue catering choice / no-alcohol ack
   document.querySelectorAll('input[name="cateringChoice"]').forEach(el => { el.checked = false; });
@@ -1101,6 +1144,12 @@ function renderEditStep1(booking, savedCardInfo) {
     </div>
 
     <!-- Guest count -->
+    ${booking.upgradeStatus ? `
+    <div class="mb-5 bg-gray-50 border-2 border-gray-100 rounded-2xl p-4">
+      <label class="lbl">Number of Kids Attending</label>
+      <p class="text-sm font-semibold text-gray-700">🔒 ${booking.guestCount} kids</p>
+      <p class="text-xs text-gray-400 mt-1">This booking is being upgraded to Whole Venue Hire — guest count can't be changed here while that's in progress. Contact us if you have questions.</p>
+    </div>` : `
     <div class="mb-5">
       <label class="lbl">Number of Kids Attending</label>
       <p class="text-xs text-gray-400 mb-2" id="editGuestRangeHint">Between ${minGuests} and ${maxGuests}. Reducing kids credits the difference as food credit — no cash refund.</p>
@@ -1111,7 +1160,7 @@ function renderEditStep1(booking, savedCardInfo) {
         <span class="text-gray-400 text-sm ml-1">kids</span>
       </div>
       <div id="editCreditPreview" class="mt-2 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 hidden"></div>
-    </div>
+    </div>`}
 
     <!-- Food split (shown only if guest count increased) -->
     <div id="editFoodSplitSection" class="hidden mb-5">
